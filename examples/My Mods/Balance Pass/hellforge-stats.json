@@ -1,0 +1,1134 @@
+{
+  "format": 1,
+  "enemies": {
+    "cy_stratagem_blocker": {
+      "entity::jammer.radius": 200
+    },
+    "eagle_bomb": {
+      "attack:mapped_4:explosion.inner_radius": 15,
+      "attack:mapped_5:damage.ap_direct": 5,
+      "attack:mapped_6:damage.ap_direct": 7,
+      "attack:mapped_6:damage.durable_damage": 2000,
+      "attack:mapped_6:damage.standard_damage": 2000
+    },
+    "tank_storm": {
+      "attack:mapped_16:explosion.inner_radius": 5,
+      "attack:mapped_16:explosion.outer_radius": 10,
+      "attack:mapped_17:damage.ap_extreme": 2,
+      "attack:mapped_17:damage.ap_large": 3,
+      "attack:mapped_17:damage.ap_slight": 4,
+      "attack:mapped_17:damage.durable_damage": 1125,
+      "attack:mapped_17:damage.standard_damage": 1125
+    },
+    "Charger": {
+      "damage_zone:zone_1:zone.health": 1250
+    },
+    "charger_bull": {
+      "damage_zone:zone_1:zone.health": 2000
+    },
+    "charger_tier2": {
+      "damage_zone:zone_1:zone.health": 2000
+    },
+    "Impaler": {
+      "damage_zone:zone_0:zone.health": 3000,
+      "damage_zone:zone_11:zone.armor": 5,
+      "damage_zone:zone_12:zone.armor": 5,
+      "damage_zone:zone_13:zone.armor": 5,
+      "damage_zone:zone_14:zone.armor": 5,
+      "damage_zone:zone_15:zone.health": 3000,
+      "damage_zone:zone_20:zone.armor": 5,
+      "damage_zone:zone_21:zone.armor": 5,
+      "damage_zone:zone_22:zone.armor": 5,
+      "damage_zone:zone_3:zone.armor": 5,
+      "damage_zone:zone_5:zone.armor": 5,
+      "damage_zone:zone_7:zone.armor": 5,
+      "damage_zone:zone_8:zone.armor": 5,
+      "entity::entity.health": 6000
+    },
+    "unnamed_entity_0957": {
+      "damage_zone:zone_9:zone.affects_main_health": 0
+    },
+    "unnamed_entity_1169": {
+      "damage_zone:zone_1:zone.health": 2000
+    },
+    "Fleshmob": {
+      "entity::entity.durable_resistance": 0.5
+    },
+    "bodyhorror_bladed": {
+      "damage_zone:zone_1:zone.armor": 0,
+      "damage_zone:zone_3:zone.armor": 0,
+      "damage_zone:zone_4:zone.armor": 0,
+      "damage_zone:zone_5:zone.armor": 0,
+      "damage_zone:zone_6:zone.armor": 0,
+      "damage_zone:zone_7:zone.armor": 0,
+      "damage_zone:zone_8:zone.armor": 0,
+      "damage_zone:zone_9:zone.armor": 0,
+      "entity::entity.armor": 0,
+      "entity::entity.health": 400
+    },
+    "illuminate_war_machine": {
+      "entity::entity.health": 10000,
+      "entity::entity.armor": 3
+    }
+  },
+  "weapons": {
+    "AR-11 Arbitrator": {
+      "attack.primary.projectile": 276,
+      "presentation.traits.1": 3085090887
+    },
+    "AR-61 Tenderizer": {
+      "attack.primary.projectile": 135,
+      "presentation.traits.1": 3085090887
+    },
+    "AR/GL-21 One-Two": {
+      "attack.primary.projectile": 135,
+      "presentation.traits.1": 3085090887,
+      "presentation.traits.2": 0
+    },
+    "JAR-5 Dominator": {
+      "ammunition.projectile": 202,
+      "attachment.magazine.jet_assisted_rifle_15mm_drum_standard.magazines_from_supply": 5,
+      "attachment.magazine.jet_assisted_rifle_15mm_drum_standard.spare_magazines": 5,
+      "fire_mode.modes.2": 0,
+      "magazine.magazines_from_supply": 5,
+      "magazine.spare_magazines": 5,
+      "presentation.traits.1": 658390125,
+      "presentation.traits.2": 1325312028,
+      "weapon.ergonomics": 25,
+      "weapon.fire_rate": 200,
+      "weapon.horizontal_spread": 15,
+      "weapon.recoil_climb_horizontal": 45,
+      "weapon.recoil_climb_vertical": 135,
+      "weapon.recoil_drift_horizontal": 45,
+      "weapon.recoil_drift_vertical": 45,
+      "weapon.sway": 0.95,
+      "weapon.vertical_spread": 15,
+      "fire_mode.modes.1": 1
+    },
+    "M7S SMG": {
+      "attack.primary.projectile": 215,
+      "magazine.magazines_from_supply": 12,
+      "magazine.spare_magazines": 12,
+      "weapon.horizontal_spread": 20,
+      "weapon.vertical_spread": 20
+    },
+    "MA5C Assault Rifle": {
+      "attack.primary.projectile": 135,
+      "magazine.magazines_from_supply": 6,
+      "magazine.spare_magazines": 6,
+      "magazine.starting_magazines": 4
+    },
+    "R-2 Amendment": {
+      "attack.primary.projectile": 305
+    },
+    "R-2124 Constitution": {
+      "attack.feed_primary.projectile": 305
+    },
+    "SMG-203 Gallant": {
+      "attack.primary.projectile": 276,
+      "attachment.magazine.smg_9x20mm_top_mounted_extended_solvent.ergonomics_modifier": 0,
+      "presentation.traits.1": 0,
+      "presentation.traits.2": 0,
+      "weapon.fire_rate": 1100,
+      "weapon.horizontal_spread": 20,
+      "weapon.vertical_spread": 20
+    },
+    "AC-8 Autocannon": {
+      "weapon.fire_rate": 250,
+      "damage.primary.ap_direct": 5,
+      "damage.primary.ap_extreme": 2,
+      "damage.primary.ap_large": 3,
+      "damage.primary.durable_damage": 325,
+      "projectile.programmable.lifetime": 2,
+      "rounds.rounds_from_supply": 10,
+      "rounds.spare_rounds": 5,
+      "weapon.recoil_climb_vertical": 75,
+      "weapon.recoil_drift_horizontal": 150,
+      "weapon.recoil_drift_vertical": 375
+    },
+    "AR-23 Liberator": {
+      "damage.ap_direct": 3,
+      "damage.ap_large": 1,
+      "damage.durable_damage": 45,
+      "damage.standard_damage": 115,
+      "presentation.traits.1": 3085090887
+    },
+    "A/G-16 Gatling Sentry / weapon": {
+      "attack.primary.projectile": 275
+    },
+    "A/MG-43 Machine Gun Sentry / weapon": {
+      "attack.primary.projectile": 135
+    },
+    "APW-1 Anti-Materiel Rifle": {
+      "damage.primary.ap_direct": 6,
+      "damage.primary.ap_extreme": 2,
+      "damage.primary.ap_large": 3,
+      "damage.primary.standard_damage": 400,
+      "weapon.third_person_reticle": 4
+    },
+    "AR-2 Coyote": {
+      "damage.ap_large": 1,
+      "damage.ap_slight": 2,
+      "damage.durable_damage": 30,
+      "damage.standard_damage": 100
+    },
+    "AR-23A Liberator Carbine": {
+      "presentation.traits.1": 3085090887
+    },
+    "AR-23P Liberator Penetrator": {
+      "damage.ap_direct": 4,
+      "damage.ap_extreme": 1,
+      "damage.ap_large": 2,
+      "damage.durable_damage": 30,
+      "damage.standard_damage": 80,
+      "presentation.traits.1": 658390125,
+      "projectile.velocity": 990
+    },
+    "AR-32 Pacifier": {
+      "magazine.magazines_from_supply": 6,
+      "magazine.spare_magazines": 6,
+      "magazine.starting_magazines": 4
+    },
+    "AR-59 Suppressor": {
+      "damage.ap_direct": 3,
+      "damage.ap_large": 1,
+      "damage.durable_damage": 35,
+      "damage.standard_damage": 100,
+      "presentation.traits.1": 3085090887,
+      "presentation.traits.2": 0
+    },
+    "ARC-12 Blitzer": {
+      "arc.chain_count": 3,
+      "arc.max_angle_spread": 90,
+      "arc.max_angle_spread_first_shot": 90,
+      "arc.max_split": 3,
+      "damage.status_1_strength": 5,
+      "damage.status_1_type": 38,
+      "weapon.fire_rate": 100
+    },
+    "ARC-3 Arc Thrower": {
+      "arc.primary.chain_count": 2,
+      "arc.primary.distance_at_max_spread": 50,
+      "arc.primary.max_angle_spread": 90,
+      "arc.primary.max_split": 2,
+      "arc.primary.range": 65,
+      "arc.primary.velocity": 2000,
+      "charge.burst_interval_seconds": 0.2,
+      "charge.burst_shots": 1,
+      "charge.level_1": 1.65,
+      "charge.level_2": 1.8,
+      "charge.level_3": 1.8,
+      "damage.primary.ap_direct": 5,
+      "damage.primary.ap_large": 5,
+      "damage.primary.ap_slight": 5,
+      "damage.primary.durable_damage": 10,
+      "damage.primary.standard_damage": 500,
+      "damage.primary.status_1_strength": 100,
+      "damage.primary.status_1_type": 39
+    },
+    "AX/AR-23 Guard Dog / gun": {
+      "attack.primary.projectile": 276
+    },
+    "BR-14 Adjudicator": {
+      "damage.ap_large": 2,
+      "damage.durable_damage": 50,
+      "damage.standard_damage": 120,
+      "magazine.magazines_from_supply": 6,
+      "magazine.spare_magazines": 6,
+      "magazine.starting_magazines": 4
+    },
+    "CB-9 Exploding Crossbow": {
+      "damage.ap_direct": 4,
+      "damage.ap_extreme": 1,
+      "damage.ap_large": 2,
+      "damage.durable_damage": 200,
+      "damage.standard_damage": 350,
+      "explosion.primary.impact.damage.durable_damage": 250,
+      "explosion.primary.impact.damage.standard_damage": 300,
+      "presentation.traits.1": 658390125,
+      "presentation.traits.2": 0,
+      "presentation.traits.3": 0
+    },
+    "EAT-411 Leveller": {
+      "damage.primary.demolition": 50
+    },
+    "EXO-45 Patriot Exosuit / left_gun": {
+      "weapon.capacity": 28,
+      "weapon.fire_rate": 400
+    },
+    "EXO-45 Patriot Exosuit / right_gun": {
+      "attack.primary.projectile": 275,
+      "weapon.capacity": 2000,
+      "windup.wind_down_seconds": 2,
+      "windup.wind_up_seconds": 0.1
+    },
+    "EXO-49 Emancipator Exosuit / left_gun": {
+      "attack.primary.projectile": 115,
+      "weapon.capacity": 200,
+      "weapon.fire_rate": 200
+    },
+    "EXO-49 Emancipator Exosuit / right_gun": {
+      "attack.primary.projectile": 115,
+      "weapon.capacity": 200,
+      "weapon.fire_rate": 200
+    },
+    "EXO-51 Lumberer Exosuit / left_gun": {
+      "weapon.capacity": 1000
+    },
+    "EXO-51 Lumberer Exosuit / right_gun": {
+      "weapon.capacity": 35
+    },
+    "FAF-14 Spear": {
+      "damage.primary.ap_direct": 9,
+      "damage.primary.ap_extreme": 9,
+      "damage.primary.ap_large": 9,
+      "damage.primary.ap_slight": 9,
+      "explosion.primary_impact.damage.ap_direct": 0,
+      "explosion.primary_impact.damage.durable_damage": 10,
+      "explosion.primary_impact.damage.standard_damage": 10,
+      "explosion.primary_impact.inner_radius": 1,
+      "explosion.primary_impact.outer_radius": 1,
+      "explosion.primary_impact.shockwave_radius": 1,
+      "missile.max_angle_to_target": 90,
+      "missile.turn_rate_aligned": 10,
+      "missile.turn_rate_at_max_angle": 5
+    },
+    "GP-20 Ultimatum": {
+      "explosion.primary.impact.inner_radius": 5
+    },
+    "GR-8 Recoilless Rifle": {
+      "damage.primary.ap_direct": 9,
+      "damage.primary.ap_large": 3,
+      "damage.primary.demolition": 40,
+      "damage.primary.durable_damage": 4500,
+      "damage.primary.stagger": 65,
+      "damage.primary.standard_damage": 4500
+    },
+    "LAS-12 Sai": {
+      "attachment.magazine.laser_heatsink_blaster_improved_heatcapacity.heatsink.spare": 8,
+      "attachment.magazine.laser_heatsink_blaster_improved_heatcapacity.heatsink.starting": 6,
+      "damage.ap_direct": 2,
+      "damage.ap_large": 2,
+      "damage.ap_slight": 2,
+      "damage.durable_damage": 10,
+      "damage.status_1_strength": 0.5,
+      "damage.status_1_type": 5,
+      "heatsink.spare": 8,
+      "presentation.traits.1": 300892437,
+      "presentation.traits.2": 0,
+      "presentation.traits.3": 0,
+      "projectile.mass": 1,
+      "projectile.velocity": 5000,
+      "weapon.fire_rate": 1500,
+      "weapon.recoil_climb_horizontal": 1,
+      "weapon.recoil_climb_vertical": 2,
+      "weapon.recoil_drift_horizontal": 2,
+      "weapon.recoil_drift_vertical": 2
+    },
+    "LAS-13 Trident": {
+      "damage.durable_damage": 10,
+      "damage.standard_damage": 80,
+      "damage.status_1_strength": 0.25,
+      "damage.status_1_type": 5,
+      "heatsink.from_supply": 3,
+      "weapon.ergonomics": 55
+    },
+    "LAS-16 Sickle": {
+      "damage.ap_direct": 3,
+      "damage.durable_damage": 10,
+      "damage.standard_damage": 80,
+      "damage.status_1_strength": 0.5,
+      "damage.status_1_type": 5,
+      "damage.status_2_strength": 0.5,
+      "damage.status_2_type": 32,
+      "heatsink.from_supply": 5,
+      "heatsink.spare": 5,
+      "heatsink.starting": 3,
+      "presentation.traits.1": 3085090887,
+      "projectile.mass": 1,
+      "projectile.velocity": 5000,
+      "weapon.ergonomics": 55,
+      "weapon.fire_rate": 850,
+      "weapon.horizontal_spread": 15,
+      "weapon.vertical_spread": 15,
+      "presentation.traits.2": 0
+    },
+    "LAS-17 Double-Edge Sickle": {
+      "heat.capacity": 190,
+      "heat.cool_per_second": 4,
+      "heat.cool_per_second_overheated": 200,
+      "heat.fire_rate_multiplier_max": 0.75,
+      "heat.heat_per_shot": 1.2,
+      "heat.level_1.damage.ap_direct": 2,
+      "heat.level_1.damage.ap_large": 2,
+      "heat.level_1.damage.ap_slight": 2,
+      "heat.level_1.damage.durable_damage": 10,
+      "heat.level_1.damage.standard_damage": 80,
+      "heat.level_1.projectile.mass": 1,
+      "heat.level_1.projectile.velocity": 5000,
+      "heat.level_2.damage.ap_direct": 4,
+      "heat.level_2.damage.ap_extreme": 1,
+      "heat.level_2.damage.ap_slight": 4,
+      "heat.level_2.damage.durable_damage": 15,
+      "heat.level_2.damage.standard_damage": 85,
+      "heat.level_2.projectile.mass": 1,
+      "heat.level_2.projectile.velocity": 5000,
+      "heat.level_3.damage.ap_direct": 5,
+      "heat.level_3.damage.ap_extreme": 2,
+      "heat.level_3.damage.ap_slight": 5,
+      "heat.level_3.damage.durable_damage": 20,
+      "heat.level_3.damage.standard_damage": 90,
+      "heat.level_3.projectile.mass": 1,
+      "heat.level_3.projectile.velocity": 5000,
+      "heat.level_3_self_status": 2,
+      "heatsink.from_supply": 1,
+      "heatsink.spare": 1,
+      "heatsink.starting": 1,
+      "weapon.ergonomics": 45,
+      "weapon.fire_rate": 1000
+    },
+    "LAS-58 Talon": {
+      "damage.ap_extreme": 3,
+      "damage.standard_damage": 100,
+      "damage.status_1_strength": 1,
+      "damage.status_1_type": 5,
+      "heat.cool_per_second": 15,
+      "heat.heat_per_shot": 12.25,
+      "heatsink.from_supply": 4,
+      "heatsink.spare": 4,
+      "heatsink.starting": 4
+    },
+    "LAS-98 Laser Cannon": {
+      "damage.primary.status_2_strength": 2,
+      "damage.primary.status_2_type": 32,
+      "damage.primary.status_3_strength": 2,
+      "damage.primary.status_3_type": 55,
+      "damage.primary.status_4_strength": 2,
+      "damage.primary.status_4_type": 6,
+      "damage.primary.durable_damage": 600,
+      "damage.primary.standard_damage": 600,
+      "heat.cool_per_second": 3,
+      "heat.heat_per_second": 16,
+      "heat.heat_per_shot": 4,
+      "heatsink.from_supply": 1,
+      "heatsink.spare": 1,
+      "heatsink.starting": 1
+    },
+    "LAS-99 Quasar Cannon": {
+      "damage.primary.ap_extreme": 6,
+      "damage.primary.demolition": 40,
+      "damage.primary.durable_damage": 3500,
+      "damage.primary.push_force": 70,
+      "damage.primary.stagger": 65,
+      "damage.primary.standard_damage": 3500,
+      "explosion.primary_impact.damage.ap_extreme": 3,
+      "explosion.primary_impact.damage.ap_large": 3,
+      "explosion.primary_impact.damage.ap_slight": 3,
+      "explosion.primary_impact.damage.durable_damage": 500,
+      "explosion.primary_impact.damage.standard_damage": 500,
+      "explosion.primary_impact.inner_radius": 6,
+      "explosion.primary_impact.outer_radius": 12,
+      "explosion.primary_impact.shockwave_radius": 12,
+      "projectile.primary.mass": 1,
+      "projectile.primary.velocity": 5000
+    },
+    "M-1000 Maxigun": {
+      "damage.primary.ap_direct": 4,
+      "damage.primary.ap_extreme": 1,
+      "damage.primary.durable_damage": 30,
+      "weapon.stationary_while_firing": 0,
+      "windup.wind_down_seconds": 2,
+      "windup.wind_up_seconds": 0.25
+    },
+    "M-103 Supply FRV / gun": {
+      "attack.primary.projectile": 276,
+      "weapon.capacity": 200
+    },
+    "M-105 Stalwart": {
+      "presentation.traits.1": 3085090887
+    },
+    "M6C/SOCOM Pistol": {
+      "damage.ap_large": 1,
+      "damage.durable_damage": 115,
+      "damage.standard_damage": 115
+    },
+    "MGX-42 Bullet Storm": {
+      "damage.primary.ap_direct": 3
+    },
+    "MLS-4X Commando": {
+      "weapon.capacity": 8
+    },
+    "MP-98 Knight": {
+      "damage.ap_large": 1,
+      "damage.durable_damage": 80,
+      "damage.stagger": 15,
+      "damage.standard_damage": 130,
+      "projectile.drag": 3,
+      "projectile.mass": 10,
+      "projectile.penetration_slowdown": 0.5,
+      "projectile.velocity": 350,
+      "weapon.fire_rate": 1100,
+      "weapon.horizontal_spread": 20,
+      "weapon.vertical_spread": 20
+    },
+    "MS-11 Solo Silo": {
+      "explosion.detonation.damage.durable_damage": 3000,
+      "explosion.detonation.damage.standard_damage": 3000,
+      "explosion.detonation.outer_radius": 30,
+      "explosion.detonation.shockwave_radius": 50,
+      "explosion.impact.damage.demolition": 60,
+      "explosion.detonation.inner_radius": 15,
+      "explosion.detonation.damage.demolition": 50
+    },
+    "P-113 Verdict": {
+      "damage.ap_extreme": 1,
+      "damage.ap_large": 2,
+      "damage.durable_damage": 100,
+      "damage.standard_damage": 100
+    },
+    "P-19 Redeemer": {
+      "damage.ap_large": 1,
+      "damage.durable_damage": 130,
+      "damage.push_force": 5,
+      "damage.stagger": 20,
+      "damage.standard_damage": 130,
+      "weapon.fire_rate": 850
+    },
+    "P-2 Peacemaker": {
+      "damage.ap_large": 1,
+      "damage.durable_damage": 130,
+      "damage.push_force": 5,
+      "damage.stagger": 20,
+      "damage.standard_damage": 130,
+      "magazine.capacity": 20,
+      "magazine.magazines_from_supply": 10,
+      "magazine.spare_magazines": 10
+    },
+    "P-4 Senator": {
+      "damage.ap_direct": 3,
+      "damage.ap_extreme": 2,
+      "damage.ap_large": 2,
+      "damage.ap_slight": 3,
+      "damage.demolition": 20,
+      "damage.durable_damage": 350,
+      "damage.push_force": 20,
+      "damage.stagger": 30,
+      "damage.standard_damage": 350,
+      "presentation.traits.1": 3085090887,
+      "presentation.traits.2": 0,
+      "presentation.traits.3": 0,
+      "projectile.velocity": 850
+    },
+    "P-69 Veto": {
+      "damage.ap_large": 1,
+      "damage.ap_slight": 2,
+      "damage.durable_damage": 100,
+      "damage.standard_damage": 100
+    },
+    "P-92 Warrant": {
+      "damage.ap_direct": 2,
+      "damage.ap_large": 2,
+      "damage.ap_slight": 2,
+      "damage.durable_damage": 100,
+      "damage.standard_damage": 100,
+      "presentation.traits.1": 300892437,
+      "presentation.traits.2": 0,
+      "presentation.traits.3": 0
+    },
+    "P/40-K Bolt Pistol": {
+      "damage.ap_extreme": 1,
+      "damage.ap_large": 2,
+      "damage.ap_slight": 3,
+      "explosion.primary.impact.damage.ap_extreme": 3,
+      "explosion.primary.impact.damage.ap_large": 3,
+      "explosion.primary.impact.damage.ap_slight": 3
+    },
+    "PLAS-39 Accelerator Rifle": {
+      "charge.burst_interval_seconds": 0.05,
+      "charge.burst_shots": 1,
+      "charge.damage_multiplier_min": 0.25,
+      "charge.explode_at_overcharge": 0,
+      "charge.level_1": 0.01,
+      "charge.level_2": 1,
+      "charge.level_3": 1,
+      "charge.penetration_multiplier_min": 0.25,
+      "charge.speed_multiplier_min": 0.33,
+      "charge.speed_multiplier_overcharge": 2,
+      "damage.durable_damage": 375,
+      "damage.standard_damage": 750,
+      "explosion.primary.impact.damage.status_1_strength": 50,
+      "explosion.primary.impact.damage.status_1_type": 55,
+      "explosion.primary.impact.inner_radius": 2,
+      "explosion.primary.impact.outer_radius": 3,
+      "explosion.primary.impact.shockwave_radius": 4,
+      "magazine.magazines_from_supply": 6,
+      "magazine.spare_magazines": 6,
+      "magazine.starting_magazines": 6,
+      "weapon.capacity": 6,
+      "presentation.traits.1": 1865818670,
+      "presentation.traits.2": 0
+    },
+    "PLAS-45 Epoch": {
+      "damage.full_charge.demolition": 30,
+      "damage.full_charge.durable_damage": 275,
+      "damage.full_charge.push_force": 25,
+      "damage.full_charge.stagger": 50,
+      "damage.full_charge.standard_damage": 550,
+      "explosion.full_charge_impact.inner_radius": 5,
+      "explosion.full_charge_impact.outer_radius": 10,
+      "explosion.full_charge_impact.shockwave_radius": 10,
+      "projectile.full_charge.velocity": 500,
+      "weapon.capacity": 2
+    },
+    "R-36 Eruptor": {
+      "damage.ap_direct": 3,
+      "damage.ap_large": 1,
+      "damage.ap_slight": 2,
+      "damage.durable_damage": 85,
+      "damage.standard_damage": 130,
+      "explosion.primary.impact.damage.ap_direct": 4,
+      "explosion.primary.impact.damage.ap_extreme": 1,
+      "explosion.primary.impact.damage.ap_large": 2,
+      "explosion.primary.impact.damage.ap_slight": 3,
+      "explosion.primary.impact.damage.demolition": 30,
+      "explosion.primary.impact.damage.durable_damage": 275,
+      "explosion.primary.impact.damage.standard_damage": 325,
+      "magazine.magazines_from_supply": 5,
+      "magazine.spare_magazines": 5,
+      "projectile.lifetime": 2,
+      "projectile.mass": 125
+    },
+    "R-4 Hyena": {
+      "damage.ap_large": 1,
+      "damage.ap_slight": 2,
+      "damage.durable_damage": 20
+    },
+    "R-6 Deadeye": {
+      "damage.ap_extreme": 1,
+      "damage.ap_large": 2,
+      "damage.ap_slight": 2,
+      "damage.durable_damage": 550,
+      "damage.standard_damage": 550
+    },
+    "R-63 Diligence": {
+      "damage.ap_direct": 3,
+      "damage.ap_extreme": 1,
+      "damage.ap_slight": 3,
+      "damage.durable_damage": 100,
+      "damage.standard_damage": 200,
+      "presentation.traits.1": 3085090887
+    },
+    "R-63CS Diligence Counter Sniper": {
+      "damage.ap_direct": 4,
+      "damage.ap_extreme": 2,
+      "damage.ap_slight": 4,
+      "damage.durable_damage": 40,
+      "damage.standard_damage": 135,
+      "presentation.traits.1": 658390125,
+      "projectile.mass": 15,
+      "projectile.velocity": 990,
+      "weapon.fire_rate": 250
+    },
+    "R-72 Censor": {
+      "damage.ap_direct": 3,
+      "damage.ap_large": 1,
+      "presentation.traits.1": 3085090887,
+      "presentation.traits.2": 0,
+      "weapon.fire_rate": 350,
+      "weapon.horizontal_spread": 0.1,
+      "weapon.vertical_spread": 0.1
+    },
+    "R/40-K Hot-Shot Marksman Rifle": {
+      "damage.ap_direct": 4,
+      "damage.ap_extreme": 1,
+      "damage.ap_large": 2,
+      "damage.status_1_strength": 2,
+      "damage.status_1_type": 5,
+      "presentation.traits.1": 658390125,
+      "projectile.mass": 1,
+      "projectile.velocity": 5000
+    },
+    "RS-422 Railgun": {
+      "charge.damage_multiplier_min": 0.75,
+      "charge.damage_multiplier_overcharge": 5,
+      "charge.level_1": 0.5,
+      "charge.level_2": 1,
+      "charge.overcharge_limit_seconds": 0.28,
+      "charge.penetration_multiplier_overcharge": 2,
+      "charge.speed_multiplier_overcharge": 2,
+      "damage.primary.durable_damage": 375,
+      "damage.primary.push_force": 30,
+      "damage.primary.stagger": 50,
+      "damage.primary.standard_damage": 700,
+      "magazine.magazines_from_supply": 5,
+      "magazine.spare_magazines": 10,
+      "magazine.starting_magazines": 5,
+      "presentation.traits.1": 658390125,
+      "presentation.traits.2": 3591930318,
+      "weapon.horizontal_spread": 0.01,
+      "weapon.vertical_spread": 0.01
+    },
+    "S-11 Speargun": {
+      "damage.primary.status_3_strength": 50,
+      "damage.primary.status_3_type": 2
+    },
+    "SMG-32 Reprimand": {
+      "attack.primary.projectile": 135,
+      "magazine.magazines_from_supply": 12,
+      "magazine.spare_magazines": 12,
+      "magazine.starting_magazines": 6,
+      "weapon.capacity": 20,
+      "weapon.horizontal_spread": 10,
+      "weapon.vertical_spread": 10
+    },
+    "SMG/FLAM-34 Stoker": {
+      "attack.primary.projectile": 215,
+      "weapon.horizontal_spread": 20,
+      "weapon.vertical_spread": 20
+    },
+    "StA-11 SMG": {
+      "magazine.magazines_from_supply": 12,
+      "magazine.spare_magazines": 12,
+      "weapon.horizontal_spread": 20,
+      "weapon.vertical_spread": 20
+    },
+    "StA-52 Assault Rifle": {
+      "presentation.traits.1": 3085090887
+    },
+    "StA-X3 W.A.S.P. Launcher": {
+      "damage.primary.ap_direct": 5,
+      "damage.primary.ap_extreme": 5,
+      "damage.primary.ap_large": 5,
+      "damage.primary.ap_slight": 5,
+      "damage.primary.durable_damage": 250,
+      "damage.primary.standard_damage": 250,
+      "explosion.primary_impact.damage.ap_direct": 4,
+      "explosion.primary_impact.damage.durable_damage": 500,
+      "explosion.primary_impact.damage.standard_damage": 500,
+      "missile.turn_rate_at_max_angle": 2,
+      "weapon.capacity": 14,
+      "weapon.fire_rate": 1000
+    },
+    "SMG-37 Defender": {
+      "ammunition.projectile": 215
+    },
+    "LAS-5 Scythe": {
+      "damage.status_2_strength": 2,
+      "damage.status_2_type": 55,
+      "damage.durable_damage": 400,
+      "heat.heat_per_second": 25,
+      "damage.standard_damage": 400,
+      "damage.ap_extreme": 2,
+      "presentation.traits.1": 1865818670,
+      "damage.status_3_strength": 0.5,
+      "damage.status_3_type": 6,
+      "presentation.traits.2": 0,
+      "presentation.traits.3": 0
+    },
+    "MG-43 Machine Gun": {
+      "damage.primary.durable_damage": 60,
+      "damage.primary.standard_damage": 125
+    },
+    "DBS-2 Double Freedom": {
+      "damage.durable_damage": 100,
+      "damage.standard_damage": 100
+    },
+    "SG-20 Halt": {
+      "damage.primary.status_1_strength": 0.5,
+      "damage.primary.status_1_type": 4,
+      "damage.primary.status_2_strength": 1,
+      "damage.primary.status_2_type": 37
+    },
+    "SG-225SP Breaker Spray&Pray": {
+      "projectile.pellet_count": 30,
+      "weapon.fire_rate": 430
+    },
+    "SG-225IE Breaker Incendiary": {
+      "damage.status_2_strength": 0.6,
+      "damage.status_2_type": 6
+    },
+    "SG-225 Breaker": {
+      "damage.durable_damage": 15,
+      "damage.standard_damage": 60,
+      "projectile.pellet_count": 12
+    },
+    "SG-451 Cookout": {
+      "damage.status_2_strength": 0.6,
+      "damage.status_2_type": 6
+    },
+    "SG-8 Punisher": {
+      "damage.durable_damage": 30,
+      "damage.standard_damage": 90
+    },
+    "SG-8S Slugger": {
+      "damage.durable_damage": 450,
+      "damage.standard_damage": 450
+    },
+    "SG-97 Sweeper": {
+      "damage.durable_damage": 25,
+      "damage.standard_damage": 50
+    },
+    "SMG-72 Pummeler": {
+      "damage.status_2_strength": 2,
+      "damage.status_2_type": 4,
+      "damage.status_3_strength": 2,
+      "damage.status_3_type": 1
+    },
+    "AR-23C Liberator Concussive": {
+      "damage.status_1_strength": 2,
+      "damage.status_1_type": 38,
+      "damage.status_2_strength": 2,
+      "damage.status_2_type": 4,
+      "damage.status_3_strength": 2,
+      "damage.status_3_type": 1
+    },
+    "GL-28 Belt-Fed Grenade Launcher": {
+      "damage.primary.durable_damage": 20,
+      "damage.primary.standard_damage": 20,
+      "damage.primary.ap_direct": 3,
+      "damage.primary.ap_large": 2,
+      "damage.primary.ap_slight": 3,
+      "explosion.primary_impact.inner_radius": 5,
+      "explosion.primary_impact.outer_radius": 6,
+      "explosion.primary_impact.shockwave_radius": 8
+    },
+    "GL-21 Grenade Launcher": {
+      "attack.primary.projectile": 89
+    },
+    "LAS-7 Dagger": {
+      "heat.charge_gain_per_second": 500
+    }
+  },
+  "explosions": {
+    "AC-8 Autocannon (function impact)": {
+      "explosion.inner_radius": 5
+    },
+    "B-100 Portable Hellbomb (behavior)": {
+      "explosion.damage.push_force": 150,
+      "explosion.damage.stagger": 100,
+      "explosion.inner_radius": 25,
+      "explosion.outer_radius": 35
+    },
+    "GR-8 Recoilless Rifle (function impact)": {
+      "explosion.shrapnel_count": 20
+    },
+    "NUX-223 Hellbomb (behavior)": {
+      "explosion.inner_radius": 35,
+      "explosion.outer_radius": 45,
+      "explosion.shockwave_radius": 65
+    },
+    "P/40-K Bolt Pistol (impact)": {
+      "explosion.shrapnel_count": 10
+    },
+    "R-36 Eruptor (impact)": {
+      "explosion.shrapnel_count": 50
+    },
+    "StA-X3 W.A.S.P. Launcher (function impact)": {
+      "explosion.shrapnel_count": 20
+    },
+    "GL-28 Belt-Fed Grenade Launcher (impact)": {
+      "explosion.damage.durable_damage": 250,
+      "explosion.damage.standard_damage": 250,
+      "explosion.shrapnel_count": 30
+    }
+  },
+  "backpacks": {
+    "AC-8 Autocannon Backpack": {
+      "deposit.refill_amount": 10
+    },
+    "LIFT-850 Jump Pack": {
+      "jump.launch_duration": 0.75,
+      "jump.takeoff_forward_speed": 0.75,
+      "jump.takeoff_speed": 3,
+      "jump.vertical_launch_velocity": 45
+    },
+    "LIFT-860 Hover Pack": {
+      "hover.max_horizontal_speed": 8
+    },
+    "SH-32 Shield Generator Pack": {
+      "shield.broken_recharge_delay": 5,
+      "shield.durability": 125,
+      "shield.recharge_delay": 0.5,
+      "shield.recharge_rate": 100
+    },
+    "SH-51 Directional Shield": {
+      "shield.broken_recharge_delay": 10,
+      "shield.durability": 2000,
+      "shield.recharge_delay": 0.5
+    },
+    "GL-28 Belt-Fed Grenade Launcher Backpack": {
+      "deposit.capacity": 60,
+      "deposit.refill_amount": 30,
+      "deposit.start_amount": 60
+    }
+  },
+  "boosters": {
+    "Localization Confusion": {
+      "booster.encounter_rate_scale": 0.75
+    },
+    "Surplus EAT Allocation": {
+      "stratagem.max_uses": 10
+    }
+  },
+  "difficulty": {
+    "10": {
+      "difficulty.optional_objectives": 6,
+      "difficulty.encounter_points": 850,
+      "difficulty.guardforce_points": 850
+    },
+    "9": {
+      "difficulty.optional_objectives": 5,
+      "difficulty.encounter_points": 600,
+      "difficulty.guardforce_points": 600
+    },
+    "7": {
+      "difficulty.encounter_points": 350,
+      "difficulty.guardforce_points": 380,
+      "difficulty.shared_spawner_cooldown": 4
+    },
+    "8": {
+      "difficulty.encounter_points": 450,
+      "difficulty.guardforce_points": 450
+    }
+  },
+  "helldiver": {
+    "Helldiver": {
+      "entity.armor": 1,
+      "entity.durable_resistance": 5,
+      "entity.health": 150,
+      "helldiver.supply.stims_from_supply": 4
+    }
+  },
+  "perks": {
+    "Blunt-Force Mitigation": {
+      "perk.armor_rating": 0.25,
+      "perk.knock_prone_resistance": 0.3
+    }
+  },
+  "statuses": {
+    "Acid Storm": {
+      "status.duration": 5
+    },
+    "Bleed": {
+      "status.duration": 999
+    },
+    "Extreme Cold": {
+      "status.duration": 2
+    },
+    "Tremor": {
+      "status.duration": 1
+    }
+  },
+  "stratagems": {
+    "A/AC-8 Autocannon Sentry": {
+      "weapon.fire_rate": 250
+    },
+    "A/G-16 Gatling Sentry": {
+      "weapon.capacity": 250,
+      "weapon.fire_rate": 1000
+    },
+    "A/LAS-98 Laser Sentry": {
+      "heat.capacity": 200,
+      "heat.heat_per_second": 12,
+      "heat.heat_per_shot": 4
+    },
+    "A/MG-43 Machine Gun Sentry": {
+      "weapon.fire_rate": 500
+    },
+    "B-100 Portable Hellbomb": {
+      "stratagem.cooldown": 180
+    },
+    "E/AT-12 Anti-Tank Emplacement": {
+      "damage.durable_damage": 1500,
+      "damage.push_force": 50,
+      "damage.stagger": 75,
+      "damage.standard_damage": 1500,
+      "explosion.damage.ap_large": 1,
+      "explosion.damage.ap_slight": 2,
+      "explosion.damage.durable_damage": 350,
+      "explosion.damage.standard_damage": 350,
+      "explosion.inner_radius": 6,
+      "explosion.outer_radius": 9,
+      "explosion.shockwave_radius": 13,
+      "projectile.velocity": 1250
+    },
+    "E/MG-101 HMG Emplacement": {
+      "weapon.capacity": 400,
+      "weapon.fire_rate": 800
+    },
+    "EXO-45 Patriot Exosuit": {
+      "stratagem.cooldown": 300,
+      "stratagem.max_uses": -1
+    },
+    "EXO-49 Emancipator Exosuit": {
+      "stratagem.cooldown": 300,
+      "stratagem.max_uses": -1
+    },
+    "EXO-51 Lumberer Exosuit": {
+      "stratagem.cooldown": 300,
+      "stratagem.max_uses": -1
+    },
+    "EXO-55 Breakthrough Exosuit": {
+      "stratagem.cooldown": 300,
+      "stratagem.max_uses": -1
+    },
+    "Eagle 110mm Rocket Pods": {
+      "damage.durable_damage": 750,
+      "damage.standard_damage": 900,
+      "eagle.attack_angle": 0,
+      "eagle.fire_duration": 3,
+      "eagle.target_radius": 50,
+      "explosion.inner_radius": 2.5,
+      "explosion.shockwave_radius": 10
+    },
+    "Eagle 500kg Bomb": {
+      "eagle.attack_angle": 45,
+      "eagle.drop_interval": 0.1
+    },
+    "Eagle Cluster Bomb": {
+      "eagle.attack_angle": 270
+    },
+    "Eagle Strafing Run": {
+      "eagle.attack_sweep_length": 40
+    },
+    "FX-12 Shield Generator Relay": {
+      "payload.lifetime": 60,
+      "shield.broken_recharge_delay": 5,
+      "shield.durability": 8000,
+      "shield.recharge_delay": 0.5,
+      "shield.recharge_rate": 1000
+    },
+    "M-102 Gunner FRV": {
+      "stratagem.cooldown": 240
+    },
+    "M-103 Supply FRV": {
+      "stratagem.cooldown": 300
+    },
+    "Orbital 120mm HE Barrage": {
+      "orbital.salvo_interval": 0,
+      "orbital.shell_interval": 1,
+      "orbital.shell_interval_random": 0.28,
+      "orbital.shells_per_salvo": 5
+    },
+    "Orbital 380mm HE Barrage": {
+      "orbital.salvo_interval": 1,
+      "orbital.salvo_interval_random": 0.25,
+      "orbital.salvos": 3,
+      "orbital.shell_interval": 0.5,
+      "orbital.shell_interval_random": 0.25,
+      "orbital.shells_per_salvo": 5
+    },
+    "Orbital Airburst Strike": {
+      "orbital.aim_step_max": 1,
+      "orbital.aim_step_min": 1,
+      "orbital.salvo_interval": 2,
+      "orbital.scatter": 1,
+      "stratagem.cooldown": 75
+    },
+    "Orbital EMS Strike": {
+      "orbital.salvo_interval": 1,
+      "orbital.salvos": 4,
+      "orbital.scatter": 25,
+      "orbital.shells_per_salvo": 4
+    },
+    "Orbital Gas Strike": {
+      "orbital.salvo_scatter": 0,
+      "orbital.salvos": 4,
+      "orbital.scatter": 25,
+      "orbital.shells_per_salvo": 4
+    },
+    "Orbital Gatling Barrage": {
+      "orbital.salvos": 8,
+      "orbital.shell_interval": 0.015,
+      "orbital.shells_per_salvo": 64,
+      "stratagem.cooldown": 90
+    },
+    "Orbital Laser": {
+      "orbital.movement_speed": 8,
+      "orbital.tick_interval": 0.05,
+      "stratagem.max_uses": -1,
+      "orbital.duration": 20
+    },
+    "Orbital Napalm Barrage": {
+      "orbital.salvo_interval": 10,
+      "orbital.salvos": 2,
+      "orbital.shell_interval": 0.28,
+      "orbital.shell_interval_random": 0.28,
+      "stratagem.cooldown": 210
+    },
+    "Orbital Precision Strike": {
+      "orbital.salvo_interval": 0,
+      "stratagem.call_in_time": 0.5,
+      "stratagem.cooldown": 30
+    },
+    "Orbital Railcannon Strike": {
+      "damage.ap_direct": 12,
+      "damage.ap_extreme": 12,
+      "damage.ap_large": 12,
+      "damage.ap_slight": 12,
+      "damage.durable_damage": 12000,
+      "damage.push_force": 50,
+      "damage.stagger": 100,
+      "damage.standard_damage": 12000,
+      "explosion.damage.ap_direct": 3,
+      "explosion.damage.ap_large": 2,
+      "explosion.damage.ap_slight": 3,
+      "explosion.damage.demolition": 30,
+      "explosion.inner_radius": 8,
+      "explosion.outer_radius": 15,
+      "explosion.shockwave_radius": 15,
+      "orbital.movement_speed": 60,
+      "stratagem.cooldown": 210
+    },
+    "Orbital Smoke Strike": {
+      "orbital.salvo_interval": 1,
+      "orbital.salvos": 1,
+      "orbital.scatter": 25,
+      "orbital.shell_interval": 0.35,
+      "orbital.shells_per_salvo": 4
+    },
+    "Orbital Walking Barrage": {
+      "orbital.salvo_interval": 0,
+      "orbital.shell_interval": 1,
+      "orbital.shells_per_salvo": 5,
+      "orbital.walking_speed": 5
+    },
+    "Eagle Airstrike": {
+      "eagle.airstrike_pattern": 3,
+      "eagle.drop_interval": 0.1
+    }
+  },
+  "throwables": {
+    "K-2 Throwing Knife": {
+      "damage.ap_direct": 4,
+      "damage.ap_extreme": 1,
+      "damage.ap_large": 2,
+      "damage.status_1_strength": 25,
+      "damage.status_1_type": 2
+    },
+    "G-3 Smoke": {
+      "explosion.inner_radius": 10,
+      "explosion.outer_radius": 10,
+      "throwable.count_from_supply": 6,
+      "throwable.max_count": 6,
+      "throwable.starting_count": 5
+    }
+  },
+  "vehicles": {
+    "EXO-45 Patriot Exosuit": {
+      "entity.health": 2000,
+      "zone_6.armor": 4,
+      "zone_7.armor": 4
+    },
+    "EXO-49 Emancipator Exosuit": {
+      "entity.health": 2000,
+      "zone_6.armor": 4,
+      "zone_7.armor": 4
+    },
+    "EXO-51 Lumberer Exosuit": {
+      "entity.health": 2000,
+      "zone_6.armor": 4,
+      "zone_7.armor": 4
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "format": 1,
+  "id": "balance-pass",
+  "name": "Balance Pass",
+  "version": "1.0.0",
+  "description": "A broad gameplay balance pass for weapons, enemies, and stratagems using HellForge stats.",
+  "gameplay": true
+}
