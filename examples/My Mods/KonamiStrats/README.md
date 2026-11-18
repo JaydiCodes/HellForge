@@ -1,0 +1,15 @@
+- **Every strat available if you know the codes**
+	- Can still "take" 4 strats as normal
+	- All other strats available if you match the input after:
+		- up up down down left right left right
+	- These strategems have a longer call in time + a cost in the case of:
+		- Eagles: 10 seconds + 100 Req slips
+			- Shared cooldown of 30 seconds
+		- Orbitals: 10 seconds + 100 Req slips
+			- Shared cooldown of 30 seconds
+		- Support weapons / backpacks: 20 seconds + 500 Req slips
+			- Shared cooldown of 5 minutes
+		- Vehicles: 60 seconds + 1000 Req slips
+			- Shared cooldown of 5 minutes
+		- Defensive stratagems: 20 seconds + 500 Req slips
+			- Shared cooldown of 2 minutes

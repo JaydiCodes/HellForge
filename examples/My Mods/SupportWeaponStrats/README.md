@@ -1,0 +1,2 @@
+- **Support weapon strats for:**
+	- Eruptor

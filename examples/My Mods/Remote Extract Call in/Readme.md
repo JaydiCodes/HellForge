@@ -1,0 +1,4 @@
+- **Remote Extract call in**
+	- Once extract available, stratagem added (random generated code)
+	- Using it calls extract to beacon
+	- In case of multiple beacons, one closest to caller

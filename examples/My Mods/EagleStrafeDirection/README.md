@@ -1,0 +1,11 @@
+- **Additional eagle input for strafe direction**
+	- After an eagle input
+		- If player lets go of stratagem key, call in is set to the eagle as default
+		- If strat key is still held, additional two key input is awaited
+		- This combination sets the direction of the previously input eagle strat
+			- Up up = 180*
+			- Down down = 0*
+			- Left left = 270*
+			- right right = 90*
+			- All other cardinal angles included, example, Down right = 45*
+		- The strat is then complete with and the additional angle set temporarily for that eagle call in only

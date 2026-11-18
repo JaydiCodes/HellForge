@@ -1,0 +1,7 @@
+- **Primary weapons of support weapons**
+	- Stalwart
+	- MG43
+	- Nova
+	- Arc thrower
+	- Grenade Launcher
+	- AMR

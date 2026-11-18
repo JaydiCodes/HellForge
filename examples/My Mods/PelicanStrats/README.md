@@ -1,0 +1,9 @@
+- **Pelican Stratagems**
+	- pelican transport A to B - Support
+	- pelican loiter - Offensive
+	- SEAF call in - Defensive
+		- Standard mix
+		- Anti Tank
+		- Grenadiers
+		- Medic
+		- Snipers
