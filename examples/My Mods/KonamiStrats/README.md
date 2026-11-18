@@ -1,6 +1,5 @@
 - **Every strat available if you know the codes**
-	- Can still "take" 4 strats as normal
-	- All other strats available if you match the input after:
+	- New stratagem that makes all strats available if you match the input after:
 		- up up down down left right left right
 	- These strategems have a longer call in time + a cost in the case of:
 		- Eagles: 10 seconds + 100 Req slips
