@@ -510,10 +510,10 @@
       "damage.ap_large": 2,
       "damage.ap_slight": 3,
       "damage.demolition": 20,
-      "damage.durable_damage": 350,
+      "damage.durable_damage": 500,
       "damage.push_force": 20,
       "damage.stagger": 30,
-      "damage.standard_damage": 350,
+      "damage.standard_damage": 500,
       "presentation.traits.1": 3085090887,
       "presentation.traits.2": 0,
       "presentation.traits.3": 0,
@@ -797,8 +797,26 @@
     "GL-21 Grenade Launcher": {
       "attack.primary.projectile": 89
     },
+    "RL-77 Airburst Rocket Launcher": {
+      "attack.primary.projectile": 36,
+      "projectile.programmable.lifetime": 2
+    },
     "LAS-7 Dagger": {
       "heat.charge_gain_per_second": 500
+    },
+    "FLAM-40 Flamethrower": {
+      "damage.primary.status_2_strength": 2,
+      "damage.primary.status_3_strength": 5,
+      "damage.primary.status_4_strength": 1,
+      "damage.primary.status_4_type": 32
+    },
+    "PLAS-1 Scorcher": {
+      "weapon.fire_rate": 650,
+      "weapon.capacity": 40
+    },
+    "PLAS-101 Purifier": {
+      "explosion.primary.impact.damage.status_1_strength": 20,
+      "explosion.primary.impact.damage.status_1_type": 55
     }
   },
   "explosions": {
@@ -1087,7 +1105,7 @@
       "orbital.salvos": 1,
       "orbital.scatter": 25,
       "orbital.shell_interval": 0.35,
-      "orbital.shells_per_salvo": 4
+      "orbital.shells_per_salvo": 6
     },
     "Orbital Walking Barrage": {
       "orbital.salvo_interval": 0,
@@ -1098,6 +1116,9 @@
     "Eagle Airstrike": {
       "eagle.airstrike_pattern": 3,
       "eagle.drop_interval": 0.1
+    },
+    "Eagle Napalm Airstrike": {
+      "explosion.inner_radius": 10
     }
   },
   "throwables": {
