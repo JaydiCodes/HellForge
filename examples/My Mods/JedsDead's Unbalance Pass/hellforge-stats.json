@@ -783,11 +783,13 @@
       "damage.status_3_type": 1
     },
     "GL-28 Belt-Fed Grenade Launcher": {
-      "damage.primary.durable_damage": 20,
-      "damage.primary.standard_damage": 20,
-      "damage.primary.ap_direct": 3,
+      "damage.primary.durable_damage": 100,
+      "damage.primary.standard_damage": 100,
+      "damage.primary.ap_direct": 4,
+      "damage.primary.ap_extreme": 1,
       "damage.primary.ap_large": 2,
       "damage.primary.ap_slight": 3,
+      "explosion.primary_impact.damage.ap_direct": 3,
       "explosion.primary_impact.inner_radius": 5,
       "explosion.primary_impact.outer_radius": 6,
       "explosion.primary_impact.shockwave_radius": 8
@@ -829,7 +831,7 @@
     "GL-28 Belt-Fed Grenade Launcher (impact)": {
       "explosion.damage.durable_damage": 250,
       "explosion.damage.standard_damage": 250,
-      "explosion.shrapnel_count": 30
+      "explosion.shrapnel_count": 15
     }
   },
   "backpacks": {

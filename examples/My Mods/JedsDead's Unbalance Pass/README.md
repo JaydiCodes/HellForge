@@ -1,10 +1,9 @@
 # JedsDead's UnBalance Pass
 
-In solo play, the code requests Blunt-Force Mitigation as the local player's second armor passive, while leaving the
-worn armor's primary passive in place. The existing stats file sets that perk's knockdown multiplier to `0.3`. The
-passive also supplies its impact-damage bonus and replaces any passive already in the second slot. The armor's own
-bonus takes precedence if it also has knockdown resistance; for example, Rock-Solid retains its own multiplier.
+A broad balance pass on almost all weapons and stratagems
 
-The override waits in multiplayer and resumes when playing alone. Its status and any failure appear in the mod's
-session log. Perk-value changes have not been verified in gameplay; test knockdown and collision behavior in a mission.
-Adding code makes this a shared gameplay mod, so friends must have the same mod files.
+Some enemies and effects have been adjusted accordingly to not make it feel too easy or broken.
+
+This mod also includes;
+- A remove extraction call in stratagem once the extract has become available.
+- Blunt force mitigation as a second passive for everyone, effectively reducing the power of ragdoll effects. (It happens very seldomly)
