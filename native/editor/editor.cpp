@@ -46,6 +46,12 @@
 #include "local_stats.h"
 #include "sounds.h"
 
+#ifdef HF_OVERLAY_FRONTEND
+#include HF_OVERLAY_FRONTEND
+#else
+static constexpr const char* hf_overlay_key_label = "F8";
+#endif
+
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND window, UINT message, WPARAM w, LPARAM l);
 
 typedef HRESULT(STDMETHODCALLTYPE* PresentFn)(IDXGISwapChain3*, UINT, UINT);
@@ -308,7 +314,12 @@ static void MouseAt(HWND window, UINT message, LPARAM l)
 static LRESULT CALLBACK EditorProc(HWND window, UINT message, WPARAM w, LPARAM l)
 {
     if (message == WM_EDITOR_SOUND) return SoundMessage();
+#ifdef HF_OVERLAY_FRONTEND
+    if (message == WM_KEYDOWN && w == hf_overlay_hotkey && !(l & 0x40000000) &&
+        (g_open || (g_ready && CanOpenOverlay(g_api, g_mod)))) { ToggleWindow(); return 0; }
+#else
     if (message == WM_KEYDOWN && w == VK_F8 && !(l & 0x40000000)) { ToggleWindow(); return 0; }
+#endif
     if ((g_open || g_modal) && g_ready)
     {
         EnterCriticalSection(&g_lock);
@@ -550,9 +561,9 @@ static bool Initialize11(IDXGISwapChain3* swapChain)
     RECT client;
     GetClientRect(g_window, &client);
     LogOverlays();
-    g_api->log(g_mod, "editor: drawing with Direct3D 11 (the game's --use-d3d11), format %d, %ldx%ld; F8 opens it (frames on thread %lu, "
+    g_api->log(g_mod, "editor: drawing with Direct3D 11 (the game's --use-d3d11), format %d, %ldx%ld; %s opens it (frames on thread %lu, "
         "the window's thread %lu)", (int)desc.BufferDesc.Format, client.right - client.left, client.bottom - client.top,
-        GetCurrentThreadId(), GetWindowThreadProcessId(g_window, NULL));
+        hf_overlay_key_label, GetCurrentThreadId(), GetWindowThreadProcessId(g_window, NULL));
     return g_gameProc != NULL;
 }
 
@@ -612,9 +623,9 @@ static bool Initialize(IDXGISwapChain3* swapChain)
     if (!icons::Upload(g_device, g_queue, g_execute, cpu, gpu)) g_api->log(g_mod, "editor: the images could not be made; the editor shows none");
     g_gameProc = (WNDPROC)SetWindowLongPtrW(g_window, GWLP_WNDPROC, (LONG_PTR)EditorProc);
     LogOverlays();
-    g_api->log(g_mod, "editor: drawing on the game's queue %p, %u back buffers, format %d, %ldx%ld; F8 opens it (frames on thread %lu, "
+    g_api->log(g_mod, "editor: drawing on the game's queue %p, %u back buffers, format %d, %ldx%ld; %s opens it (frames on thread %lu, "
         "the window's thread %lu)", (void*)g_queue, g_buffers, (int)g_format, client.right - client.left, client.bottom - client.top,
-        GetCurrentThreadId(), GetWindowThreadProcessId(g_window, NULL));
+        hf_overlay_key_label, GetCurrentThreadId(), GetWindowThreadProcessId(g_window, NULL));
     return g_gameProc != NULL;
 }
 
@@ -1193,6 +1204,9 @@ static void Start(HfMod* mod, HfEvent event, void* user)
 extern "C" HF_MOD_EXPORT int hellforge_mod_init(const HfApi* hf, HfMod* mod)
 {
     if (hf->version < 6) return 1;
+#ifdef HF_OVERLAY_FRONTEND
+    if (InitOverlayGameplay(hf, mod)) return 1;
+#endif
     g_api = hf;
     g_mod = mod;
     /* Local Stats is the editor's neighbour in the mods folder. */

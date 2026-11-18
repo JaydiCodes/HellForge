@@ -120,6 +120,9 @@ static double g_lastLive;
 static char g_folder[MAX_PATH] = "";
 static char g_logsFolder[MAX_PATH] = "";
 
+static int g_testPurchases;
+static bool g_testEruptorDebit;
+static uint32_t g_shopState = HF_STATE_SHIP;
 static void Log(HfMod*, const char* format, ...)
 {
     char line[512];
@@ -128,6 +131,8 @@ static void Log(HfMod*, const char* format, ...)
     vsnprintf(line, sizeof line, format, arguments);
     va_end(arguments);
     printf("  mod: %s\n", line);
+    if (strncmp(line, "Test purchase:", sizeof("Test purchase:") - 1) == 0) g_testPurchases++;
+    if (strcmp(line, "Test purchase: R-36 Eruptor (1000 test Requisition; 4000 remaining)") == 0) g_testEruptorDebit = true;
     if (strstr(line, "drawing on the game's queue") || strstr(line, "drawing with Direct3D 11")) g_drawing = 1;
     if (const char* at = strstr(line, "drawing on the game's queue ")) sscanf(at + strlen("drawing on the game's queue "), "%p", &g_drawnQueue);
     if (strstr(line, "hooked the swap chain")) g_hooked = 1;
@@ -147,6 +152,10 @@ static void Log(HfMod*, const char* format, ...)
     if (strstr(line, "sound: the editor opens")) g_editorOpens++;
 }
 static const char* Build() { return "25480438"; }
+static int Subscribe(HfMod*, uint32_t, HfListener, void*, int32_t) { return 1; }
+static uint32_t ShopState(HfMod*) { return g_shopState; }
+static int CodeMatches(uintptr_t, const char*) { return 0; }
+static uintptr_t Global(HfMod*, const char*) { return 0; }
 static const char* ModFolder(HfMod*) { return g_folder; }
 static int On(HfMod* mod, HfEvent event, HfEventCallback callback, void* user) { if (event == HF_EVENT_ENTITIES_READY) g_ready = callback; return 0; }
 /* the originals the editor got, by target (the test's "overlay" calls past the editor with them) */
@@ -349,12 +358,20 @@ int main(int argc, char** argv)
     if (argc < 2) { puts("usage: overlay_test.exe <hellforge_editor.dll> [<screenshot.bmp> [<editor folder>]]"); return 2; }
     SetProcessDPIAware(); /* the screenshot in real pixels, not a scaled copy */
     MH_Initialize();
+    const bool shop = getenv("HELLFORGE_OVERLAY_TEST_SHOP") != NULL;
     g_api.version = HF_MOD_SDK_VERSION; g_api.size = sizeof g_api;
     g_api.log = Log; g_api.build_id = Build; g_api.on = On; g_api.hook = Hook; g_api.set_live = SetLive; g_api.record = Record; g_api.mod_folder = ModFolder;
     g_api.get_live = GetLive;
     g_api.last_log = LastLog; g_api.logs_folder = LogsFolder; g_api.get_stat = GetStat; g_api.session = Session; g_api.stats_source = StatsSource;
     g_api.content = Content;
     g_api.component_record = ComponentRecord;
+    if (shop)
+    {
+        g_api.subscribe = Subscribe;
+        g_api.game_state = ShopState;
+        g_api.code_matches = CodeMatches;
+        g_api.global = Global;
+    }
     g_extraWeapons = getenv("HELLFORGE_EDITOR_TEST_WEAPONS") ? (uint32_t)atoi(getenv("HELLFORGE_EDITOR_TEST_WEAPONS")) : 0;
     if (g_extraWeapons > 512) g_extraWeapons = 512;
     g_api.mods = Mods;
@@ -460,8 +477,9 @@ int main(int argc, char** argv)
     uint8_t presentBefore[8]; /* Present's first bytes as they are before the editor */
     memcpy(presentBefore, presentCode, 8);
     HMODULE editor = LoadLibraryA(argv[1]);
+    if (!editor) { printf("FAIL cannot load %s (Windows error %lu)\n", argv[1], GetLastError()); return 1; }
     typedef int (*Init)(const HfApi*, HfMod*);
-    Init init = editor ? (Init)(void*)GetProcAddress(editor, "hellforge_mod_init") : NULL;
+    Init init = (Init)(void*)GetProcAddress(editor, "hellforge_mod_init");
     if (!init || init(&g_api, &g_mod) != 0 || !g_ready) { puts("FAIL the editor did not initialize"); return 1; }
     g_ready(&g_mod, HF_EVENT_ENTITIES_READY, NULL);
     if (catalogued)
@@ -504,6 +522,19 @@ int main(int argc, char** argv)
     {
         MSG message;
         while (PeekMessageW(&message, NULL, 0, 0, PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
+        if (shop)
+        {
+            if (frame == 10 || frame == 50 || frame == 70 || frame == 100 || frame == 115) Key(window, VK_F1);
+            if (frame == 34) Key(window, VK_ESCAPE);
+            if (frame == 60) g_shopState = HF_STATE_MISSION;
+            if (frame == 90) g_shopState = HF_STATE_SHIP;
+            const LPARAM button = MAKELPARAM(785, 375);
+            if (frame == 20 || frame == 26) SendMessageW(window, WM_MOUSEMOVE, 0, button);
+            if (frame == 21 || frame == 27) SendMessageW(window, WM_LBUTTONDOWN, MK_LBUTTON, button);
+            if (frame == 22 || frame == 28) SendMessageW(window, WM_LBUTTONUP, 0, button);
+        }
+        else
+        {
         /* an overlay hooks Present's and Present1's code over the editor's after it has started, and never calls the
          * editor's detour (RivaTuner coming in late, issue #5); the editor must get in front of it again. Where a real
          * RivaTuner is in the process it is that overlay (it hooks over the editor on the first frames), and the test's
@@ -595,6 +626,7 @@ int main(int argc, char** argv)
             SetWindowPos(window, NULL, 0, 0, (int)width, (int)height, SWP_NOZORDER);
             if (FAILED(chain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0))) { puts("FAIL ResizeBuffers"); failures++; }
         }
+        }
         const float color[4] = {0.05f, 0.25f, 0.05f, 1.0f}; /* green: what the "game" draws */
         if (d3d11)
         {
@@ -638,6 +670,25 @@ int main(int argc, char** argv)
         queue->Signal(fence, ++value);
         fence->SetEventOnCompletion(value, event); WaitForSingleObject(event, 2000);
         buffer->Release();
+        }
+        if (shop)
+        {
+            if (frame == 16 || frame == 45 || frame == 55 || frame == 65 || frame == 80 || frame == 110 || frame == 120)
+            {
+                RECT center = {500, 330, 750, 390};
+                const bool open = frame == 16 || frame == 55 || frame == 110;
+                int drawn = Screenshot(frame == 16 && argc > 2 ? argv[2] : NULL, width, height, &center);
+                if (open ? drawn < 1000 : drawn > 100)
+                { printf("FAIL shop at frame %d: %d changed pixels, expected %s\n", frame, drawn, open ? "open" : "closed"); failures++; }
+            }
+            if (frame == 120)
+            {
+                if (!g_testEruptorDebit || g_testPurchases != 1)
+                { printf("FAIL expected one Eruptor purchase for 1000, got %d total purchases\n", g_testPurchases); failures++; }
+                printf("%s shop overlay: %s\n", failures ? "FAIL" : "PASS", d3d11 ? "D3D11" : "D3D12");
+                return failures != 0;
+            }
+            continue;
         }
         if (frame == 400 && argc > 2) /* the screen as it is, editor open */
         {

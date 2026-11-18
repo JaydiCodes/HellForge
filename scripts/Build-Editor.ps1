@@ -8,13 +8,32 @@
 # Usage: scripts/Build-Editor.ps1 [-Install <installation>] [-Test [-SkipOverlayTest]]   (with -Install, the folder is copied into
 # its mods, with the game icons extracted from that installation's game copy; -SkipOverlayTest leaves out overlay_test, which
 # needs a GPU and a desktop to draw on, as on CI's hosted runners)
-param([string]$Install,[switch]$Test,[switch]$SkipOverlayTest)
+# Usage: scripts/Build-Editor.ps1 -SpendMyResources [-Test]   (standalone shop; -Test runs the D3D12 and D3D11 fixtures)
+param([string]$Install,[switch]$Test,[switch]$SkipOverlayTest,[switch]$SpendMyResources)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+if($SpendMyResources -and ($Install -or $SkipOverlayTest)){
+    throw '-SpendMyResources builds a standalone mod. Do not combine it with -Install or -SkipOverlayTest.'
+}
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $project=Split-Path -Parent $PSScriptRoot
 $buildTools=& (Join-Path $PSScriptRoot 'Get-BuildTools.ps1')
 $zig=$buildTools.Zig
+$testOut=Join-Path $project 'artifacts/editor/test'
+function Build-OverlayTest {
+    $minHook=$buildTools.MinHook
+    New-Item -ItemType Directory $testOut -Force|Out-Null
+    $hookObjects=@()
+    foreach($source in @('src/buffer.c','src/hook.c','src/trampoline.c','src/hde/hde64.c')){
+        $object=Join-Path $testOut ('mh_'+[IO.Path]::GetFileNameWithoutExtension($source)+'.o')
+        & $zig cc -target x86_64-windows-gnu -O1 -w -I (Join-Path $minHook 'include') -c (Join-Path $minHook $source) -o $object
+        if($LASTEXITCODE){throw 'MinHook did not compile.'}
+        $hookObjects+=$object
+    }
+    & $zig c++ -target x86_64-windows-gnu -O1 -std=c++17 -Wall -Werror -Wno-unused-parameter -I (Join-Path $project 'native/mod-sdk') -I (Join-Path $minHook 'include') `
+        (Join-Path $project 'native/editor/test/overlay_test.cpp') @hookObjects -ld3d11 -ld3d12 -ldxgi -lgdi32 -o (Join-Path $testOut 'overlay_test.exe')
+    if($LASTEXITCODE){throw 'The overlay test did not compile.'}
+}
 $archive=Join-Path $project 'tools/downloads/imgui-1.91.9b.zip'
 $sha='FD37507C8476A6D14CC7C4B352401F31BCBD0F0D995D35390811E968C466F46E'
 if(-not(Test-Path -LiteralPath $archive) -or (Get-FileHash -LiteralPath $archive).Hash -ne $sha){
@@ -31,7 +50,7 @@ if(-not(Test-Path -LiteralPath $marker) -or [IO.File]::ReadAllText($marker) -ne 
     [IO.Compression.ZipFile]::ExtractToDirectory($archive,(Join-Path $project 'tools/imgui'))
     [IO.File]::WriteAllText($marker,$sha)
 }
-$out=Join-Path $project 'artifacts/editor/hellforge-editor'
+$out=if($SpendMyResources){Join-Path $project 'artifacts/SpendMyResources'}else{Join-Path $project 'artifacts/editor/hellforge-editor'}
 New-Item -ItemType Directory $out -Force|Out-Null
 $sources=@('imgui.cpp','imgui_draw.cpp','imgui_tables.cpp','imgui_widgets.cpp','imgui_demo.cpp','backends/imgui_impl_win32.cpp','backends/imgui_impl_dx11.cpp','backends/imgui_impl_dx12.cpp')|ForEach-Object {Join-Path $imgui $_}
 $common=@('-target','x86_64-windows-gnu','-O2','-std=c++17','-fno-exceptions','-fno-rtti','-I',(Join-Path $project 'native/mod-sdk'),'-I',$imgui,'-I',(Join-Path $imgui 'backends'),'-DIMGUI_DISABLE_OBSOLETE_FUNCTIONS',('-ffile-prefix-map='+$project+'=.')) # source paths in the DLL are relative: it ships
@@ -58,6 +77,42 @@ foreach($source in $sources){
     if($LASTEXITCODE){throw ('Dear ImGui did not compile: '+$source)}
     $built+=$object
 }
+if($SpendMyResources){
+    $mod=Join-Path $project 'examples/My Mods/SpendMyResources'
+    $src=Join-Path $mod 'src'
+    $editor=Join-Path $project 'native/editor'
+    $gameplay=Join-Path $objects 'spend_my_resources.o'
+    & $zig cc -target x86_64-windows-gnu -O2 -Wall -Werror -Wno-unused-parameter -I (Join-Path $project 'native/mod-sdk') `
+        -c (Join-Path $src 'spend_my_resources.c') -o $gameplay
+    if($LASTEXITCODE){throw 'Spend My Resources gameplay did not compile.'}
+    $dll=Join-Path $out 'spend_my_resources.dll'
+    & $zig c++ @common -shared -Wall -Werror -Wno-unused-parameter -s -I $src -I $editor '-DHF_OVERLAY_FRONTEND=\"shop_frontend.h\"' `
+        (Join-Path $editor 'editor.cpp') (Join-Path $src 'shop_frontend.cpp') $gameplay @built `
+        -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -lole32 -luser32 -o $dll
+    if($LASTEXITCODE){throw 'Spend My Resources overlay did not compile.'}
+    Get-ChildItem -LiteralPath $out -Filter '*.lib' | Remove-Item
+    Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'README.md'),(Join-Path $project 'LICENSE') -Destination $out
+    Copy-Item -LiteralPath (Join-Path $imgui 'LICENSE.txt') -Destination (Join-Path $out 'imgui-LICENSE.txt')
+    Write-Output "Built standalone mod: $dll"
+    if($Test){
+        Build-OverlayTest
+        $oldD3D11=$env:HELLFORGE_EDITOR_TEST_D3D11
+        $oldShop=$env:HELLFORGE_OVERLAY_TEST_SHOP
+        try {
+            $env:HELLFORGE_OVERLAY_TEST_SHOP='1'
+            $env:HELLFORGE_EDITOR_TEST_D3D11=$null
+            & (Join-Path $testOut 'overlay_test.exe') $dll (Join-Path $testOut 'shop-d3d12.bmp')
+            if($LASTEXITCODE){throw 'The Direct3D 12 shop overlay test failed.'}
+            $env:HELLFORGE_EDITOR_TEST_D3D11='1'
+            & (Join-Path $testOut 'overlay_test.exe') $dll (Join-Path $testOut 'shop-d3d11.bmp')
+            if($LASTEXITCODE){throw 'The Direct3D 11 shop overlay test failed.'}
+        } finally {
+            $env:HELLFORGE_EDITOR_TEST_D3D11=$oldD3D11
+            $env:HELLFORGE_OVERLAY_TEST_SHOP=$oldShop
+        }
+    }
+    return
+}
 $editorSources=@('editor.cpp','app.cpp','app_values.cpp','app_staging.cpp','app_widgets.cpp','app_page.cpp','app_presets.cpp','app_mods_logs.cpp','app_sync.cpp','app_lobbies.cpp','app_keys.cpp','app_browse.cpp','app_views.cpp','canvas.cpp','catalog.cpp','icons.cpp','json.cpp','local_stats.cpp','sounds.cpp')|ForEach-Object{Join-Path $project ('native/editor/'+$_)}
 & $zig c++ @common -shared -Wall -Werror -Wno-unused-parameter -s @editorSources @built `
     -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -lole32 -luser32 -o (Join-Path $out 'hellforge_editor.dll')
@@ -75,19 +130,7 @@ if($LASTEXITCODE){throw 'The editor catalogue could not be made.'}
 Copy-Item -LiteralPath (Join-Path $imgui 'LICENSE.txt') -Destination (Join-Path $out 'imgui-LICENSE.txt')
 Write-Output ('Built {0} ({1:N0} KB)' -f (Join-Path $out 'hellforge_editor.dll'),((Get-Item (Join-Path $out 'hellforge_editor.dll')).Length/1KB))
 if($Test -and -not $SkipOverlayTest){
-    $minHook=$buildTools.MinHook
-    $testOut=Join-Path $project 'artifacts/editor/test'
-    New-Item -ItemType Directory $testOut -Force|Out-Null
-    $hookObjects=@()
-    foreach($source in @('src/buffer.c','src/hook.c','src/trampoline.c','src/hde/hde64.c')){
-        $object=Join-Path $testOut ('mh_'+[IO.Path]::GetFileNameWithoutExtension($source)+'.o')
-        & $zig cc -target x86_64-windows-gnu -O1 -w -I (Join-Path $minHook 'include') -c (Join-Path $minHook $source) -o $object
-        if($LASTEXITCODE){throw 'MinHook did not compile.'}
-        $hookObjects+=$object
-    }
-    & $zig c++ -target x86_64-windows-gnu -O1 -std=c++17 -Wall -Werror -Wno-unused-parameter -I (Join-Path $project 'native/mod-sdk') -I (Join-Path $minHook 'include') `
-        (Join-Path $project 'native/editor/test/overlay_test.cpp') @hookObjects -ld3d11 -ld3d12 -ldxgi -lgdi32 -o (Join-Path $testOut 'overlay_test.exe')
-    if($LASTEXITCODE){throw 'The overlay test did not compile.'}
+    Build-OverlayTest
     # a big HD2R Editor preset, where there is one (artifacts/presets; never committed): the editor must stay fast with it
     $big=Join-Path $project 'artifacts/presets/Black-Wolfs-balance.hd2rpreset.json'
     $env:HF_TEST_BIG_PRESET=if(Test-Path -LiteralPath $big){$big}else{''}
