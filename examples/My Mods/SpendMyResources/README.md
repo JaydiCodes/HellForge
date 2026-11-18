@@ -1,16 +1,16 @@
-- **Spend samples, Req or SC to empower weapons / strats for one operation**
+- **Spend samples, Req or FC (Forge Credits) to empower weapons / strats for one operation**
 	- Remove resource limits
 	- Resources exchange
 		- Req = 1 Point
 		- Common = 50 Points
 		- Rare = 100 Points
 		- Super = 200 Points
-		- SC = 500 Points
+		- FC = 500 Points
 	- Also increase Req reward 2 times all sources
 	- In each case spend either
-		- 10 common OR 5K Req OR 1 SC
-		- 10 Rare OR 10K Req OR 5 SC
-		- 10 Super OR 25K Req OR 10 SC
+		- 10 common OR 5K Req OR 1 FC
+		- 10 Rare OR 10K Req OR 5 FC
+		- 10 Super OR 25K Req OR 10 FC
 	- Primaries
 	- Secondaries
 	- Strats
@@ -20,13 +20,12 @@
 		- Backpacks
 		- Vehicles
 		- Turrets
-	- Spend either 10 SC, 10K Req, 50 Common, 25 Rare or 10 Super to (limit to one of each):
-		- Add one more armor passive
+	- Spend either 10 FC, 10K Req, 50 Common, 25 Rare or 10 Super to (limit to one of each):
 		- Add one more strat slot
 		- Add one more booster
-	- Extremely powerful weapons and stratagems require Req slips, Samples or SC to equip
+	- Extremely powerful weapons and stratagems require Req slips, Samples or FC to equip
 		- Need either:
-			- 1 SC, 1K Req, 10 Common, 5 Rare or 1 Super
+			- 1 FC, 1K Req, 10 Common, 5 Rare or 1 Super
 		- Primaries
 			- Eruptor
 			- Dominator
