@@ -8,7 +8,7 @@
 # Usage: scripts/Build-Editor.ps1 [-Install <installation>] [-Test [-SkipOverlayTest]]   (with -Install, the folder is copied into
 # its mods, with the game icons extracted from that installation's game copy; -SkipOverlayTest leaves out overlay_test, which
 # needs a GPU and a desktop to draw on, as on CI's hosted runners)
-# Usage: scripts/Build-Editor.ps1 -SpendMyResources [-Test]   (standalone shop; -Test runs backend/native and D3D12/11 fixtures)
+# Usage: scripts/Build-Editor.ps1 -SpendMyResources [-Test]   (standalone shop; -Test runs native/profile and D3D12/11 fixtures)
 param([string]$Install,[switch]$Test,[switch]$SkipOverlayTest,[switch]$SpendMyResources)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -85,27 +85,41 @@ if($SpendMyResources){
     & $zig cc -target x86_64-windows-gnu -O2 -Wall -Werror -Wno-unused-parameter -I (Join-Path $project 'native/mod-sdk') `
         -c (Join-Path $src 'spend_my_resources.c') -o $gameplay
     if($LASTEXITCODE){throw 'Spend My Resources gameplay did not compile.'}
-    $requisition=Join-Path $objects 'smr_requisition.o'
-    & $zig cc -target x86_64-windows-gnu -O2 -Wall -Werror -I (Join-Path $project 'native/mod-sdk') `
-        -c (Join-Path $src 'requisition.c') -o $requisition
-    if($LASTEXITCODE){throw 'Spend My Resources requisition client did not compile.'}
     $dll=Join-Path $out 'spend_my_resources.dll'
     & $zig c++ @common -shared -Wall -Werror -Wno-unused-parameter -s -I $src -I $editor '-DHF_OVERLAY_FRONTEND=\"shop_frontend.h\"' `
-        (Join-Path $editor 'editor.cpp') (Join-Path $src 'shop_frontend.cpp') $gameplay $requisition @built `
-        -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -lole32 -luser32 -lwinhttp -o $dll
+        (Join-Path $editor 'editor.cpp') (Join-Path $src 'shop_frontend.cpp') $gameplay @built `
+        -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -lole32 -luser32 -o $dll
     if($LASTEXITCODE){throw 'Spend My Resources overlay did not compile.'}
     Get-ChildItem -LiteralPath $out -Filter '*.lib' | Remove-Item
-    Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'README.md'),(Join-Path $project 'LICENSE') -Destination $out
+    Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'README.md'),(Join-Path $mod 'prices.json'),(Join-Path $project 'LICENSE') -Destination $out
     Copy-Item -LiteralPath (Join-Path $imgui 'LICENSE.txt') -Destination (Join-Path $out 'imgui-LICENSE.txt')
     Write-Output "Built standalone mod: $dll"
     if($Test){
         New-Item -ItemType Directory $testOut -Force|Out-Null
         $shopTest=Join-Path $testOut 'shop_test.exe'
         & $zig cc -target x86_64-windows-gnu -O1 -Wall -Werror -Wno-unused-parameter -I (Join-Path $project 'native/mod-sdk') `
-            (Join-Path $mod 'test/shop_test.c') (Join-Path $src 'requisition.c') -lwinhttp -lole32 -o $shopTest
+            (Join-Path $mod 'test/shop_test.c') -o $shopTest
         if($LASTEXITCODE){throw 'The resource shop fixture did not compile.'}
-        & dotnet run --project (Join-Path $project 'tests/HellForge.LocalBackend.Tests') -- --requisition $shopTest
-        if($LASTEXITCODE){throw 'The resource shop/backend integration test failed.'}
+        & $shopTest
+        if($LASTEXITCODE){throw 'The resource shop fixture failed.'}
+        $profileTest=Join-Path $testOut 'profile_payment_test.exe'
+        & $zig c++ -target x86_64-windows-gnu -O1 -std=c++17 -Wall -Werror -I (Join-Path $project 'native/mod-sdk') -I $editor `
+            (Join-Path $mod 'test/profile_payment_test.cpp') -o $profileTest
+        if($LASTEXITCODE){throw 'The profile payment fixture did not compile.'}
+        & $profileTest
+        if($LASTEXITCODE){throw 'The profile payment fixture failed.'}
+        $pricesTest=Join-Path $testOut 'prices_test.exe'
+        & $zig c++ -target x86_64-windows-gnu -O1 -std=c++17 -Wall -Werror -I (Join-Path $project 'native/mod-sdk') -I $editor `
+            (Join-Path $mod 'test/prices_test.cpp') -o $pricesTest
+        if($LASTEXITCODE){throw 'The price list fixture did not compile.'}
+        & $pricesTest (Join-Path $out 'prices.json')
+        if($LASTEXITCODE){throw 'The price list fixture failed.'}
+        $checkoutTest=Join-Path $testOut 'checkout_frontend_test.exe'
+        & $zig c++ @common -Wall -Werror -Wno-unused-parameter -I $editor `
+            (Join-Path $mod 'test/checkout_frontend_test.cpp') @built -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -o $checkoutTest
+        if($LASTEXITCODE){throw 'The checkout frontend fixture did not compile.'}
+        & $checkoutTest
+        if($LASTEXITCODE){throw 'The checkout frontend fixture failed.'}
         Build-OverlayTest
         $oldD3D11=$env:HELLFORGE_EDITOR_TEST_D3D11
         $oldShop=$env:HELLFORGE_OVERLAY_TEST_SHOP

@@ -686,7 +686,7 @@ int main(int argc, char** argv)
             if (frame == 16 || frame == 45 || frame == 55 || frame == 65 || frame == 80 || frame == 110 || frame == 120)
             {
                 RECT center = {500, 330, 750, 390};
-                const bool open = frame == 16 || frame == 55 || frame == 110;
+                const bool open = false; /* Checkout opens from rejected Ready input, never F1. */
                 int drawn = Screenshot(frame == 16 && argc > 2 ? argv[2] : NULL, width, height, &center);
                 if (open ? drawn < 1000 : drawn > 100)
                 { printf("FAIL shop at frame %d: %d changed pixels, expected %s\n", frame, drawn, open ? "open" : "closed"); failures++; }

@@ -11,6 +11,7 @@ enum {
     MAX_RECORDS = 32,
     MAX_STRATAGEMS = 32
 };
+_Static_assert(PRICE_COUNT <= 32, "Checkout selection mask supports at most 32 restricted items.");
 
 static uintptr_t LocalLoadout(const HfApi* api, uintptr_t game, uint64_t peer)
 {
@@ -27,5 +28,43 @@ static uintptr_t LocalLoadout(const HfApi* api, uintptr_t game, uint64_t peer)
         if (!api->read(record, &record_peer, sizeof record_peer) && record_peer == peer)
             return record + LOADOUT;
     }
+
     return 0;
+}
+
+static int SelectedItems(HfMod* mod, unsigned* selected)
+{
+    const HfApi* api = HF_API(mod);
+    const HfLocalUser* local = hf_global_LocalUser(mod);
+    uint64_t peer = 0;
+    if (!local || api->read((uintptr_t)local + offsetof(HfLocalUser, peer), &peer, sizeof peer)) return 0;
+    uintptr_t loadout = LocalLoadout(api, game_base, peer);
+    uint32_t count = 0, weapons[3], stratagems[MAX_STRATAGEMS];
+    if (!loadout || api->read(loadout + STRATAGEM_COUNT, &count, sizeof count) || count > MAX_STRATAGEMS) return 0;
+    for (size_t i = 0; i < 3; ++i)
+        if (api->read(loadout + i * WEAPON_STRIDE, &weapons[i], sizeof weapons[i])) return 0;
+    for (uint32_t i = 0; i < count; ++i)
+        if (api->read(loadout + STRATAGEM_SLOTS + i * STRATAGEM_STRIDE, &stratagems[i], sizeof stratagems[i])) return 0;
+    *selected = 0;
+    for (size_t i = 0; i < PRICE_COUNT; ++i)
+    {
+        int weapon = kLoadoutPrices[i].kind == PRICE_WEAPON;
+        const uint32_t* picks = weapon ? weapons : stratagems;
+        for (uint32_t j = 0; j < (weapon ? 3u : count); ++j)
+            if (picks[j] == kLoadoutPrices[i].id) *selected |= 1u << i;
+    }
+    return 1;
+}
+
+static unsigned UnpaidItems(unsigned selected, unsigned* total)
+{
+    unsigned unpaid = 0;
+    *total = 0;
+    for (size_t i = 0; i < PRICE_COUNT; ++i)
+        if ((selected & (1u << i)) && !access[i])
+        {
+            unpaid |= 1u << i;
+            *total += kLoadoutPrices[i].requisition;
+        }
+    return unpaid;
 }

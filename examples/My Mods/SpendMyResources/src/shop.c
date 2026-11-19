@@ -28,7 +28,7 @@ int SmrShopItem(size_t i, SmrItem* out)
     if (i >= PRICE_COUNT) return 0;
     AcquireSRWLockShared(&shop_lock);
     *out = (SmrItem){kLoadoutPrices[i].name, kLoadoutPrices[i].requisition, access[i] != 0,
-        owned_amount[i] != 0, charge.state != CHARGE_IDLE};
+        owned_amount[i] != 0, charge.state != CHARGE_IDLE, (checkout_mask & (1u << i)) != 0};
     ReleaseSRWLockShared(&shop_lock);
     return 1;
 }
@@ -58,20 +58,10 @@ static void ShopTick(HfMod* mod, float dt, void* user)
         return;
     }
     uintptr_t manager = Inventory(api);
+    unsigned selected = 0;
+    int selection_read = SelectedItems(mod, &selected);
     unsigned balance = 0, amounts[PRICE_COUNT] = {0};
     int ready = manager && ItemRecord(api, manager, REQUISITION, &balance);
-    unsigned token_amount = 0;
-    uintptr_t token_record = ready ? ItemRecord(api, manager, token_weapon, &token_amount) : 0;
-    uint32_t token_state = 0;
-    ready = ready && token_record && !api->read(token_record + 0x14, &token_state, 4);
-    if (ready && (token_amount || token_state == 2 || token_state == 4))
-    {
-        inventory_remove(manager, token_weapon, token_amount ? token_amount : 1);
-        ready = ItemRecord(api, manager, token_weapon, &token_amount) &&
-            !api->read(token_record + 0x14, &token_state, 4) &&
-            !token_amount && token_state != 2 && token_state != 4;
-        if (!ready) ShopMessage(mod, "Could not hide the fake purchase token.");
-    }
     for (size_t i = 0; i < PRICE_COUNT && ready; ++i)
     {
         uint32_t item_state = 0;
@@ -84,7 +74,8 @@ static void ShopTick(HfMod* mod, float dt, void* user)
     inventory_ready = ready;
     wallet = balance;
     int state = charge.state;
-    size_t bought = charge.item;
+    checkout_mask = selected;
+    checkout_valid = selection_read;
     for (size_t i = 0; i < PRICE_COUNT; ++i)
         owned_amount[i] = amounts[i];
     ReleaseSRWLockExclusive(&shop_lock);
@@ -92,5 +83,5 @@ static void ShopTick(HfMod* mod, float dt, void* user)
     if (became_ready && state == CHARGE_IDLE)
         ShopMessage(mod, "Purchases deduct real requisition from this offline profile.");
 
-    ProcessPurchase(mod, manager, balance, state, bought);
+    ProcessPurchase(mod, manager, balance, state);
 }

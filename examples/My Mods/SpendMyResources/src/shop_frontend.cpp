@@ -5,26 +5,56 @@
 #include "local_stats.h"
 #include "sounds.h"
 #include "shop_frontend.h"
+#include "profile_payment.cpp"
+#include "prices.cpp"
 
 namespace editorapp
 {
 static const HfApi* api;
 static HfMod* mod;
-static void (*closeShop)();
+static void (*showCheckout)(bool);
 static bool shopOpen;
+static bool purchasePending;
+
+static void CloseCheckout(bool ready = false)
+{
+    showCheckout(false);
+    SmrFinishCheckout(ready);
+    shopOpen = false;
+    purchasePending = false;
+}
 
 void Init(const Host& host)
 {
     api = host.api;
     mod = host.mod;
-    closeShop = host.close;
+    showCheckout = host.modal;
 }
 
 void Opened() { shopOpen = true; }
 void Closed() { shopOpen = false; }
 void Tick()
 {
-    if (shopOpen && !CanOpenOverlay(api, mod)) closeShop();
+    uintptr_t menu = 0;
+    uint32_t top = 0;
+    uintptr_t game = api->module_base("game.dll", nullptr);
+    bool loadout = game && !api->read(game + 0x347CE38, &menu, sizeof menu) && menu &&
+        !api->read(menu, &top, sizeof top) && top == 11 && api->game_state(mod) == HF_STATE_SHIP;
+    if (!loadout) SmrFinishCheckout(false);
+    if (SmrTakeCheckoutRequest() && loadout)
+    {
+        shopOpen = true;
+        purchasePending = false;
+        showCheckout(true);
+    }
+    if (shopOpen)
+    {
+        unsigned total;
+        int pending;
+        SmrCheckout(&total, &pending);
+        if (!loadout) CloseCheckout();
+        else if (purchasePending && !pending && !total) CloseCheckout(true);
+    }
 }
 
 void Frame(ImDrawList*, float width, float height, float)
@@ -40,19 +70,24 @@ void Frame(ImDrawList*, float width, float height, float)
         else ImGui::TextDisabled("Requisition slips: unavailable");
         ImGui::TextDisabled("Purchases charge your saved offline profile.");
         ImGui::Separator();
+        ImGui::TextUnformatted("Equipped restricted items");
         SmrItem item;
         for (size_t i = 0; SmrShopItem(i, &item); ++i)
         {
-            ImGui::PushID(static_cast<int>(i));
-            ImGui::Text("%s - %u Req", item.name, item.price);
-            ImGui::SameLine(290);
-            ImGui::BeginDisabled(!ready || !item.owned || item.access || item.pending || balance < item.price);
-            const char* label = item.access ? "Access ready" : item.pending ? "Pending" :
-                !item.owned ? "Not owned" : balance < item.price ? "Not enough" : "Buy access";
-            if (ImGui::Button(label, ImVec2(125, 0))) SmrBuyAccess(mod, i);
-            ImGui::EndDisabled();
-            ImGui::PopID();
+            if (!item.selected) continue;
+            if (item.access) ImGui::Text("%s - Access ready (0 Req due)", item.name);
+            else ImGui::Text("%s - %u Req", item.name, item.price);
         }
+        unsigned total;
+        int pending;
+        bool canBuy = SmrCheckout(&total, &pending) != 0;
+        ImGui::Separator();
+        ImGui::Text("Total due: %u Req", total);
+        ImGui::BeginDisabled(!canBuy);
+        if (ImGui::Button(pending ? "Purchasing..." : "Purchase access"))
+            purchasePending = SmrBuyCheckout(mod) != 0;
+        ImGui::EndDisabled();
+        ImGui::TextDisabled("After purchase, you will ready automatically.");
         char message[192];
         SmrMessage(message, sizeof message);
         ImGui::PushTextWrapPos(440);
@@ -60,7 +95,7 @@ void Frame(ImDrawList*, float width, float height, float)
         ImGui::PopTextWrapPos();
     }
     ImGui::End();
-    if (!visible || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) closeShop();
+    if (!visible || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) CloseCheckout();
 }
 
 float PixelScale(float, float) { return 1.0f; }
@@ -68,7 +103,7 @@ bool NoticeShown() { return false; }
 void AddModContent() {}
 void ModsChanged() {}
 void Overlay(ImDrawList*, float, float) {}
-void Modal(ImDrawList*, float, float, float) {}
+void Modal(ImDrawList* list, float width, float height, float dt) { Frame(list, width, height, dt); }
 void SaveStatus(bool, const std::string&) {}
 }
 

@@ -25,35 +25,19 @@ static int ReadyAccessAllowed(HfMod* mod, uintptr_t card)
         return 0;
     }
     uintptr_t loadout = LocalLoadout(api, game_base, peer);
-    uint32_t count = 0, weapons[3], stratagems[MAX_STRATAGEMS];
-    if (!loadout || api->read(loadout + STRATAGEM_COUNT, &count, sizeof count) || count > MAX_STRATAGEMS)
+    unsigned selected = 0;
+    if (!loadout || !SelectedItems(mod, &selected))
         goto unreadable;
-    for (size_t i = 0; i < 3; ++i)
-        if (api->read(loadout + i * WEAPON_STRIDE, &weapons[i], sizeof weapons[i])) goto unreadable;
-    for (uint32_t i = 0; i < count; ++i)
-        if (api->read(loadout + STRATAGEM_SLOTS + i * STRATAGEM_STRIDE, &stratagems[i], sizeof stratagems[i]))
-            goto unreadable;
-
-    unsigned char allowed[PRICE_COUNT];
-    AcquireSRWLockShared(&shop_lock);
-    memcpy(allowed, access, sizeof allowed);
-    ReleaseSRWLockShared(&shop_lock);
-    for (size_t i = 0; i < PRICE_COUNT; ++i)
-    {
-        if (allowed[i]) continue;
-        int weapon = kLoadoutPrices[i].kind == PRICE_WEAPON;
-        const uint32_t* picks = weapon ? weapons : stratagems;
-        uint32_t pick_count = weapon ? 3 : count;
-        for (uint32_t j = 0; j < pick_count; ++j)
-            if (picks[j] == kLoadoutPrices[i].id)
-            {
-                char message[192];
-                snprintf(message, sizeof message, "Ready blocked: buy access to %s before deploying.", kLoadoutPrices[i].name);
-                ShopMessage(mod, message);
-                return 0;
-            }
-    }
-    return 1;
+    unsigned total;
+    AcquireSRWLockExclusive(&shop_lock);
+    checkout_mask = selected;
+    checkout_valid = 1;
+    unsigned unpaid = UnpaidItems(selected, &total);
+    ReleaseSRWLockExclusive(&shop_lock);
+    if (!unpaid) return 1;
+    ShopMessage(mod, "Purchase access for the equipped items to ready automatically.");
+    InterlockedExchange(&checkout_requested, 1);
+    return 0;
 
 unreadable:
     ShopMessage(mod, "Ready blocked: could not read the selected loadout.");
@@ -63,13 +47,30 @@ unreadable:
 static int ReadyInput(uintptr_t button, uintptr_t input)
 {
     int activated = ready_input_original(button, input);
-    if (activated != 1) return activated;
+    int automatic = InterlockedCompareExchange(&auto_ready, 0, 0) == 2;
+    if (activated != 1 && !automatic) return activated;
     const HfApi* api = HF_API(ready_mod);
     uintptr_t menu = Pointer(api, game_base + READY_MENU);
     uint32_t top = 0;
-    if (!menu || api->read(menu, &top, sizeof top) || top != 11) return activated;
+    if (!menu || api->read(menu, &top, sizeof top) || top != 11)
+    {
+        InterlockedExchange(&auto_ready, 0);
+        return activated;
+    }
     uintptr_t screen = Pointer(api, menu + READY_SCREEN);
     if (!screen || button != screen + READY_CARD + READY_BUTTON) return activated;
+    if (automatic)
+    {
+        InterlockedExchange(&auto_ready, 0);
+        unsigned selected = 0;
+        if (!SelectedItems(ready_mod, &selected) || selected != auto_ready_selection)
+        {
+            ShopMessage(ready_mod, "Automatic Ready cancelled: loadout changed or could not be read.");
+            return activated == 1 ? 0 : activated;
+        }
+        /* Re-enter the normal Ready path once; the game still checks missing stratagem slots. */
+        return ReadyAccessAllowed(ready_mod, screen + READY_CARD) ? 1 : 0;
+    }
     return ReadyAccessAllowed(ready_mod, screen + READY_CARD) ? activated : 0;
 }
 

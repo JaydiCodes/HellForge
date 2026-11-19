@@ -1,7 +1,6 @@
 #pragma once
 #include "shop.h"
 #include "access_items.h"
-#include "requisition.h"
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,14 +13,18 @@ static int inventory_ready;
 static int shop_failed;
 static char shop_message[192] = "Waiting for the player's inventory.";
 static SRWLOCK shop_lock = SRWLOCK_INIT;
-static uint32_t token_weapon, token_attachment;
 static const char* logs_folder;
+static unsigned checkout_mask;
+static int checkout_valid;
+static volatile LONG checkout_requested;
+static volatile LONG auto_ready;
+static unsigned auto_ready_selection;
 
-enum { CHARGE_IDLE, CHARGE_QUEUED, CHARGE_RUNNING, CHARGE_SAVED, CHARGE_REFUSED, CHARGE_UNKNOWN };
+enum { CHARGE_IDLE, CHARGE_QUEUED };
 static struct {
     int state;
-    size_t item;
-    char error[192];
+    unsigned mask;
+    unsigned total;
 } charge;
 
 static void ShopMessage(HfMod* mod, const char* text);
