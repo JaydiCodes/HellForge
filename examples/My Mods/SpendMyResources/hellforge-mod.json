@@ -3,7 +3,7 @@
   "id": "jaydicodes.spend-my-resources",
   "name": "Spend My Resources",
   "version": "0.7.0",
-  "description": "Spend real offline-profile requisition on one-mission Eruptor and Solo Silo access in the F1 ship shop; unpurchased items are locked or hidden.",
+  "description": "Spend real offline-profile requisition on session-only, one-mission Eruptor and Solo Silo access in the F1 ship shop; Ready is blocked without access.",
   "gameplay": true,
   "coop": "shared",
   "code": {
