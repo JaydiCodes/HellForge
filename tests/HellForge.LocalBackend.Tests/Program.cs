@@ -22,6 +22,13 @@ var bodies = new[] { "{}", "{\"gmiStr\":null}", "{\"gmiStr\":\"\"}",
 var failed = false;
 try
 {
+    if (args.Length > 0 && args[0] == "--requisition")
+    {
+        await RequisitionTests.Run(root, Check, args.Length > 1 ? args[1] : null);
+        Console.WriteLine($"{checks} requisition checks passed.");
+        return 0;
+    }
+    await RequisitionTests.Run(root, Check);
     // A web page in the player's browser is refused: another Host (DNS rebinding), or a browser's marks (Origin, Referer,
     // Sec-Fetch-*). A program on this PC is served, by 127.0.0.1 or localhost.
     {

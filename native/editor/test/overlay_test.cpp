@@ -121,7 +121,6 @@ static char g_folder[MAX_PATH] = "";
 static char g_logsFolder[MAX_PATH] = "";
 
 static int g_testPurchases;
-static bool g_testEruptorDebit;
 static uint32_t g_shopState = HF_STATE_SHIP;
 static void Log(HfMod*, const char* format, ...)
 {
@@ -131,8 +130,7 @@ static void Log(HfMod*, const char* format, ...)
     vsnprintf(line, sizeof line, format, arguments);
     va_end(arguments);
     printf("  mod: %s\n", line);
-    if (strncmp(line, "Test purchase:", sizeof("Test purchase:") - 1) == 0) g_testPurchases++;
-    if (strcmp(line, "Test purchase: R-36 Eruptor (1000 test Requisition; 4000 remaining)") == 0) g_testEruptorDebit = true;
+    if (strncmp(line, "Purchase saved:", sizeof("Purchase saved:") - 1) == 0) g_testPurchases++;
     if (strstr(line, "drawing on the game's queue") || strstr(line, "drawing with Direct3D 11")) g_drawing = 1;
     if (const char* at = strstr(line, "drawing on the game's queue ")) sscanf(at + strlen("drawing on the game's queue "), "%p", &g_drawnQueue);
     if (strstr(line, "hooked the swap chain")) g_hooked = 1;
@@ -156,6 +154,12 @@ static int Subscribe(HfMod*, uint32_t, HfListener, void*, int32_t) { return 1; }
 static uint32_t ShopState(HfMod*) { return g_shopState; }
 static int CodeMatches(uintptr_t, const char*) { return 0; }
 static uintptr_t Global(HfMod*, const char*) { return 0; }
+static uintptr_t ModuleBase(const char*, size_t*) { return 0; }
+static int UnavailableRead(uintptr_t, void*, size_t) { return 1; }
+static int UnavailableWrite(uintptr_t, const void*, size_t) { return 1; }
+static int OnGameThread(HfMod*, HfTickCallback, void*) { return 1; }
+static uint32_t AddShopToken(HfMod*, const HfWeapon*) { return 0x12345678u; }
+static const char* ShopLogs(HfMod*) { return "."; }
 static const char* ModFolder(HfMod*) { return g_folder; }
 static int On(HfMod* mod, HfEvent event, HfEventCallback callback, void* user) { if (event == HF_EVENT_ENTITIES_READY) g_ready = callback; return 0; }
 /* the originals the editor got, by target (the test's "overlay" calls past the editor with them) */
@@ -371,6 +375,12 @@ int main(int argc, char** argv)
         g_api.game_state = ShopState;
         g_api.code_matches = CodeMatches;
         g_api.global = Global;
+        g_api.module_base = ModuleBase;
+        g_api.read = UnavailableRead;
+        g_api.write = UnavailableWrite;
+        g_api.on_game_thread = OnGameThread;
+        g_api.add_weapon = AddShopToken;
+        g_api.logs_folder = ShopLogs;
     }
     g_extraWeapons = getenv("HELLFORGE_EDITOR_TEST_WEAPONS") ? (uint32_t)atoi(getenv("HELLFORGE_EDITOR_TEST_WEAPONS")) : 0;
     if (g_extraWeapons > 512) g_extraWeapons = 512;
@@ -683,8 +693,8 @@ int main(int argc, char** argv)
             }
             if (frame == 120)
             {
-                if (!g_testEruptorDebit || g_testPurchases != 1)
-                { printf("FAIL expected one Eruptor purchase for 1000, got %d total purchases\n", g_testPurchases); failures++; }
+                if (g_testPurchases != 0)
+                { printf("FAIL shop purchased without a game inventory: %d purchases\n", g_testPurchases); failures++; }
                 printf("%s shop overlay: %s\n", failures ? "FAIL" : "PASS", d3d11 ? "D3D11" : "D3D12");
                 return failures != 0;
             }

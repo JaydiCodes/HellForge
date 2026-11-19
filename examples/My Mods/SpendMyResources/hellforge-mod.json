@@ -2,8 +2,8 @@
   "format": 1,
   "id": "jaydicodes.spend-my-resources",
   "name": "Spend My Resources",
-  "version": "0.5.0",
-  "description": "Shared gameplay prototype: open the F1 test shop on the ship to buy one-mission access to the Eruptor and Solo Silo.",
+  "version": "0.7.0",
+  "description": "Spend real offline-profile requisition on one-mission Eruptor and Solo Silo access in the F1 ship shop; unpurchased items are locked or hidden.",
   "gameplay": true,
   "coop": "shared",
   "code": {

@@ -31,12 +31,14 @@ void Frame(ImDrawList*, float width, float height, float)
 {
     ImGui::SetNextWindowPos(ImVec2(width / 2, height / 2), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     bool visible = true;
-    if (ImGui::Begin("Spend My Resources - Test Shop", &visible,
+    if (ImGui::Begin("Spend My Resources", &visible,
             ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings))
     {
-        unsigned balance = SmrBalance();
-        ImGui::Text("Test balance: %u Requisition", balance);
-        ImGui::TextDisabled("Simulation only. Real Requisition is not charged.");
+        unsigned balance = 0;
+        bool ready = SmrBalance(&balance) != 0;
+        if (ready) ImGui::Text("Requisition slips: %u", balance);
+        else ImGui::TextDisabled("Requisition slips: unavailable");
+        ImGui::TextDisabled("Purchases charge your saved offline profile.");
         ImGui::Separator();
         SmrItem item;
         for (size_t i = 0; SmrShopItem(i, &item); ++i)
@@ -44,12 +46,18 @@ void Frame(ImDrawList*, float width, float height, float)
             ImGui::PushID(static_cast<int>(i));
             ImGui::Text("%s - %u Req", item.name, item.price);
             ImGui::SameLine(290);
-            ImGui::BeginDisabled(item.access || balance < item.price);
-            const char* label = item.access ? "Access ready" : balance < item.price ? "Not enough" : "Buy test access";
-            if (ImGui::Button(label, ImVec2(125, 0)) && SmrBuyAccess(mod, i)) balance = SmrBalance();
+            ImGui::BeginDisabled(!ready || !item.owned || item.access || item.pending || balance < item.price);
+            const char* label = item.access ? "Access ready" : item.pending ? "Pending" :
+                !item.owned ? "Not owned" : balance < item.price ? "Not enough" : "Buy access";
+            if (ImGui::Button(label, ImVec2(125, 0))) SmrBuyAccess(mod, i);
             ImGui::EndDisabled();
             ImGui::PopID();
         }
+        char message[192];
+        SmrMessage(message, sizeof message);
+        ImGui::PushTextWrapPos(440);
+        ImGui::TextWrapped("%s", message);
+        ImGui::PopTextWrapPos();
     }
     ImGui::End();
     if (!visible || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) closeShop();
