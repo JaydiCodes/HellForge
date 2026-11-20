@@ -130,9 +130,10 @@ over the exchange menu. Leaving the ship closes the exchange menu and cancels qu
 		- Super = 200 Points
 		- FC = 500 Points
 	- In each case spend either: (These can be stacked)
+    	- Some items might not have all tiers or have all 3 tiers or just 1 tier
 		- 10 common OR 1 FC = "Plus"
 		- 10 Rare OR 5 FC = "Elite"
-		- 10 Super OR 10 FC = "Super" (Only select items have a Super upgrade)
+		- 10 Super OR 10 FC = "Super"
 	- Primaries
     	- Plus: 2 extra mags
     	- Elite: 
@@ -143,6 +144,8 @@ over the exchange menu. Leaving the ship closes the exchange menu and cancels qu
 		- Support weapons
 		- Backpacks
 		- Vehicles
+    		- FRVs
+    		- Exosuits
 		- Turrets
 	- Spend either 20 FC or 10K Req to (limit to one of either):
 		- Add one more strat slot
