@@ -9,7 +9,6 @@ typedef struct SmrItem {
     const char* name;
     unsigned price;
     int access;
-    int owned;
     int pending;
     int selected;
 } SmrItem;

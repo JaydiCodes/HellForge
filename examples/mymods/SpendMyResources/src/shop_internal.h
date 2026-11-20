@@ -8,18 +8,17 @@
 
 static unsigned char access[PRICE_COUNT];
 static unsigned char deployed_access[PRICE_COUNT];
-static unsigned owned_amount[PRICE_COUNT];
 static unsigned wallet;
 static int inventory_ready;
 static int shop_failed;
 static char shop_message[192] = "Waiting for the player's inventory.";
 static SRWLOCK shop_lock = SRWLOCK_INIT;
 static const char* logs_folder;
-static unsigned checkout_mask;
+static uint64_t checkout_mask;
 static int checkout_valid;
 static volatile LONG checkout_requested;
 static volatile LONG auto_ready;
-static unsigned auto_ready_selection;
+static uint64_t auto_ready_selection;
 static unsigned currency_amount[CURRENCY_COUNT], currency_cap[CURRENCY_COUNT];
 static int exchange_ready;
 static struct {
@@ -31,7 +30,7 @@ static struct {
 enum { CHARGE_IDLE, CHARGE_QUEUED };
 static struct {
     int state;
-    unsigned mask;
+    uint64_t mask;
     unsigned total;
 } charge;
 

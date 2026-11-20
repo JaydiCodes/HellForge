@@ -11,7 +11,7 @@ enum {
     MAX_RECORDS = 32,
     MAX_STRATAGEMS = 32
 };
-_Static_assert(PRICE_COUNT <= 32, "Checkout selection mask supports at most 32 restricted items.");
+_Static_assert(PRICE_COUNT <= 64, "Checkout selection mask supports at most 64 restricted items.");
 
 static uintptr_t LocalLoadout(const HfApi* api, uintptr_t game, uint64_t peer)
 {
@@ -32,7 +32,7 @@ static uintptr_t LocalLoadout(const HfApi* api, uintptr_t game, uint64_t peer)
     return 0;
 }
 
-static int SelectedItems(HfMod* mod, unsigned* selected)
+static int SelectedItems(HfMod* mod, uint64_t* selected)
 {
     const HfApi* api = HF_API(mod);
     const HfLocalUser* local = hf_global_LocalUser(mod);
@@ -51,19 +51,19 @@ static int SelectedItems(HfMod* mod, unsigned* selected)
         int weapon = kLoadoutPrices[i].kind == PRICE_WEAPON;
         const uint32_t* picks = weapon ? weapons : stratagems;
         for (uint32_t j = 0; j < (weapon ? 3u : count); ++j)
-            if (picks[j] == kLoadoutPrices[i].id) *selected |= 1u << i;
+            if (picks[j] == kLoadoutPrices[i].id) *selected |= UINT64_C(1) << i;
     }
     return 1;
 }
 
-static unsigned UnpaidItems(unsigned selected, unsigned* total)
+static uint64_t UnpaidItems(uint64_t selected, unsigned* total)
 {
-    unsigned unpaid = 0;
+    uint64_t unpaid = 0;
     *total = 0;
     for (size_t i = 0; i < PRICE_COUNT; ++i)
-        if ((selected & (1u << i)) && !access[i])
+        if ((selected & (UINT64_C(1) << i)) && !access[i])
         {
-            unpaid |= 1u << i;
+            unpaid |= UINT64_C(1) << i;
             *total += kLoadoutPrices[i].requisition;
         }
     return unpaid;

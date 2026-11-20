@@ -34,7 +34,7 @@ extern "C" void SmrMessage(char* text, size_t size) { snprintf(text, size, "Chec
 extern "C" int SmrShopItem(size_t i, SmrItem* item)
 {
     if (i > 1) return 0;
-    *item = {i ? "MS-11 Solo Silo" : "R-36 Eruptor", i ? 2000u : 750u, 0, 1, 0, 1};
+    *item = {i ? "MS-11 Solo Silo" : "R-36 Eruptor", i ? 2000u : 750u, 0, 0, 1};
     return 1;
 }
 extern "C" int SmrCurrencyItem(size_t i, SmrCurrency* item)

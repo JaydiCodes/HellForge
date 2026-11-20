@@ -21,6 +21,14 @@ static unsigned saved_currency[CURRENCY_COUNT];
 static int add_failed, add_calls, exchange_profile_calls, exchange_profile_refused;
 
 #define CHECK(test) do { if (!(test)) { fprintf(stderr, "FAIL line %d: %s\n", __LINE__, #test); exit(1); } } while (0)
+static size_t PriceIndex(const char* name)
+{
+    for (size_t i = 0; i < PRICE_COUNT; ++i)
+        if (!strcmp(kLoadoutPrices[i].name, name)) return i;
+    CHECK(0 && "Missing expected restriction.");
+    return PRICE_COUNT;
+}
+
 static int Read(uintptr_t at, void* out, size_t size) { if (!at || at == unreadable_at) return 1; memcpy(out, (const void*)at, size); return 0; }
 static uintptr_t Base(const char* name, size_t* size) { return !strcmp(name, "game.dll") ? (uintptr_t)image : 0; }
 static const char* Build(void) { return "25480438"; }
@@ -121,7 +129,7 @@ int SmrDeductProfile(const char* logs, uint32_t resource, unsigned cost, char* r
     CHECK(resource == REQUISITION && saved_wallet >= cost);
     CHECK(Amount(REQUISITION) == saved_wallet - cost);
     for (size_t i = 0; i < PRICE_COUNT; ++i)
-        if (charge.mask & (1u << i)) CHECK(!access[i]);
+        if (charge.mask & (UINT64_C(1) << i)) CHECK(!access[i]);
     profile_calls++;
     if (profile_refused)
     {
@@ -166,8 +174,8 @@ static int BuyItem(size_t i)
     if (charge.state == CHARGE_IDLE)
     {
         Pick(i == 0 ? HF_ITEM_R36_ERUPTOR : HF_ITEM_AR23_LIBERATOR,
-            i == 1 ? HF_STRATAGEM_MS11_SOLO_SILO : 0);
-        unsigned selected;
+            i == PriceIndex("MS-11 Solo Silo") ? HF_STRATAGEM_MS11_SOLO_SILO : 0);
+        uint64_t selected;
         checkout_valid = SelectedItems(&mod, &selected);
         checkout_mask = selected;
     }
@@ -176,6 +184,7 @@ static int BuyItem(size_t i)
 
 static void TestReadyGate(void)
 {
+    size_t silo = PriceIndex("MS-11 Solo Silo");
     unsigned char* menu = calloc(1, 0xC0);
     unsigned char* screen = calloc(1, READY_CARD + READY_PEER + 8);
     CHECK(menu && screen);
@@ -192,12 +201,12 @@ static void TestReadyGate(void)
     unsigned balance_before = wallet;
     CHECK(!ReadyInput(button, 1234));
     CHECK(SmrTakeCheckoutRequest() && !SmrTakeCheckoutRequest());
-    CHECK(!memcmp(before, history, sizeof before) && wallet == balance_before && !access[0] && !access[1]);
+    CHECK(!memcmp(before, history, sizeof before) && wallet == balance_before && !access[0] && !access[silo]);
     CHECK(last_button == button && last_input == 1234);
     CHECK(*(uint32_t*)(history + LOADOUT + STRATAGEM_COUNT) == 4);
-    access[1] = 1;
+    access[silo] = 1;
     CHECK(ReadyInput(button, 1234) == 1);
-    access[1] = 0;
+    access[silo] = 0;
     CHECK(ReadyInput(button + 8, 1234) == 1);
     Put32(menu, 0);
     CHECK(ReadyInput(button, 1234) == 1);
@@ -396,18 +405,52 @@ static void TestExchanges(void)
 
 static void TestExpandedCatalog(void)
 {
-    static const struct { uint32_t id, mix_id; unsigned slot; } expected[] = {
-        {HF_ITEM_JAR5_DOMINATOR, HF_ITEM_JAR5_DOMINATOR, 0},
-        {HF_ITEM_AR23P_LIBERATOR_PENETRATOR, HF_ITEM_AR23P_LIBERATOR_PENETRATOR, 0},
-        {HF_ITEM_GP20_ULTIMATUM, HF_ITEM_GP20_ULTIMATUM, WEAPON_STRIDE},
-        {HF_ITEM_P40K_BOLT_PISTOL, HF_ITEM_P40K_BOLT_PISTOL, WEAPON_STRIDE},
-        {HF_ITEM_G40K_MELTA_MINE, HF_ITEM_G40K_MELTA_MINE, 2 * WEAPON_STRIDE},
-        {HF_ITEM_G48_GIGA_GRENADE, HF_ITEM_G48_GIGA_GRENADE, 2 * WEAPON_STRIDE},
-        {HF_STRATAGEM_EAGLE_500KG_BOMB, 3977158988u, STRATAGEM_SLOTS},
-        {HF_STRATAGEM_RS422_RAILGUN, 2739946883u, STRATAGEM_SLOTS},
-        {HF_STRATAGEM_ORBITAL_WALKING_BARRAGE, 999215554u, STRATAGEM_SLOTS},
-        {HF_STRATAGEM_ORBITAL_LASER, 3197981335u, STRATAGEM_SLOTS},
-        {HF_STRATAGEM_ARC3_ARC_THROWER, 612174174u, STRATAGEM_SLOTS}
+    static const struct { uint32_t id; PriceKind kind; unsigned slot, price; const char* name; } expected[] = {
+        {HF_ITEM_AR23P_LIBERATOR_PENETRATOR, PRICE_WEAPON, 0, 500, "AR-23P Liberator Penetrator"},
+        {HF_ITEM_GP20_ULTIMATUM, PRICE_WEAPON, WEAPON_STRIDE, 500, "GP-20 Ultimatum"},
+        {HF_ITEM_P40K_BOLT_PISTOL, PRICE_WEAPON, WEAPON_STRIDE, 500, "P/40-K Bolt Pistol"},
+        {HF_ITEM_G40K_MELTA_MINE, PRICE_WEAPON, 2 * WEAPON_STRIDE, 500, "G/40-K Melta Mine"},
+        {HF_ITEM_G48_GIGA_GRENADE, PRICE_WEAPON, 2 * WEAPON_STRIDE, 500, "G-48 Giga Grenade"},
+        {HF_STRATAGEM_MS11_SOLO_SILO, PRICE_STRATAGEM, STRATAGEM_SLOTS, 2000, "MS-11 Solo Silo"},
+        {HF_STRATAGEM_EAGLE_500KG_BOMB, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "Eagle 500kg Bomb"},
+        {HF_STRATAGEM_RS422_RAILGUN, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "RS-422 Railgun"},
+        {HF_STRATAGEM_ORBITAL_WALKING_BARRAGE, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "Orbital Walking Barrage"},
+        {HF_STRATAGEM_ORBITAL_LASER, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "Orbital Laser"},
+        {HF_STRATAGEM_ARC3_ARC_THROWER, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "ARC-3 Arc Thrower"},
+        {HF_ITEM_PLAS39_ACCELERATOR_RIFLE, PRICE_WEAPON, 0, 500, "PLAS-39 Accelerator Rifle"},
+        {HF_ITEM_R6_DEADEYE, PRICE_WEAPON, 0, 500, "R-6 Deadeye"},
+        {HF_ITEM_R63CS_DILIGENCE_COUNTER_SNIPER, PRICE_WEAPON, 0, 500, "R-63CS Diligence Counter Sniper"},
+        {HF_ITEM_R72_CENSOR, PRICE_WEAPON, 0, 500, "R-72 Censor"},
+        {HF_ITEM_R40K_HOTSHOT_MARKSMAN_RIFLE, PRICE_WEAPON, 0, 500, "R/40-K Hot-Shot Marksman Rifle"},
+        {HF_ITEM_LAS5_SCYTHE, PRICE_WEAPON, 0, 500, "LAS-5 Scythe"},
+        {HF_ITEM_AR59_SUPPRESSOR, PRICE_WEAPON, 0, 500, "AR-59 Suppressor"},
+        {HF_ITEM_LAS17_DOUBLEEDGE_SICKLE, PRICE_WEAPON, 0, 500, "LAS-17 Double-Edge Sickle"},
+        {HF_ITEM_P4_SENATOR, PRICE_WEAPON, WEAPON_STRIDE, 500, "P-4 Senator"},
+        {HF_STRATAGEM_LAS98_LASER_CANNON, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "LAS-98 Laser Cannon"},
+        {HF_STRATAGEM_LAS99_QUASAR_CANNON, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "LAS-99 Quasar Cannon"},
+        {HF_STRATAGEM_M1000_MAXIGUN, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "M-1000 Maxigun"},
+        {HF_STRATAGEM_PLAS45_EPOCH, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "PLAS-45 Epoch"},
+        {HF_STRATAGEM_STAX3_W_A_S_P_LAUNCHER, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "StA-X3 W.A.S.P. Launcher"},
+        {HF_STRATAGEM_GL28_BELTFED_GRENADE_LAUNCHER, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "GL-28 Belt-Fed Grenade Launcher"},
+        {HF_STRATAGEM_RL77_AIRBURST_ROCKET_LAUNCHER, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "RL-77 Airburst Rocket Launcher"},
+        {HF_STRATAGEM_LIFT850_JUMP_PACK, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "LIFT-850 Jump Pack"},
+        {HF_STRATAGEM_LIFT860_HOVER_PACK, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "LIFT-860 Hover Pack"},
+        {HF_STRATAGEM_SH32_SHIELD_GENERATOR_PACK, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "SH-32 Shield Generator Pack"},
+        {HF_STRATAGEM_EAT411_LEVELLER, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "EAT-411 Leveller"},
+        {HF_STRATAGEM_EXO45_PATRIOT, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "EXO-45 Patriot Exosuit"},
+        {HF_STRATAGEM_EXO49_EMANCIPATOR_EXOSUIT, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "EXO-49 Emancipator Exosuit"},
+        {HF_STRATAGEM_EXO51_LUMBERER_EXOSUIT, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "EXO-51 Lumberer Exosuit"},
+        {HF_STRATAGEM_EXO55_BREAKTHROUGH_EXOSUIT, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "EXO-55 Breakthrough Exosuit"},
+        {HF_STRATAGEM_ORBITAL_380MM_BARRAGE, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "Orbital 380mm HE Barrage"},
+        {HF_STRATAGEM_ORBITAL_120MM_BARRAGE, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "Orbital 120mm HE Barrage"},
+        {HF_STRATAGEM_ORBITAL_NAPALM_BARRAGE, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "Orbital Napalm Barrage"},
+        {HF_STRATAGEM_ORBITAL_RAILCANNON_STRIKE, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "Orbital Railcannon Strike"},
+        {HF_STRATAGEM_AC8_AUTOCANNON, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "AC-8 Autocannon"},
+        {HF_STRATAGEM_AG16_GATLING_SENTRY, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "A/G-16 Gatling Sentry"},
+        {HF_STRATAGEM_APW1_ANTIMATERIEL_RIFLE, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "APW-1 Anti-Materiel Rifle"},
+        {HF_STRATAGEM_AXAR23_GUARD_DOG, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "AX/AR-23 Guard Dog / gun"},
+        {HF_STRATAGEM_GR8_RECOILLESS_RIFLE, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "GR-8 Recoilless Rifle"},
+        {HF_STRATAGEM_MLS4X_COMMANDO, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "MLS-4X Commando"}
     };
     unsigned char* card = calloc(1, READY_PEER + 8);
     CHECK(card && PRICE_COUNT == 2 + sizeof expected / sizeof expected[0]);
@@ -416,22 +459,25 @@ static void TestExpandedCatalog(void)
     {
         size_t index = i + 2;
         CHECK(kLoadoutPrices[index].id == expected[i].id &&
-            kLoadoutPrices[index].mix_id == expected[i].mix_id &&
-            kLoadoutPrices[index].requisition == 500);
+            kLoadoutPrices[index].kind == expected[i].kind &&
+            !strcmp(kLoadoutPrices[index].name, expected[i].name) &&
+            kLoadoutPrices[index].requisition == expected[i].price);
         Pick(HF_ITEM_AR23_LIBERATOR, 0);
         Put32(history + LOADOUT + expected[i].slot, expected[i].id);
         if (expected[i].slot == STRATAGEM_SLOTS) Put32(history + LOADOUT + STRATAGEM_COUNT, 1);
         Tick();
-        unsigned selected, total;
+        uint64_t selected;
+        unsigned total;
         int pending;
-        CHECK(SelectedItems(&mod, &selected) && selected == (1u << index));
+        CHECK(SelectedItems(&mod, &selected) && selected == (UINT64_C(1) << index));
         CHECK(!ReadyAccessAllowed(&mod, (uintptr_t)card) && SmrTakeCheckoutRequest());
-        CHECK(SmrCheckout(&total, &pending) && total == 500 && !pending);
+        CHECK(SmrCheckout(&total, &pending) && total == expected[i].price && !pending);
         SmrItem item;
-        CHECK(SmrShopItem(index, &item) && item.selected && item.owned && item.price == 500);
+        CHECK(SmrShopItem(index, &item) && item.selected && item.price == expected[i].price);
         CHECK(SmrBuyCheckout(&mod));
         Tick();
-        CHECK(access[index] && saved_wallet == 4500 && Amount(REQUISITION) == 4500);
+        CHECK(access[index] && saved_wallet == 5000 - expected[i].price &&
+            Amount(REQUISITION) == 5000 - expected[i].price);
         CHECK(profile_calls == 1 && ReadyAccessAllowed(&mod, (uintptr_t)card));
         CHECK(!SmrCheckout(&total, &pending) && total == 0);
         SmrFinishCheckout(0);
@@ -465,26 +511,28 @@ static void TestExpandedCatalog(void)
     saved_wallet = 5000;
     SetAmount(REQUISITION, 5000);
     profile_calls = 0;
-    kLoadoutPrices[2].requisition = 1375;
+    size_t jar = PriceIndex("JAR-5 Dominator");
+    kLoadoutPrices[jar].requisition = 1375;
     Pick(HF_ITEM_JAR5_DOMINATOR, 0);
     Tick();
     CHECK(SmrCheckout(&total, &pending) && total == 1375);
     CHECK(SmrBuyCheckout(&mod));
     Tick();
-    CHECK(access[2] && saved_wallet == 3625 && Amount(REQUISITION) == 3625 && profile_calls == 1);
+    CHECK(access[jar] && saved_wallet == 3625 && Amount(REQUISITION) == 3625 && profile_calls == 1);
     MissionStart(&mod, NULL, NULL);
     MissionEnd(&mod, NULL, NULL);
     SmrFinishCheckout(0);
-    kLoadoutPrices[2].requisition = 500;
+    kLoadoutPrices[jar].requisition = 500;
     saved_wallet = 5000;
     SetAmount(REQUISITION, 5000);
     profile_calls = 0;
     free(card);
-    puts("PASS expanded catalogue: all new items cost 500, gate Ready, deduct once, grant access and expire; seven-item checkout costs 3500");
+    puts("PASS expanded catalogue: all 47 restrictions gate Ready, deduct once, grant access and expire; seven-item checkout costs 3500");
 }
 
 int main(void)
 {
+    size_t silo = PriceIndex("MS-11 Solo Silo");
     image = VirtualAlloc(NULL, 0x3480000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     manager = calloc(1, 0xE0000);
     history = calloc(1, 0x2D204);
@@ -493,14 +541,11 @@ int main(void)
     PutPointer(INVENTORY_CELL, manager);
     PutPointer(HISTORY_CELL, history);
     PutPointer(0x347CDD8, profile);
-    Put32(manager + INVENTORY_COUNT, PRICE_COUNT + CURRENCY_COUNT);
+    Put32(manager + INVENTORY_COUNT, CURRENCY_COUNT);
     Put32(manager + CATALOGUE_STATUS, 2);
     Put32(manager + INVENTORY_STATUS, 2);
-    Put32(manager + INVENTORY_RECORDS + 4, REQUISITION);
-    for (size_t i = 0; i < PRICE_COUNT; ++i)
-        Put32(manager + INVENTORY_RECORDS + (i + 1) * INVENTORY_STRIDE + 4, kLoadoutPrices[i].mix_id);
-    for (size_t i = 1; i < CURRENCY_COUNT; ++i)
-        Put32(manager + INVENTORY_RECORDS + (PRICE_COUNT + i) * INVENTORY_STRIDE + 4, kCurrencies[i].id);
+    for (size_t i = 0; i < CURRENCY_COUNT; ++i)
+        Put32(manager + INVENTORY_RECORDS + i * INVENTORY_STRIDE + 4, kCurrencies[i].id);
     api.version = 16; api.size = sizeof api; api.log = Log; api.read = Read;
     api.module_base = Base; api.build_id = Build; api.game_state = State; api.code_matches = Matches;
     api.global = Global; api.subscribe = Subscribe; api.on_game_thread = OnTick;
@@ -518,9 +563,6 @@ int main(void)
     inventory_remove = Remove;
     inventory_add = Add;
     SetAmount(REQUISITION, 5000);
-    SetAmount(HF_ITEM_R36_ERUPTOR, 1);
-    SetAmount(699439563u, 1);
-    for (size_t i = 2; i < PRICE_COUNT; ++i) SetAmount(kLoadoutPrices[i].mix_id, 1);
     local.peer = 123;
     memcpy(history, &local.peer, sizeof local.peer);
     uint64_t other = 456;
@@ -529,7 +571,6 @@ int main(void)
     Put32(history + RECORD_STRIDE + LOADOUT, HF_ITEM_R36_ERUPTOR);
     Pick(HF_ITEM_R36_ERUPTOR, HF_STRATAGEM_MS11_SOLO_SILO);
     Tick();
-    CHECK(Amount(HF_ITEM_R36_ERUPTOR) == 1 && Amount(699439563u) == 1);
     CHECK(*(uint32_t*)(history + LOADOUT) == HF_ITEM_R36_ERUPTOR);
     CHECK(*(uint32_t*)(history + RECORD_STRIDE + LOADOUT) == HF_ITEM_R36_ERUPTOR);
     CHECK(*(uint32_t*)(history + LOADOUT + STRATAGEM_COUNT) == 1 &&
@@ -541,7 +582,7 @@ int main(void)
     TestReadyGate();
     TestExpandedCatalog();
     TestExchanges();
-    CHECK(Amount(REQUISITION) == 5000 && !access[0] && !access[1]);
+    CHECK(Amount(REQUISITION) == 5000 && !access[0] && !access[silo]);
     Pick(HF_ITEM_R36_ERUPTOR, HF_STRATAGEM_MS11_SOLO_SILO);
     Tick();
     unsigned total;
@@ -550,16 +591,16 @@ int main(void)
     CHECK(SmrBuyCheckout(&mod));
     CHECK(!SmrBuyCheckout(&mod));
     Tick();
-    CHECK(access[0] && access[1] && saved_wallet == 2250 && Amount(REQUISITION) == 2250 && profile_calls == 1);
+    CHECK(access[0] && access[silo] && saved_wallet == 2250 && Amount(REQUISITION) == 2250 && profile_calls == 1);
     CHECK(auto_ready == 1);
     SmrFinishCheckout(0);
     CHECK(!SmrCheckout(&total, &pending) && !total && !pending);
-    access[1] = 0;
+    access[silo] = 0;
     CHECK(SmrCheckout(&total, &pending) && total == 2000);
     CHECK(SmrBuyCheckout(&mod));
     Pick(HF_ITEM_R36_ERUPTOR, 0);
     Tick();
-    CHECK(charge.state == CHARGE_IDLE && !access[1] && profile_calls == 1);
+    CHECK(charge.state == CHARGE_IDLE && !access[silo] && profile_calls == 1);
     CHECK(auto_ready == 0);
     access[0] = 0;
     saved_wallet = 5000;
@@ -569,19 +610,19 @@ int main(void)
 
     CHECK(BuyItem(0));
     CHECK(!access[0] && Amount(REQUISITION) == 5000);
-    CHECK(!BuyItem(0) && !BuyItem(1));
+    CHECK(!BuyItem(0) && !BuyItem(silo));
     WaitFor(CHARGE_IDLE);
     CHECK(profile_calls == 1 && saved_wallet == 4250);
-    CHECK(access[0] && Amount(REQUISITION) == 4250 && Amount(HF_ITEM_R36_ERUPTOR) == 1);
-    CHECK(access[0] && !access[1]);
+    CHECK(access[0] && Amount(REQUISITION) == 4250);
+    CHECK(access[0] && !access[silo]);
     CHECK(!BuyItem(0));
     game_state = HF_STATE_MISSION;
-    CHECK(!BuyItem(1));
+    CHECK(!BuyItem(silo));
     Pick(HF_ITEM_R36_ERUPTOR, 0);
     MissionStart(&mod, NULL, NULL);
     Tick();
-    CHECK(access[0] && deployed_access[0] && Amount(HF_ITEM_R36_ERUPTOR) == 1);
-    CHECK(access[0] && !access[1]);
+    CHECK(access[0] && deployed_access[0]);
+    CHECK(access[0] && !access[silo]);
     HfPlayerEvent spawn = {0};
     spawn.local = 1; spawn.peer = local.peer;
     PlayerSpawn(&mod, &spawn, NULL);
@@ -589,46 +630,45 @@ int main(void)
     CHECK(deployed_access[0] && Amount(REQUISITION) == 4250);
     MissionEnd(&mod, NULL, NULL);
     CHECK(!access[0] && !deployed_access[0]);
-    CHECK(!access[0] && !access[1]);
+    CHECK(!access[0] && !access[silo]);
     MissionEnd(&mod, NULL, NULL);
-    CHECK(!access[0] && !access[1]);
+    CHECK(!access[0] && !access[silo]);
     game_state = HF_STATE_SHIP;
     Tick();
-    CHECK(Amount(HF_ITEM_R36_ERUPTOR) == 1 && Amount(REQUISITION) == 4250);
+    CHECK(Amount(REQUISITION) == 4250);
 
-    CHECK(BuyItem(1));
+    CHECK(BuyItem(silo));
     WaitFor(CHARGE_IDLE);
-    CHECK(access[1] && Amount(699439563u) == 1 && Amount(REQUISITION) == 2250);
+    CHECK(access[silo] && Amount(REQUISITION) == 2250);
     Pick(HF_ITEM_AR23_LIBERATOR, 0);
     game_state = HF_STATE_MISSION;
     MissionStart(&mod, NULL, NULL);
     Tick();
-    CHECK(access[1] && !deployed_access[1]);
-    CHECK(!access[0] && access[1]);
+    CHECK(access[silo] && !deployed_access[silo]);
+    CHECK(!access[0] && access[silo]);
     MissionEnd(&mod, NULL, NULL);
     game_state = HF_STATE_SHIP;
     Tick();
-    CHECK(access[1] && Amount(699439563u) == 1 && Amount(REQUISITION) == 2250);
+    CHECK(access[silo] && Amount(REQUISITION) == 2250);
     game_state = HF_STATE_MISSION;
     Pick(HF_ITEM_AR23_LIBERATOR, HF_STRATAGEM_MS11_SOLO_SILO);
     local_ready = 0;
     MissionStart(&mod, NULL, NULL);
-    CHECK(waiting_for_spawn && access[1]);
+    CHECK(waiting_for_spawn && access[silo]);
     Tick();
-    CHECK(Amount(699439563u) == 1);
     local_ready = 1;
     PlayerSpawn(&mod, &spawn, NULL);
     Tick();
-    CHECK(!waiting_for_spawn && access[1] && deployed_access[1] && Amount(699439563u) == 1);
-    CHECK(!access[0] && access[1]);
+    CHECK(!waiting_for_spawn && access[silo] && deployed_access[silo]);
+    CHECK(!access[0] && access[silo]);
     PlayerSpawn(&mod, &spawn, NULL);
-    CHECK(deployed_access[1]);
+    CHECK(deployed_access[silo]);
     MissionEnd(&mod, NULL, NULL);
-    CHECK(!access[1] && !deployed_access[1]);
-    CHECK(!access[0] && !access[1]);
+    CHECK(!access[silo] && !deployed_access[silo]);
+    CHECK(!access[0] && !access[silo]);
     game_state = HF_STATE_SHIP;
     Tick();
-    CHECK(Amount(699439563u) == 1 && Amount(REQUISITION) == 2250);
+    CHECK(Amount(REQUISITION) == 2250);
 
     CHECK(BuyItem(0));
     game_state = HF_STATE_MISSION;
@@ -651,12 +691,10 @@ int main(void)
     unsigned balance;
     CHECK(!SmrBalance(&balance) && !BuyItem(0));
     Put32(manager + INVENTORY_STATUS, 2);
-    SetAmount(HF_ITEM_R36_ERUPTOR, 0);
     Tick();
     SmrItem item;
-    CHECK(!shop_failed && inventory_ready && !Amount(HF_ITEM_R36_ERUPTOR));
-    CHECK(SmrShopItem(0, &item) && !item.owned && !BuyItem(0));
-    SetAmount(HF_ITEM_R36_ERUPTOR, 1);
+    CHECK(!shop_failed && inventory_ready);
+    CHECK(SmrShopItem(0, &item) && item.selected && !BuyItem(0));
     SetAmount(REQUISITION, 2250);
     Tick();
     profile_refused = 1;
@@ -664,7 +702,7 @@ int main(void)
     Tick();
     CHECK(shop_failed && !inventory_ready);
     CHECK(auto_ready == 0);
-    CHECK(!BuyItem(0) && !BuyItem(1));
+    CHECK(!BuyItem(0) && !BuyItem(silo));
     CHECK(!access[0] && Amount(REQUISITION) == 1500 && saved_wallet == 2250);
     puts("PASS native shop: native deduction before profile edit, access after success only, partial failures stop shop, Ready gate and mission lifetime");
     VirtualFree(image, 0, MEM_RELEASE);

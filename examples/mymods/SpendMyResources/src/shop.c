@@ -27,8 +27,9 @@ int SmrShopItem(size_t i, SmrItem* out)
 {
     if (i >= PRICE_COUNT) return 0;
     AcquireSRWLockShared(&shop_lock);
+    int selected = (checkout_mask & (UINT64_C(1) << i)) != 0;
     *out = (SmrItem){kLoadoutPrices[i].name, kLoadoutPrices[i].requisition, access[i] != 0,
-        owned_amount[i] != 0, charge.state != CHARGE_IDLE, (checkout_mask & (1u << i)) != 0};
+        charge.state != CHARGE_IDLE, selected};
     ReleaseSRWLockShared(&shop_lock);
     return 1;
 }
@@ -62,17 +63,10 @@ static void ShopTick(HfMod* mod, float dt, void* user)
     ReadCurrencies(mod, manager);
     ProcessExchange(mod, manager);
     if (shop_failed) return;
-    unsigned selected = 0;
+    uint64_t selected = 0;
     int selection_read = SelectedItems(mod, &selected);
-    unsigned balance = 0, amounts[PRICE_COUNT] = {0};
+    unsigned balance = 0;
     int ready = manager && ItemRecord(api, manager, REQUISITION, &balance);
-    for (size_t i = 0; i < PRICE_COUNT && ready; ++i)
-    {
-        uint32_t item_state = 0;
-        uintptr_t record = ItemRecord(api, manager, kLoadoutPrices[i].mix_id, &amounts[i]);
-        ready = record && !api->read(record + 0x14, &item_state, sizeof item_state);
-        if (item_state != 2 && item_state != 4) amounts[i] = 0;
-    }
     AcquireSRWLockExclusive(&shop_lock);
     int became_ready = ready && !inventory_ready;
     inventory_ready = ready;
@@ -80,8 +74,6 @@ static void ShopTick(HfMod* mod, float dt, void* user)
     int state = charge.state;
     checkout_mask = selected;
     checkout_valid = selection_read;
-    for (size_t i = 0; i < PRICE_COUNT; ++i)
-        owned_amount[i] = amounts[i];
     ReleaseSRWLockExclusive(&shop_lock);
     if (!ready) return;
     if (became_ready && state == CHARGE_IDLE)

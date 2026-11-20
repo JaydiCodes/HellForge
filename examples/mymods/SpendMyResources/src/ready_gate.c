@@ -25,14 +25,14 @@ static int ReadyAccessAllowed(HfMod* mod, uintptr_t card)
         return 0;
     }
     uintptr_t loadout = LocalLoadout(api, game_base, peer);
-    unsigned selected = 0;
+    uint64_t selected = 0;
     if (!loadout || !SelectedItems(mod, &selected))
         goto unreadable;
     unsigned total;
     AcquireSRWLockExclusive(&shop_lock);
     checkout_mask = selected;
     checkout_valid = 1;
-    unsigned unpaid = UnpaidItems(selected, &total);
+    uint64_t unpaid = UnpaidItems(selected, &total);
     ReleaseSRWLockExclusive(&shop_lock);
     if (!unpaid) return 1;
     ShopMessage(mod, "Purchase access for the equipped items to ready automatically.");
@@ -62,7 +62,7 @@ static int ReadyInput(uintptr_t button, uintptr_t input)
     if (automatic)
     {
         InterlockedExchange(&auto_ready, 0);
-        unsigned selected = 0;
+        uint64_t selected = 0;
         if (!SelectedItems(ready_mod, &selected) || selected != auto_ready_selection)
         {
             ShopMessage(ready_mod, "Automatic Ready cancelled: loadout changed or could not be read.");

@@ -9,12 +9,9 @@ void SmrFinishCheckout(int ready)
 int SmrCheckout(unsigned* total, int* pending)
 {
     AcquireSRWLockShared(&shop_lock);
-    unsigned unpaid = UnpaidItems(checkout_mask, total);
+    uint64_t unpaid = UnpaidItems(checkout_mask, total);
     *pending = charge.state != CHARGE_IDLE || exchange.pending;
-    int owned = 1;
-    for (size_t i = 0; i < PRICE_COUNT; ++i)
-        if ((unpaid & (1u << i)) && !owned_amount[i]) owned = 0;
-    int ready = owned && checkout_valid && inventory_ready && unpaid && !*pending && wallet >= *total;
+    int ready = checkout_valid && inventory_ready && unpaid && !*pending && wallet >= *total;
     ReleaseSRWLockShared(&shop_lock);
     return ready;
 }
@@ -25,11 +22,8 @@ int SmrBuyCheckout(HfMod* mod)
     if (api->game_state(mod) != HF_STATE_SHIP) return 0;
     AcquireSRWLockExclusive(&shop_lock);
     unsigned total;
-    unsigned unpaid = UnpaidItems(checkout_mask, &total);
-    int owned = 1;
-    for (size_t i = 0; i < PRICE_COUNT; ++i)
-        if ((unpaid & (1u << i)) && !owned_amount[i]) owned = 0;
-    if (!owned || !checkout_valid || !unpaid || !total || !inventory_ready || charge.state != CHARGE_IDLE || exchange.pending || wallet < total)
+    uint64_t unpaid = UnpaidItems(checkout_mask, &total);
+    if (!checkout_valid || !unpaid || !total || !inventory_ready || charge.state != CHARGE_IDLE || exchange.pending || wallet < total)
     {
         ReleaseSRWLockExclusive(&shop_lock);
         ShopMessage(mod, "Checkout unavailable: check the loadout, balance and pending purchase.");
@@ -47,10 +41,12 @@ int SmrBuyCheckout(HfMod* mod)
 static void ProcessPurchase(HfMod* mod, uintptr_t manager, unsigned balance, int state)
 {
     if (state != CHARGE_QUEUED) return;
-    unsigned selected = 0, total = 0;
+    uint64_t selected = 0;
+    unsigned total = 0;
     int readable = SelectedItems(mod, &selected);
     AcquireSRWLockShared(&shop_lock);
-    unsigned unpaid = UnpaidItems(selected, &total), mask = charge.mask, price = charge.total;
+    uint64_t unpaid = UnpaidItems(selected, &total), mask = charge.mask;
+    unsigned price = charge.total;
     ReleaseSRWLockShared(&shop_lock);
     if (HF_API(mod)->game_state(mod) != HF_STATE_SHIP || !readable || unpaid != mask || total != price || balance < price)
     {
@@ -70,13 +66,13 @@ static void ProcessPurchase(HfMod* mod, uintptr_t manager, unsigned balance, int
         AcquireSRWLockExclusive(&shop_lock);
         wallet = after;
         for (size_t i = 0; i < PRICE_COUNT; ++i)
-            if (mask & (1u << i)) access[i] = 1;
+            if (mask & (UINT64_C(1) << i)) access[i] = 1;
         charge.state = CHARGE_IDLE;
         auto_ready_selection = selected;
         ReleaseSRWLockExclusive(&shop_lock);
         InterlockedExchange(&auto_ready, 1);
-        HF_API(mod)->log(mod, "Purchased loadout access (mask 0x%X): runtime requisition %u -> %u. %s",
-            mask, balance, after, detail);
+        HF_API(mod)->log(mod, "Purchased loadout access (mask 0x%llX): runtime requisition %u -> %u. %s",
+            (unsigned long long)mask, balance, after, detail);
         ShopMessage(mod, "Access purchased. Readying automatically.");
         return;
     }

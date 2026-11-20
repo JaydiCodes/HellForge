@@ -1,7 +1,8 @@
 # Spend My Resources
 
 Spend requisition from your offline profile to equip the restricted items below for one mission.
-Items must already be unlocked in the game.
+Items must already be unlocked in the game. The mod checks equipped loadout entries rather than querying each item's
+inventory record; normal game loadout rules still apply.
 
 | Item | Requisition slips |
 |---|---:|
@@ -18,6 +19,40 @@ Items must already be unlocked in the game.
 | Orbital Walking Barrage | 500 |
 | Orbital Laser | 1,000 |
 | ARC-3 Arc Thrower | 500 |
+| PLAS-39 Accelerator Rifle | 500 |
+| R-6 Deadeye | 500 |
+| R-63CS Diligence Counter Sniper | 500 |
+| R-72 Censor | 500 |
+| R/40-K Hot-Shot Marksman Rifle | 500 |
+| LAS-5 Scythe | 500 |
+| AR-59 Suppressor | 500 |
+| LAS-17 Double-Edge Sickle | 500 |
+| P-4 Senator | 500 |
+| LAS-98 Laser Cannon | 500 |
+| LAS-99 Quasar Cannon | 500 |
+| M-1000 Maxigun | 500 |
+| PLAS-45 Epoch | 500 |
+| StA-X3 W.A.S.P. Launcher | 500 |
+| GL-28 Belt-Fed Grenade Launcher | 500 |
+| RL-77 Airburst Rocket Launcher | 500 |
+| LIFT-850 Jump Pack | 500 |
+| LIFT-860 Hover Pack | 500 |
+| SH-32 Shield Generator Pack | 500 |
+| EAT-411 Leveller | 500 |
+| EXO-45 Patriot Exosuit | 500 |
+| EXO-49 Emancipator Exosuit | 500 |
+| EXO-51 Lumberer Exosuit | 500 |
+| EXO-55 Breakthrough Exosuit | 500 |
+| Orbital 380mm HE Barrage | 500 |
+| Orbital 120mm HE Barrage | 500 |
+| Orbital Napalm Barrage | 500 |
+| Orbital Railcannon Strike | 500 |
+| AC-8 Autocannon | 500 |
+| A/G-16 Gatling Sentry | 500 |
+| APW-1 Anti-Materiel Rifle | 500 |
+| AX/AR-23 Guard Dog / gun | 500 |
+| GR-8 Recoilless Rifle | 500 |
+| MLS-4X Commando | 500 |
 
 ## Custom prices
 
@@ -94,11 +129,13 @@ over the exchange menu. Leaving the ship closes the exchange menu and cancels qu
 		- Rare = 100 Points
 		- Super = 200 Points
 		- FC = 500 Points
-	- In each case spend either
-		- 10 common OR 5K Req OR 1 FC
-		- 10 Rare OR 10K Req OR 5 FC
-		- 10 Super OR 25K Req OR 10 FC
+	- In each case spend either: (These can be stacked)
+		- 10 common OR 1 FC = "Plus"
+		- 10 Rare OR 5 FC = "Elite"
+		- 10 Super OR 10 FC = "Super" (Only select items have a Super upgrade)
 	- Primaries
+    	- Plus: 2 extra mags
+    	- Elite: 
 	- Secondaries
 	- Strats
 		- Eagles
@@ -107,17 +144,28 @@ over the exchange menu. Leaving the ship closes the exchange menu and cancels qu
 		- Backpacks
 		- Vehicles
 		- Turrets
-	- Spend either 10 FC, 10K Req, 50 Common, 25 Rare or 10 Super to (limit to one of each):
+	- Spend either 20 FC or 10K Req to (limit to one of either):
 		- Add one more strat slot
-		- Add one more booster
+		- Orbitals buff: All equiped orbital strike cooldowns are halved, but other strat cooldowns are doubled.
+		- Eagles buff: All equiped eagles have unlimited uses, but cooldowns are increased by 33%.
+		- Defensive strats buff: All equiped defensive strats have no cooldown, but are limited to 10 uses.
 	- Extremely powerful weapons and stratagems require Req slips, Samples or FC to equip
 		- Primaries
 			- Eruptor
 			- JAR-5 Dominator
 			- AR-23P Liberator Penetrator
+			- PLAS-39 Accelerator Rifle
+			- R-6 Deadeye
+			- R-63CS Diligence Counter Sniper
+			- R-72 Censor
+			- R/40-K Hot-Shot Marksman Rifle
+			- LAS-5 Scythe
+			- AR-59 Suppressor
+			- LAS-17 Double-Edge Sickle
 		- Secondaries
 			- Ultimatum
 			- Bolt Pistol
+			- P-4 Senator
 		- Throwables
 			- Melta Mine
 			- Giga grenade
@@ -128,3 +176,26 @@ over the exchange menu. Leaving the ship closes the exchange menu and cancels qu
 			- Orbital Walking Barrage
 			- Orbital Laser
 			- ARC-3 Arc Thrower
+			- LAS-98 Laser Cannon
+			- LAS-99 Quasar Cannon
+			- M-1000 Maxigun
+			- PLAS-45 Epoch
+			- StA-X3 W.A.S.P. Launcher
+			- GL-28 Belt-Fed Grenade Launcher
+			- RL-77 Airburst Rocket Launcher
+			- LIFT-850 Jump Pack
+			- LIFT-860 Hover Pack
+			- SH-32 Shield Generator Pack
+			- EAT-411 Leveller
+			- All Exosuits
+			- Orbital 380mm HE Barrage
+			- Orbital 120mm HE Barrage
+			- Orbital Napalm Barrage
+			- Orbital Railcannon Strike
+			- AC-8 Autocannon
+			- A/G-16 Gatling Sentry
+			- APW-1 Anti-Materiel Rifle
+			- AX/AR-23 Guard Dog / gun
+			- GR-8 Recoilless Rifle
+			- MLS-4X Commando
+			- B-1 Supply pack

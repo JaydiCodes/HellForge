@@ -78,7 +78,7 @@ foreach($source in $sources){
     $built+=$object
 }
 if($SpendMyResources){
-    $mod=Join-Path $project 'examples/My Mods/SpendMyResources'
+    $mod=Join-Path $project 'examples/mymods/SpendMyResources'
     $src=Join-Path $mod 'src'
     $editor=Join-Path $project 'native/editor'
     $gameplay=Join-Path $objects 'spend_my_resources.o'

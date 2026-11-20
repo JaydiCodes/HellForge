@@ -26,8 +26,8 @@ static uintptr_t Inventory(const HfApi* api)
 
 static uintptr_t ItemRecord(const HfApi* api, uintptr_t manager, uint32_t mix_id, unsigned* amount)
 {
-    static struct { uintptr_t manager, record; uint32_t id; } cache[PRICE_COUNT + CURRENCY_COUNT];
-    for (size_t i = 0; i < PRICE_COUNT + CURRENCY_COUNT; ++i)
+    static struct { uintptr_t manager, record; uint32_t id; } cache[CURRENCY_COUNT];
+    for (size_t i = 0; i < CURRENCY_COUNT; ++i)
         if (cache[i].manager == manager && cache[i].id == mix_id)
         {
             uint32_t id;
@@ -45,7 +45,7 @@ static uintptr_t ItemRecord(const HfApi* api, uintptr_t manager, uint32_t mix_id
         if (id == mix_id)
         {
             if (api->read(record + 0xB0, amount, 4)) return 0;
-            for (size_t k = 0; k < PRICE_COUNT + CURRENCY_COUNT; ++k)
+            for (size_t k = 0; k < CURRENCY_COUNT; ++k)
                 if (!cache[k].manager || cache[k].manager != manager)
                 {
                     cache[k].manager = manager;
