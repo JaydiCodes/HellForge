@@ -140,6 +140,8 @@ over the exchange menu. Leaving the ship closes the exchange menu and cancels qu
 	- Secondaries
 	- Strats
 		- Eagles
+    		- Super:
+        		- 500KG: Airstrike drop pattern 3, meaning many 500Kgs at once
 		- Orbitals
 		- Support weapons
 		- Backpacks
@@ -147,7 +149,7 @@ over the exchange menu. Leaving the ship closes the exchange menu and cancels qu
     		- FRVs
     		- Exosuits
 		- Turrets
-	- Spend either 20 FC or 10K Req to (limit to one of either):
+	- Spend either 20 FC or 10K Req to upgrade destroyer (limit to one of either):
 		- Add one more strat slot
 		- Orbitals buff: All equiped orbital strike cooldowns are halved, but other strat cooldowns are doubled.
 		- Eagles buff: All equiped eagles have unlimited uses, but cooldowns are increased by 33%.
