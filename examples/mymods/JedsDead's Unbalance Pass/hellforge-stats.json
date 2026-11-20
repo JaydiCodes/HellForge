@@ -1149,7 +1149,7 @@
     },
     "Eagle Airstrike": {
       "eagle.airstrike_pattern": 3,
-      "eagle.drop_interval": 0.1
+      "eagle.rearm_time": 120
     },
     "Eagle Napalm Airstrike": {
       "explosion.inner_radius": 10
