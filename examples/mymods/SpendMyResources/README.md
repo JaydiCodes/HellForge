@@ -94,7 +94,6 @@ over the exchange menu. Leaving the ship closes the exchange menu and cancels qu
 		- Rare = 100 Points
 		- Super = 200 Points
 		- FC = 500 Points
-	- Also increase Req reward 2 times all sources
 	- In each case spend either
 		- 10 common OR 5K Req OR 1 FC
 		- 10 Rare OR 10K Req OR 5 FC
