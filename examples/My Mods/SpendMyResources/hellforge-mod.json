@@ -3,7 +3,7 @@
   "id": "jaydicodes.spend-my-resources",
   "name": "Spend My Resources",
   "version": "0.7.0",
-  "description": "Ready opens a loadout checkout for equipped restricted items. Spend offline-profile requisition on session-only, one-mission access.",
+  "description": "Ready opens access checkout for restricted equipment. F2 opens ship-only exchanges for requisition, samples and Forge Credits.",
   "gameplay": true,
   "coop": "shared",
   "code": {

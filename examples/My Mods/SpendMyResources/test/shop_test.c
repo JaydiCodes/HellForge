@@ -17,6 +17,8 @@ static unsigned saved_wallet = 5000;
 static int prices_refused, subscription_calls;
 static int input_result = 1, input_calls, hook_refused;
 static uintptr_t last_button, last_input, unreadable_at;
+static unsigned saved_currency[CURRENCY_COUNT];
+static int add_failed, add_calls, exchange_profile_calls, exchange_profile_refused;
 
 #define CHECK(test) do { if (!(test)) { fprintf(stderr, "FAIL line %d: %s\n", __LINE__, #test); exit(1); } } while (0)
 static int Read(uintptr_t at, void* out, size_t size) { if (!at || at == unreadable_at) return 1; memcpy(out, (const void*)at, size); return 0; }
@@ -67,10 +69,37 @@ static void SetAmount(uint32_t id, unsigned amount)
 }
 static void Remove(uintptr_t unused, uint32_t id, uint32_t amount)
 {
-    CHECK(id == REQUISITION);
+    int currency = 0;
+    for (size_t i = 0; i < CURRENCY_COUNT; ++i) currency |= id == kCurrencies[i].id;
+    CHECK(currency);
     if (remove_failed) return;
     unsigned before = Amount(id);
     SetAmount(id, before > amount ? before - amount : 0);
+}
+static void Add(uintptr_t unused, uint32_t id, uint32_t amount, uint32_t source, const char* text, int extra)
+{
+    CHECK(!source && !text && !extra);
+    add_calls++;
+    if (add_failed != 1) SetAmount(id, Amount(id) + amount - (add_failed == 2 ? 1 : 0));
+}
+int SmrExchangeProfile(const char* logs, uint32_t source, unsigned debit, uint32_t target, unsigned credit,
+    char* result, size_t size)
+{
+    size_t from = 0, to = 0;
+    while (from < CURRENCY_COUNT && kCurrencies[from].id != source) ++from;
+    while (to < CURRENCY_COUNT && kCurrencies[to].id != target) ++to;
+    CHECK(from < CURRENCY_COUNT && to < CURRENCY_COUNT && from != to);
+    CHECK(Amount(source) == saved_currency[from] - debit && Amount(target) == saved_currency[to] + credit);
+    exchange_profile_calls++;
+    if (exchange_profile_refused)
+    {
+        snprintf(result, size, "Synthetic exchange profile failure.");
+        return 0;
+    }
+    saved_currency[from] -= debit;
+    saved_currency[to] += credit;
+    snprintf(result, size, "Exchange profile fixture saved.");
+    return 1;
 }
 int SmrLoadPrices(const char* const* names, unsigned* prices, size_t count, char* result, size_t size)
 {
@@ -234,6 +263,137 @@ static void TestReadyGate(void)
     Pick(HF_ITEM_AR23_LIBERATOR, 0);
 }
 
+static void ResetExchange(void)
+{
+    const unsigned amounts[] = {10000, 100, 100, 50, 100}, caps[] = {50000, 500, 250, 100, 0};
+    for (size_t i = 0; i < CURRENCY_COUNT; ++i)
+    {
+        SetAmount(kCurrencies[i].id, amounts[i]);
+        saved_currency[i] = amounts[i];
+        unsigned ignored;
+        uintptr_t record = ItemRecord(&api, (uintptr_t)manager, kCurrencies[i].id, &ignored);
+        Put32((unsigned char*)record + 0x18, caps[i]);
+    }
+    Pick(HF_ITEM_AR23_LIBERATOR, 0);
+    shop_failed = remove_failed = add_failed = exchange_profile_refused = 0;
+    exchange_profile_calls = add_calls = 0;
+    game_state = HF_STATE_SHIP;
+    Tick();
+}
+
+static void TestExchanges(void)
+{
+    unsigned debit, credit;
+    const unsigned points[] = {1, 50, 100, 200, 500};
+    CHECK(CURRENCY_COUNT == 5);
+    for (size_t i = 0; i < CURRENCY_COUNT; ++i) CHECK(kCurrencies[i].points == points[i]);
+    for (size_t from = 0; from < CURRENCY_COUNT; ++from)
+        for (size_t to = 0; to < CURRENCY_COUNT; ++to)
+        {
+            if (from == to) { CHECK(!SmrExchangeQuote(from, to, 1, &debit, &credit)); continue; }
+            ResetExchange();
+            CHECK(SmrExchangeQuote(from, to, 1, &debit, &credit));
+            CHECK((uint64_t)debit * kCurrencies[from].points == (uint64_t)credit * kCurrencies[to].points);
+            unsigned before_from = saved_currency[from], before_to = saved_currency[to];
+            CHECK(SmrExchange(&mod, from, to, 1));
+            CHECK(!SmrExchange(&mod, from, to, 1) && exchange_profile_calls == 0);
+            CHECK(!SmrBuyCheckout(&mod));
+            SmrCurrency item;
+            CHECK(SmrCurrencyItem(from, &item) && item.pending);
+            Tick();
+            CHECK(!exchange.pending && !shop_failed && exchange_profile_calls == 1 && add_calls == 1);
+            CHECK(saved_currency[from] == before_from - debit && saved_currency[to] == before_to + credit);
+            CHECK(Amount(kCurrencies[from].id) == saved_currency[from] && Amount(kCurrencies[to].id) == saved_currency[to]);
+            CHECK(!auto_ready);
+            for (size_t i = 0; i < PRICE_COUNT; ++i) CHECK(!access[i]);
+        }
+    ResetExchange();
+    CHECK(SmrExchangeQuote(3, 4, 1, &debit, &credit) && debit == 5 && credit == 2);
+    CHECK(!SmrExchangeQuote(0, CURRENCY_COUNT, 1, &debit, &credit));
+    CHECK(!SmrExchangeQuote(0, 1, 0, &debit, &credit));
+    CHECK(!SmrExchangeQuote(0, 4, UINT_MAX, &debit, &credit));
+    CHECK(!SmrExchange(&mod, 0, 4, 0));
+    CHECK(!SmrExchange(&mod, 0, 4, 21));
+    CHECK(!SmrExchange(&mod, 4, 3, 11)); /* 55 super would exceed 100. */
+    CHECK(!SmrExchange(&mod, 4, 0, 81)); /* 40,500 Req would exceed 50,000. */
+    CHECK(!SmrExchange(&mod, 4, 1, 41)); /* 410 common would exceed 500. */
+    CHECK(!SmrExchange(&mod, 4, 2, 31)); /* 155 rare would exceed 250. */
+    CHECK(SmrExchange(&mod, 4, 3, 10)); /* Exactly at the cap is allowed. */
+    Tick();
+    CHECK(Amount(kCurrencies[3].id) == 100);
+    ResetExchange();
+    SetAmount(REQUISITION, 101);
+    saved_currency[0] = 101;
+    Tick();
+    CHECK(SmrExchange(&mod, 0, 1, 2));
+    Tick();
+    CHECK(Amount(REQUISITION) == 1 && saved_currency[0] == 1); /* Remainder retained. */
+    ResetExchange();
+    SetAmount(kCurrencies[4].id, 0);
+    saved_currency[4] = 0;
+    Tick();
+    CHECK(SmrExchange(&mod, 0, 4, 1));
+    Tick();
+    CHECK(Amount(kCurrencies[4].id) == 1 && saved_currency[4] == 1);
+    ResetExchange();
+    SetAmount(kCurrencies[4].id, UINT_MAX);
+    Tick();
+    CHECK(!SmrExchange(&mod, 0, 4, 1)); /* Uncapped currencies still cannot overflow. */
+    ResetExchange();
+    CHECK(SmrExchange(&mod, 0, 4, 2));
+    game_state = HF_STATE_MISSION;
+    Tick();
+    CHECK(!exchange.pending && !exchange_profile_calls && !add_calls && Amount(REQUISITION) == 10000);
+    CHECK(!SmrExchange(&mod, 0, 4, 1));
+    ResetExchange();
+    charge.state = CHARGE_QUEUED;
+    CHECK(!SmrExchange(&mod, 0, 4, 1));
+    charge.state = CHARGE_IDLE;
+    CHECK(SmrExchange(&mod, 0, 4, 2));
+    SetAmount(REQUISITION, 999);
+    Tick();
+    CHECK(!exchange.pending && !exchange_profile_calls && !add_calls && Amount(REQUISITION) == 999);
+    ResetExchange();
+    CHECK(SmrExchange(&mod, 4, 3, 1));
+    SetAmount(kCurrencies[3].id, 100);
+    Tick();
+    CHECK(!exchange.pending && !exchange_profile_calls && Amount(kCurrencies[4].id) == 100);
+    ResetExchange();
+    unsigned ignored;
+    uintptr_t capped = ItemRecord(&api, (uintptr_t)manager, kCurrencies[3].id, &ignored);
+    CHECK(SmrExchange(&mod, 4, 3, 1));
+    Put32((unsigned char*)capped + 0x18, 50);
+    Tick();
+    CHECK(!exchange.pending && !exchange_profile_calls && Amount(kCurrencies[4].id) == 100);
+    ResetExchange();
+    uintptr_t record = ItemRecord(&api, (uintptr_t)manager, kCurrencies[4].id, &ignored);
+    unreadable_at = record + 0x18;
+    Tick();
+    CHECK(!SmrExchange(&mod, 0, 4, 1));
+    unreadable_at = 0;
+    ResetExchange();
+    for (int failure = 0; failure < 4; ++failure)
+    {
+        ResetExchange();
+        remove_failed = failure == 0;
+        add_failed = failure == 1 ? 1 : (failure == 3 ? 2 : 0);
+        exchange_profile_refused = failure == 2;
+        CHECK(SmrExchange(&mod, 0, 4, 1));
+        Tick();
+        CHECK(shop_failed && !inventory_ready && !exchange_ready && !exchange.pending);
+        CHECK(add_calls == (failure == 0 ? 0 : 1));
+        CHECK(exchange_profile_calls == (failure == 2 ? 1 : 0));
+        CHECK(saved_currency[0] == 10000 && saved_currency[4] == 100);
+        CHECK(!SmrExchange(&mod, 0, 4, 1));
+        CHECK(!BuyItem(0));
+    }
+    ResetExchange();
+    SetAmount(REQUISITION, 5000);
+    saved_wallet = 5000;
+    Tick();
+    puts("PASS exchanges: all 20 pairs, exact batches, remainders, caps, ship-only, stale balance/cap checks, shared transaction exclusion and partial failures");
+}
+
 static void TestExpandedCatalog(void)
 {
     static const struct { uint32_t id, mix_id; unsigned slot; } expected[] = {
@@ -333,12 +493,14 @@ int main(void)
     PutPointer(INVENTORY_CELL, manager);
     PutPointer(HISTORY_CELL, history);
     PutPointer(0x347CDD8, profile);
-    Put32(manager + INVENTORY_COUNT, PRICE_COUNT + 1);
+    Put32(manager + INVENTORY_COUNT, PRICE_COUNT + CURRENCY_COUNT);
     Put32(manager + CATALOGUE_STATUS, 2);
     Put32(manager + INVENTORY_STATUS, 2);
     Put32(manager + INVENTORY_RECORDS + 4, REQUISITION);
     for (size_t i = 0; i < PRICE_COUNT; ++i)
         Put32(manager + INVENTORY_RECORDS + (i + 1) * INVENTORY_STRIDE + 4, kLoadoutPrices[i].mix_id);
+    for (size_t i = 1; i < CURRENCY_COUNT; ++i)
+        Put32(manager + INVENTORY_RECORDS + (PRICE_COUNT + i) * INVENTORY_STRIDE + 4, kCurrencies[i].id);
     api.version = 16; api.size = sizeof api; api.log = Log; api.read = Read;
     api.module_base = Base; api.build_id = Build; api.game_state = State; api.code_matches = Matches;
     api.global = Global; api.subscribe = Subscribe; api.on_game_thread = OnTick;
@@ -354,6 +516,7 @@ int main(void)
     pins_match = 1;
     game_base = (uintptr_t)image;
     inventory_remove = Remove;
+    inventory_add = Add;
     SetAmount(REQUISITION, 5000);
     SetAmount(HF_ITEM_R36_ERUPTOR, 1);
     SetAmount(699439563u, 1);
@@ -377,6 +540,7 @@ int main(void)
     CHECK(!BuyItem(PRICE_COUNT));
     TestReadyGate();
     TestExpandedCatalog();
+    TestExchanges();
     CHECK(Amount(REQUISITION) == 5000 && !access[0] && !access[1]);
     Pick(HF_ITEM_R36_ERUPTOR, HF_STRATAGEM_MS11_SOLO_SILO);
     Tick();

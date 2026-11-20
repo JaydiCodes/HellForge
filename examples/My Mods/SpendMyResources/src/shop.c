@@ -48,6 +48,7 @@ static void ShopTick(HfMod* mod, float dt, void* user)
         }
         game_base = game;
         inventory_remove = (void (*)(uintptr_t, uint32_t, uint32_t))(game + 0x136F5E0);
+        inventory_add = (void (*)(uintptr_t, uint32_t, uint32_t, uint32_t, const char*, int))(game + 0x136EF80);
     }
     if (!InstallReadyGate(mod))
     {
@@ -58,6 +59,9 @@ static void ShopTick(HfMod* mod, float dt, void* user)
         return;
     }
     uintptr_t manager = Inventory(api);
+    ReadCurrencies(mod, manager);
+    ProcessExchange(mod, manager);
+    if (shop_failed) return;
     unsigned selected = 0;
     int selection_read = SelectedItems(mod, &selected);
     unsigned balance = 0, amounts[PRICE_COUNT] = {0};

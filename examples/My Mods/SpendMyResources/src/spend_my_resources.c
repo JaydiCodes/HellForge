@@ -6,6 +6,7 @@
 #include "loadout.c"
 #include "ready_gate.c"
 #include "missions.c"
+#include "exchange.c"
 #include "purchases.c"
 #include "shop.c"
 

@@ -534,7 +534,8 @@ int main(int argc, char** argv)
         while (PeekMessageW(&message, NULL, 0, 0, PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
         if (shop)
         {
-            if (frame == 10 || frame == 50 || frame == 70 || frame == 100 || frame == 115) Key(window, VK_F1);
+            if (frame == 10 || frame == 50 || frame == 70 || frame == 100 || frame == 115) Key(window, VK_F2);
+            if (frame == 12) Key(window, VK_F1);
             if (frame == 34) Key(window, VK_ESCAPE);
             if (frame == 60) g_shopState = HF_STATE_MISSION;
             if (frame == 90) g_shopState = HF_STATE_SHIP;
@@ -686,7 +687,7 @@ int main(int argc, char** argv)
             if (frame == 16 || frame == 45 || frame == 55 || frame == 65 || frame == 80 || frame == 110 || frame == 120)
             {
                 RECT center = {500, 330, 750, 390};
-                const bool open = false; /* Checkout opens from rejected Ready input, never F1. */
+                const bool open = frame == 16 || frame == 55 || frame == 110;
                 int drawn = Screenshot(frame == 16 && argc > 2 ? argv[2] : NULL, width, height, &center);
                 if (open ? drawn < 1000 : drawn > 100)
                 { printf("FAIL shop at frame %d: %d changed pixels, expected %s\n", frame, drawn, open ? "open" : "closed"); failures++; }

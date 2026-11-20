@@ -1,6 +1,38 @@
 {
   "format": 1,
   "enemies": {
+    "lieutenant_artillery": {
+      "damage_zone:zone_4:zone.health": 350,
+      "entity::entity.health": 2000
+    },
+    "lieutenant_assault": {
+      "damage_zone:zone_4:zone.health": 350,
+      "entity::entity.health": 2000
+    },
+    "lieutenant_base": {
+      "damage_zone:zone_4:zone.health": 350,
+      "entity::entity.health": 2000
+    },
+    "lieutenant_ivory_legion": {
+      "damage_zone:zone_4:zone.health": 350,
+      "entity::entity.health": 2000
+    },
+    "lieutenant_ivory_legion_assault": {
+      "damage_zone:zone_4:zone.health": 350,
+      "entity::entity.health": 2000
+    },
+    "lieutenant_suppressor": {
+      "damage_zone:zone_4:zone.health": 350,
+      "entity::entity.health": 2000
+    },
+    "unnamed_entity_0235": {
+      "damage_zone:zone_4:zone.health": 350,
+      "entity::entity.health": 2000
+    },
+    "unnamed_entity_1059": {
+      "damage_zone:zone_4:zone.health": 350,
+      "entity::entity.health": 2000
+    },
     "cy_stratagem_blocker": {
       "entity::jammer.radius": 200
     },

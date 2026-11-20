@@ -6,6 +6,7 @@ enum {
 };
 static uintptr_t game_base;
 static void (*inventory_remove)(uintptr_t, uint32_t, uint32_t);
+static void (*inventory_add)(uintptr_t, uint32_t, uint32_t, uint32_t, const char*, int);
 
 static uintptr_t Pointer(const HfApi* api, uintptr_t at)
 {
@@ -25,8 +26,8 @@ static uintptr_t Inventory(const HfApi* api)
 
 static uintptr_t ItemRecord(const HfApi* api, uintptr_t manager, uint32_t mix_id, unsigned* amount)
 {
-    static struct { uintptr_t manager, record; uint32_t id; } cache[PRICE_COUNT + 1];
-    for (size_t i = 0; i < PRICE_COUNT + 1; ++i)
+    static struct { uintptr_t manager, record; uint32_t id; } cache[PRICE_COUNT + CURRENCY_COUNT];
+    for (size_t i = 0; i < PRICE_COUNT + CURRENCY_COUNT; ++i)
         if (cache[i].manager == manager && cache[i].id == mix_id)
         {
             uint32_t id;
@@ -44,7 +45,7 @@ static uintptr_t ItemRecord(const HfApi* api, uintptr_t manager, uint32_t mix_id
         if (id == mix_id)
         {
             if (api->read(record + 0xB0, amount, 4)) return 0;
-            for (size_t k = 0; k < PRICE_COUNT + 1; ++k)
+            for (size_t k = 0; k < PRICE_COUNT + CURRENCY_COUNT; ++k)
                 if (!cache[k].manager || cache[k].manager != manager)
                 {
                     cache[k].manager = manager;
@@ -62,6 +63,9 @@ static int LayoutMatches(const HfApi* api, uintptr_t game)
 {
     return api->code_matches(game + 0x1361F69, "48 8B 35 E0 AE 11 02") &&
         api->code_matches(game + 0x136F5E0, "85 D2 0F 84 91 00 00 00 53 48 83 EC 20 44 8B 91 E0 1C 00 00") &&
+        api->code_matches(game + 0x136EF80,
+            "44 89 44 24 18 48 89 4C 24 08 53 56 57 41 54 41 55 41 56 48 81 EC D8 00 00 00 "
+            "45 33 E4 45 8B E9 41 8B F8 8B F2 4C 8B F1 81 FA 50 C8 84 35 0F") &&
         api->code_matches(game + 0x136E6C1,
             "48 8B 35 30 E8 10 02 33 DB 4D 89 73 18 44 8B F3 8B AE E0 1C 00 00 "
             "4C 8D AE E4 1C 00 00 89 AE 44 1D 0D 00") &&

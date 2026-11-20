@@ -1,6 +1,7 @@
 #pragma once
 #include "shop.h"
 #include "access_items.h"
+#include "currencies.h"
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
@@ -19,6 +20,13 @@ static int checkout_valid;
 static volatile LONG checkout_requested;
 static volatile LONG auto_ready;
 static unsigned auto_ready_selection;
+static unsigned currency_amount[CURRENCY_COUNT], currency_cap[CURRENCY_COUNT];
+static int exchange_ready;
+static struct {
+    int pending;
+    size_t from, to;
+    unsigned batches;
+} exchange;
 
 enum { CHARGE_IDLE, CHARGE_QUEUED };
 static struct {

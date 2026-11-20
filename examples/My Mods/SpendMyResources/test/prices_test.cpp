@@ -14,7 +14,10 @@ int main(int argc, char** argv)
     for (size_t i = 0; i < PRICE_COUNT; ++i) names[i] = kLoadoutPrices[i].name;
     char result[256] = {};
     CHECK(ReadPrices(Wide(argv[1]), names, prices, PRICE_COUNT, result, sizeof result));
-    for (size_t i = 0; i < PRICE_COUNT; ++i) CHECK(prices[i] == kLoadoutPrices[i].requisition);
+    Value shipped;
+    std::string shippedText, shippedError;
+    CHECK(ReadFile(Wide(argv[1]), &shippedText) && Parse(shippedText, &shipped, &shippedError));
+    for (size_t i = 0; i < PRICE_COUNT; ++i) CHECK(prices[i] == shipped.GetNumber(names[i]));
 
     wchar_t temp[MAX_PATH], file[MAX_PATH];
     CHECK(GetTempPathW(MAX_PATH, temp) && GetTempFileNameW(temp, L"smr", 0, file));

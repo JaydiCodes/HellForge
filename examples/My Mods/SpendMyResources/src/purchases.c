@@ -10,7 +10,7 @@ int SmrCheckout(unsigned* total, int* pending)
 {
     AcquireSRWLockShared(&shop_lock);
     unsigned unpaid = UnpaidItems(checkout_mask, total);
-    *pending = charge.state != CHARGE_IDLE;
+    *pending = charge.state != CHARGE_IDLE || exchange.pending;
     int owned = 1;
     for (size_t i = 0; i < PRICE_COUNT; ++i)
         if ((unpaid & (1u << i)) && !owned_amount[i]) owned = 0;
@@ -29,7 +29,7 @@ int SmrBuyCheckout(HfMod* mod)
     int owned = 1;
     for (size_t i = 0; i < PRICE_COUNT; ++i)
         if ((unpaid & (1u << i)) && !owned_amount[i]) owned = 0;
-    if (!owned || !checkout_valid || !unpaid || !total || !inventory_ready || charge.state != CHARGE_IDLE || wallet < total)
+    if (!owned || !checkout_valid || !unpaid || !total || !inventory_ready || charge.state != CHARGE_IDLE || exchange.pending || wallet < total)
     {
         ReleaseSRWLockExclusive(&shop_lock);
         ShopMessage(mod, "Checkout unavailable: check the loadout, balance and pending purchase.");
