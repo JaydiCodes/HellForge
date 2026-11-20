@@ -140,9 +140,13 @@ over the exchange menu. Leaving the ship closes the exchange menu and cancels qu
 	- Secondaries
 	- Strats
 		- Eagles
+    		- Plus: +1 use
+    		- Elite: 
     		- Super:
         		- 500KG: Airstrike drop pattern 3, meaning many 500Kgs at once
 		- Orbitals
+    		- Plus: 1 extra salvo
+    		- Elite: 
 		- Support weapons
 		- Backpacks
 		- Vehicles

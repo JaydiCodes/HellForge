@@ -192,11 +192,13 @@
       "attack.primary.projectile": 135
     },
     "APW-1 Anti-Materiel Rifle": {
-      "damage.primary.ap_direct": 6,
-      "damage.primary.ap_extreme": 2,
-      "damage.primary.ap_large": 3,
-      "damage.primary.standard_damage": 400,
-      "weapon.third_person_reticle": 4
+      "damage.primary.durable_damage": 300,
+      "damage.primary.standard_damage": 600,
+      "magazine.spare_magazines": 6,
+      "magazine.starting_magazines": 4,
+      "magazine.magazines_from_supply": 6,
+      "damage.primary.ap_extreme": 0,
+      "damage.primary.ap_large": 2
     },
     "AR-2 Coyote": {
       "damage.ap_large": 1,
