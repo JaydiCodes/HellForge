@@ -12,20 +12,21 @@ static void TestUpgradeConfig(const std::wstring& shippedPath, const std::wstrin
     char result[256] = {};
     SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT] = {};
     CHECK(ReadUpgradeConfig(shippedPath, tuning, result, sizeof result));
-    CHECK(tuning[SMR_UPGRADE_ORBITAL].cooldown_percent == -66 && tuning[SMR_UPGRADE_ORBITAL].forge_credits == 30);
+    CHECK(tuning[SMR_UPGRADE_ORBITAL].cooldown_percent == -66 && tuning[SMR_UPGRADE_ORBITAL].forge_credits == 50);
     CHECK(tuning[SMR_UPGRADE_EAGLE].rearm_seconds == 30 && tuning[SMR_UPGRADE_EAGLE].call_in_extra_seconds == 2 &&
         tuning[SMR_UPGRADE_EAGLE].cooldown_seconds == 20);
-    CHECK(tuning[SMR_UPGRADE_DEFENSIVE].cooldown_seconds == 0 && tuning[SMR_UPGRADE_SUPPORT].cooldown_seconds == 0);
+    CHECK(tuning[SMR_UPGRADE_DEFENSIVE].cooldown_percent == -66 && tuning[SMR_UPGRADE_SUPPORT].cooldown_percent == -66);
+    CHECK(tuning[SMR_UPGRADE_DEFENSIVE].other_cooldown_percent == 100 && tuning[SMR_UPGRADE_SUPPORT].other_cooldown_percent == 100);
     std::string text, why;
     Value valid;
     CHECK(ReadFile(shippedPath, &text) && Parse(text, &valid, &why));
     valid.At("orbital").At("cooldown_percent") = Value::MakeNumber(-72.5, false);
     valid.At("eagle").At("forge_credits") = Value::MakeNumber(7, true);
-    valid.At("support").At("cooldown_seconds") = Value::MakeNumber(2.5, false);
+    valid.At("support").At("cooldown_percent") = Value::MakeNumber(-62.5, false);
     CHECK(WriteAtomically(tempPath, Write(valid)));
     CHECK(ReadUpgradeConfig(tempPath, tuning, result, sizeof result));
     CHECK(tuning[SMR_UPGRADE_ORBITAL].cooldown_percent == -72.5 && tuning[SMR_UPGRADE_EAGLE].forge_credits == 7);
-    CHECK(tuning[SMR_UPGRADE_SUPPORT].cooldown_seconds == 2.5);
+    CHECK(tuning[SMR_UPGRADE_SUPPORT].cooldown_percent == -62.5 && tuning[SMR_UPGRADE_DEFENSIVE].cooldown_percent == -66);
     for (const char* bad : {"0", "-1", "1.5", "1e3", "\"10\"", "4294967296", "1e999"})
     {
         Value document = valid, value;
@@ -35,19 +36,21 @@ static void TestUpgradeConfig(const std::wstring& shippedPath, const std::wstrin
         CHECK(!ReadUpgradeConfig(tempPath, tuning, result, sizeof result) && result[0]);
         CHECK(tuning[SMR_UPGRADE_ORBITAL].cooldown_percent == -72.5 && tuning[SMR_UPGRADE_EAGLE].forge_credits == 7);
     }
-    for (int i = 0; i < 7; ++i)
+    for (int i = 0; i < 9; ++i)
     {
         Value document = valid;
         if (i == 0) document.Erase("eagle");
-        if (i == 1) document.At("support").Erase("cooldown_seconds");
+        if (i == 1) document.At("support").Erase("cooldown_percent");
         if (i == 2) document.At("eagle").At("typo") = Value::MakeNumber(10, true);
         if (i == 3) document.At("eagle").members.emplace_back("forge_credits", Value::MakeNumber(10, true));
-        if (i == 4) document.At("orbital").At("cooldown_percent") = Value::MakeNumber(-101, true);
+        if (i == 4) document.At("defensive").At("cooldown_percent") = Value::MakeNumber(-101, true);
         if (i == 5) document.At("defensive").At("uses") = Value::MakeNumber(10, true);
         if (i == 6) document.At("support").At("uses") = Value::MakeNumber(5, true);
+        if (i == 7) document.At("defensive").At("cooldown_seconds") = Value::MakeNumber(30, true);
+        if (i == 8) document.At("support").At("cooldown_seconds") = Value::MakeNumber(60, true);
         CHECK(WriteAtomically(tempPath, Write(document)));
         CHECK(!ReadUpgradeConfig(tempPath, tuning, result, sizeof result) && result[0]);
-        CHECK(tuning[SMR_UPGRADE_SUPPORT].cooldown_seconds == 2.5);
+        CHECK(tuning[SMR_UPGRADE_SUPPORT].cooldown_percent == -62.5 && tuning[SMR_UPGRADE_DEFENSIVE].cooldown_percent == -66);
     }
     CHECK(DeleteFileW(tempPath.c_str()));
     CHECK(!ReadUpgradeConfig(tempPath, tuning, result, sizeof result) && result[0]);

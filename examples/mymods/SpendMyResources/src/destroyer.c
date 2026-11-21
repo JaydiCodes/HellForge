@@ -101,6 +101,7 @@ static int PlanUpgrade(HfMod* mod, uintptr_t loadout, SmrUpgrade upgrade, Upgrad
     *count = 0;
     const SmrUpgradeTuning* tuning = SmrGetUpgradeTuning(upgrade);
     if (!tuning || !ReadStratagems(api, loadout, picks, &slots)) return 0;
+    const double cooldown_factor = (100 + tuning->cooldown_percent) / 100;
     const double other_factor = 1 + tuning->other_cooldown_percent / 100;
     int has_eagle = 0;
     for (uint32_t i = 0; i < slots; ++i)
@@ -127,11 +128,11 @@ static int PlanUpgrade(HfMod* mod, uintptr_t loadout, SmrUpgrade upgrade, Upgrad
             (upgrade == SMR_UPGRADE_SUPPORT && hud.now.number == HUD_SUPPORT))
         {
             /* StratagemSettings stores unlimited uses as UINT32_MAX. */
-            if (!AddFixedEdit(mod, edits, count, type, &kCooldown, (HfValue)HF_F32(tuning->cooldown_seconds)) ||
+            if (!AddTimedEdit(mod, edits, count, type, &kCooldown, cooldown_factor, 0) ||
                 !AddFixedEdit(mod, edits, count, type, &kUses, (HfValue)HF_U32(UINT32_MAX))) return 0;
         }
         else if (!AddTimedEdit(mod, edits, count, type, &kCooldown,
-            upgrade == SMR_UPGRADE_ORBITAL && orbital ? (100 + tuning->cooldown_percent) / 100 : other_factor, 0))
+            upgrade == SMR_UPGRADE_ORBITAL && orbital ? cooldown_factor : other_factor, 0))
             return 0;
     }
     if (has_eagle)
