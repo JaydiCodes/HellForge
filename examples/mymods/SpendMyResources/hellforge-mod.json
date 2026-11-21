@@ -2,8 +2,8 @@
   "format": 1,
   "id": "jaydicodes.spend-my-resources",
   "name": "Spend My Resources",
-  "version": "0.7.0",
-  "description": "Ready opens access checkout for restricted equipment. F2 opens ship-only exchanges for requisition, samples and Forge Credits.",
+  "version": "0.8.0",
+  "description": "Ready opens mission upgrades, then access checkout for restricted equipment if needed. F2 opens ship-only currency exchange.",
   "gameplay": true,
   "coop": "shared",
   "code": {

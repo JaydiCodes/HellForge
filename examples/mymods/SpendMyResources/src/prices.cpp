@@ -55,7 +55,7 @@ static int ReadPrices(const std::wstring& path, const char* const* names, unsign
     return 1;
 }
 
-extern "C" int SmrLoadPrices(const char* const* names, unsigned* prices, size_t count, char* result, size_t size)
+static std::wstring ConfigPath(const wchar_t* filename, char* result, size_t size)
 {
     static const char moduleAnchor = 0;
     HMODULE module = nullptr;
@@ -64,15 +64,20 @@ extern "C" int SmrLoadPrices(const char* const* names, unsigned* prices, size_t 
             reinterpret_cast<LPCWSTR>(&moduleAnchor), &module))
     {
         snprintf(result, size, "Cannot locate the mod DLL (Windows error %lu).", GetLastError());
-        return 0;
+        return {};
     }
     DWORD length = GetModuleFileNameW(module, path, sizeof path / sizeof path[0]);
     if (!length || length >= sizeof path / sizeof path[0])
     {
         snprintf(result, size, "Cannot read the mod DLL path (Windows error %lu).", GetLastError());
-        return 0;
+        return {};
     }
     const std::wstring dllPath(path, length);
-    return ReadPrices(dllPath.substr(0, dllPath.find_last_of(L'\\') + 1) + L"prices.json",
-        names, prices, count, result, size);
+    return dllPath.substr(0, dllPath.find_last_of(L'\\') + 1) + filename;
+}
+
+extern "C" int SmrLoadPrices(const char* const* names, unsigned* prices, size_t count, char* result, size_t size)
+{
+    const auto path = ConfigPath(L"prices.json", result, size);
+    return !path.empty() && ReadPrices(path, names, prices, count, result, size);
 }

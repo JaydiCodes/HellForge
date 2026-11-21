@@ -13,7 +13,7 @@ enum {
 static HfMod* ready_mod;
 static int (*ready_input_original)(uintptr_t button, uintptr_t input);
 
-static int ReadyAccessAllowed(HfMod* mod, uintptr_t card)
+static int IsLocalCard(HfMod* mod, uintptr_t card)
 {
     const HfApi* api = HF_API(mod);
     const HfLocalUser* local = hf_global_LocalUser(mod);
@@ -24,22 +24,33 @@ static int ReadyAccessAllowed(HfMod* mod, uintptr_t card)
         ShopMessage(mod, "Ready blocked: could not verify the local loadout player.");
         return 0;
     }
-    uintptr_t loadout = LocalLoadout(api, game_base, peer);
+    return 1;
+}
+
+static int ReadyAccessAllowed(HfMod* mod, uintptr_t card)
+{
+    if (!IsLocalCard(mod, card))
+    {
+        SmrFinishCheckout(0);
+        return 0;
+    }
     uint64_t selected = 0;
-    if (!loadout || !SelectedItems(mod, &selected))
+    if (!SelectedItems(mod, &selected))
         goto unreadable;
     unsigned total;
     AcquireSRWLockExclusive(&shop_lock);
     checkout_mask = selected;
     checkout_valid = 1;
     uint64_t unpaid = UnpaidItems(selected, &total);
+    SmrUpgrade upgrade = upgrade_selected;
     ReleaseSRWLockExclusive(&shop_lock);
-    if (!unpaid) return 1;
-    ShopMessage(mod, "Purchase access for the equipped items to ready automatically.");
+    if (!unpaid && !upgrade) return 1;
+    ShopMessage(mod, "Review your loadout costs before readying up.");
     InterlockedExchange(&checkout_requested, 1);
     return 0;
 
 unreadable:
+    SmrFinishCheckout(0);
     ShopMessage(mod, "Ready blocked: could not read the selected loadout.");
     return 0;
 }
@@ -48,13 +59,16 @@ static int ReadyInput(uintptr_t button, uintptr_t input)
 {
     int activated = ready_input_original(button, input);
     int automatic = InterlockedCompareExchange(&auto_ready, 0, 0) == 2;
-    if (activated != 1 && !automatic) return activated;
+    int upgrade_continue = InterlockedCompareExchange(&destroyer_gate, 0, 0) == DESTROYER_CONTINUE;
+    if (activated != 1 && !automatic && !upgrade_continue) return activated;
     const HfApi* api = HF_API(ready_mod);
+    if (api->game_state(ready_mod) != HF_STATE_SHIP) return activated;
     uintptr_t menu = Pointer(api, game_base + READY_MENU);
     uint32_t top = 0;
     if (!menu || api->read(menu, &top, sizeof top) || top != 11)
     {
         InterlockedExchange(&auto_ready, 0);
+        InterlockedExchange(&destroyer_gate, DESTROYER_IDLE);
         return activated;
     }
     uintptr_t screen = Pointer(api, menu + READY_SCREEN);
@@ -71,7 +85,12 @@ static int ReadyInput(uintptr_t button, uintptr_t input)
         /* Re-enter the normal Ready path once; the game still checks missing stratagem slots. */
         return ReadyAccessAllowed(ready_mod, screen + READY_CARD) ? 1 : 0;
     }
-    return ReadyAccessAllowed(ready_mod, screen + READY_CARD) ? activated : 0;
+    if (InterlockedCompareExchange(&destroyer_gate, DESTROYER_IDLE, DESTROYER_CONTINUE) == DESTROYER_CONTINUE)
+        return ReadyAccessAllowed(ready_mod, screen + READY_CARD) ? 1 : 0;
+    if (activated != 1) return activated;
+    if (IsLocalCard(ready_mod, screen + READY_CARD))
+        InterlockedCompareExchange(&destroyer_gate, DESTROYER_REQUESTED, DESTROYER_IDLE);
+    return 0;
 }
 
 static int InstallReadyGate(HfMod* mod)

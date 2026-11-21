@@ -66,6 +66,14 @@ int main()
         item.At("other") = Value::MakeString("preserve item fields");
         exchangeItems.items.push_back(item);
     }
+    CHECK(WriteAtomically(path, Write(exchangeOriginal)));
+    CHECK(!SmrDeductProfilePair(utf8, kCurrencies[0].id, 750, kCurrencies[FORGE_CREDITS].id, 1001, result, sizeof result));
+    CHECK(ReadFile(path, &text) && text == Write(exchangeOriginal));
+    CHECK(SmrDeductProfilePair(utf8, kCurrencies[0].id, 750, kCurrencies[FORGE_CREDITS].id, 10, result, sizeof result));
+    expected = exchangeOriginal;
+    expected.At("inventory").At("items").items[0].At("amount") = Value::MakeNumber(250, true);
+    expected.At("inventory").At("items").items[FORGE_CREDITS].At("amount") = Value::MakeNumber(990, true);
+    CHECK(ReadFile(path, &text) && Parse(text, &actual, &why) && Write(actual) == Write(expected));
     for (size_t from = 0; from < CURRENCY_COUNT; ++from)
         for (size_t to = 0; to < CURRENCY_COUNT; ++to)
         {

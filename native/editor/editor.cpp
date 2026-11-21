@@ -311,6 +311,15 @@ static void MouseAt(HWND window, UINT message, LPARAM l)
     }
 }
 
+static bool RawLeftRelease(LPARAM handle)
+{
+    RAWINPUT input = {};
+    UINT size = sizeof input;
+    UINT read = GetRawInputData((HRAWINPUT)handle, RID_INPUT, &input, &size, sizeof(RAWINPUTHEADER));
+    return read >= offsetof(RAWINPUT, data) + sizeof(RAWMOUSE) && read != (UINT)-1 &&
+        input.header.dwType == RIM_TYPEMOUSE && input.data.mouse.usButtonFlags == RI_MOUSE_LEFT_BUTTON_UP;
+}
+
 static LRESULT CALLBACK EditorProc(HWND window, UINT message, WPARAM w, LPARAM l)
 {
     if (message == WM_EDITOR_SOUND) return SoundMessage();
@@ -326,17 +335,50 @@ static LRESULT CALLBACK EditorProc(HWND window, UINT message, WPARAM w, LPARAM l
         MouseAt(window, message, l);
         ImGui_ImplWin32_WndProcHandler(window, message, w, l);
         LeaveCriticalSection(&g_lock);
-        if (InputMessage(message)) return message == WM_INPUT ? DefWindowProcW(window, message, w, l) : 0;
+        /* Ready can open the overlay after the game has already seen the press. Keep its release paired. */
+        if (InputMessage(message) && message != WM_LBUTTONUP && !(message == WM_INPUT && RawLeftRelease(l)))
+            return message == WM_INPUT ? DefWindowProcW(window, message, w, l) : 0;
     }
     return CallWindowProcW(g_gameProc, window, message, w, l);
 }
 
 static BOOL WINAPI ClipCursorDetour(const RECT* rect) { return g_open || g_modal ? TRUE : g_clipCursor(rect); }
 static BOOL WINAPI SetCursorPosDetour(int x, int y) { return g_open || g_modal ? TRUE : g_setCursorPos(x, y); }
+static constexpr size_t RawInputStride(size_t bytes)
+{
+    return (bytes + sizeof(ULONG_PTR) - 1) & ~(sizeof(ULONG_PTR) - 1);
+}
+
 static UINT WINAPI RawInputBufferDetour(PRAWINPUT data, PUINT size, UINT header)
 {
-    if ((g_open || g_modal) && data != NULL) { UINT dropped = g_rawInputBuffer(data, size, header); (void)dropped; return 0; }
-    return g_rawInputBuffer(data, size, header);
+    if ((!g_open && !g_modal) || data == NULL || size == NULL) return g_rawInputBuffer(data, size, header);
+    const size_t capacity = *size;
+    UINT count = g_rawInputBuffer(data, size, header);
+    if (count == (UINT)-1) return count;
+    BYTE* base = reinterpret_cast<BYTE*>(data);
+    size_t offset = 0;
+    UINT kept = 0;
+    for (UINT i = 0; i < count && capacity - offset >= sizeof(RAWINPUTHEADER); ++i)
+    {
+        const auto* input = reinterpret_cast<const RAWINPUT*>(base + offset);
+        const size_t bytes = input->header.dwSize;
+        if (bytes < sizeof(RAWINPUTHEADER) || bytes > capacity - offset) break;
+        const size_t packet = offsetof(RAWINPUT, data) + sizeof(RAWMOUSE);
+        if (input->header.dwType == RIM_TYPEMOUSE && bytes >= packet &&
+            (input->data.mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP))
+        {
+            RAWINPUT release = {};
+            release.header = input->header;
+            release.header.dwSize = (DWORD)packet;
+            release.data.mouse.usButtonFlags = RI_MOUSE_LEFT_BUTTON_UP;
+            memcpy(base + kept * RawInputStride(packet), &release, packet);
+            ++kept;
+        }
+        const size_t stride = RawInputStride(bytes);
+        if (stride > capacity - offset) break;
+        offset += stride;
+    }
+    return kept;
 }
 
 /* ---- the game's queue ------------------------------------------------------------------------------------------- */

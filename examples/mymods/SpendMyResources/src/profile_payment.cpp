@@ -13,8 +13,8 @@ static int ProfileAmount(const hfjson::Value* amount, unsigned* out)
     return 1;
 }
 
-static int UpdateProfile(const char* logs, uint32_t resource, unsigned cost, uint32_t target, unsigned credit,
-    char* result, size_t size)
+static int UpdateProfile(const char* logs, uint32_t resource, unsigned cost, uint32_t target, unsigned targetAmount,
+    bool deductTarget, char* result, size_t size)
 {
     using namespace hfjson;
     std::wstring profilePath;
@@ -70,23 +70,25 @@ static int UpdateProfile(const char* logs, uint32_t resource, unsigned cost, uin
         snprintf(result, size, "Profile NOT edited: resource amount missing, invalid or insufficient.");
         return 0;
     }
-    if (target && (!credit || target == resource ||
+    if (target && (!targetAmount || target == resource ||
         (targetItem && !ProfileAmount(targetItem->Find("amount"), &targetBefore)) ||
-        targetBefore > std::numeric_limits<unsigned>::max() - credit))
+        (deductTarget ? targetBefore < targetAmount : targetBefore > std::numeric_limits<unsigned>::max() - targetAmount)))
     {
-        snprintf(result, size, "Profile NOT edited: destination amount invalid or would overflow.");
+        snprintf(result, size, "%s", deductTarget ? "Profile NOT edited: second resource balance missing, invalid or insufficient." :
+            "Profile NOT edited: destination amount invalid or would overflow.");
         return 0;
     }
     sourceItem->At("amount") = Value::MakeNumber(before - cost, true);
     if (target)
     {
-        if (targetItem) targetItem->At("amount") = Value::MakeNumber(targetBefore + credit, true);
+        if (targetItem) targetItem->At("amount") = Value::MakeNumber(
+            deductTarget ? targetBefore - targetAmount : targetBefore + targetAmount, true);
         else
         {
             Value added;
             added.kind = Value::Object;
             added.At("mixId") = Value::MakeNumber(target, true);
-            added.At("amount") = Value::MakeNumber(credit, true);
+            added.At("amount") = Value::MakeNumber(targetAmount, true);
             items->items.push_back(std::move(added));
         }
     }
@@ -102,14 +104,27 @@ static int UpdateProfile(const char* logs, uint32_t resource, unsigned cost, uin
         snprintf(result, size, "Profile write could NOT be verified (unreadable or changed again).");
         return 0;
     }
-    snprintf(result, size, "Profile resource %u: %u -> %u.", resource,
-        static_cast<unsigned>(before), static_cast<unsigned>(before - cost));
+    if (deductTarget)
+        snprintf(result, size, "Profile resources %u and %u deducted in one write.", resource, target);
+    else
+        snprintf(result, size, "Profile resource %u: %u -> %u.", resource, before, before - cost);
     return 1;
 }
 
 extern "C" int SmrDeductProfile(const char* logs, uint32_t resource, unsigned cost, char* result, size_t size)
 {
-    return UpdateProfile(logs, resource, cost, 0, 0, result, size);
+    return UpdateProfile(logs, resource, cost, 0, 0, false, result, size);
+}
+
+extern "C" int SmrDeductProfilePair(const char* logs, uint32_t resource, unsigned cost, uint32_t second,
+    unsigned second_cost, char* result, size_t size)
+{
+    if (!second)
+    {
+        snprintf(result, size, "Profile NOT edited: second resource missing.");
+        return 0;
+    }
+    return UpdateProfile(logs, resource, cost, second, second_cost, true, result, size);
 }
 
 extern "C" int SmrExchangeProfile(const char* logs, uint32_t source, unsigned debit, uint32_t target, unsigned credit,
@@ -120,5 +135,5 @@ extern "C" int SmrExchangeProfile(const char* logs, uint32_t source, unsigned de
         snprintf(result, size, "Profile NOT edited: destination resource missing.");
         return 0;
     }
-    return UpdateProfile(logs, source, debit, target, credit, result, size);
+    return UpdateProfile(logs, source, debit, target, credit, false, result, size);
 }

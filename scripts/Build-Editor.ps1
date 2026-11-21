@@ -87,11 +87,11 @@ if($SpendMyResources){
     if($LASTEXITCODE){throw 'Spend My Resources gameplay did not compile.'}
     $dll=Join-Path $out 'spend_my_resources.dll'
     & $zig c++ @common -shared -Wall -Werror -Wno-unused-parameter -s -I $src -I $editor '-DHF_OVERLAY_FRONTEND=\"shop_frontend.h\"' `
-        (Join-Path $editor 'editor.cpp') (Join-Path $src 'shop_frontend.cpp') $gameplay @built `
+        (Join-Path $editor 'editor.cpp') (Join-Path $editor 'icons.cpp') (Join-Path $src 'shop_frontend.cpp') $gameplay @built `
         -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -lole32 -luser32 -o $dll
     if($LASTEXITCODE){throw 'Spend My Resources overlay did not compile.'}
     Get-ChildItem -LiteralPath $out -Filter '*.lib' | Remove-Item
-    Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'README.md'),(Join-Path $mod 'prices.json'),(Join-Path $project 'LICENSE') -Destination $out
+    Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'README.md'),(Join-Path $mod 'prices.json'),(Join-Path $mod 'destroyer-upgrades.json'),(Join-Path $project 'LICENSE') -Destination $out
     Copy-Item -LiteralPath (Join-Path $imgui 'LICENSE.txt') -Destination (Join-Path $out 'imgui-LICENSE.txt')
     Write-Output "Built standalone mod: $dll"
     if($Test){
@@ -112,13 +112,14 @@ if($SpendMyResources){
         & $zig c++ -target x86_64-windows-gnu -O1 -std=c++17 -Wall -Werror -I (Join-Path $project 'native/mod-sdk') -I $editor `
             (Join-Path $mod 'test/prices_test.cpp') -o $pricesTest
         if($LASTEXITCODE){throw 'The price list fixture did not compile.'}
-        & $pricesTest (Join-Path $out 'prices.json')
+        & $pricesTest (Join-Path $out 'prices.json') (Join-Path $out 'destroyer-upgrades.json')
         if($LASTEXITCODE){throw 'The price list fixture failed.'}
         $checkoutTest=Join-Path $testOut 'checkout_frontend_test.exe'
         & $zig c++ @common -Wall -Werror -Wno-unused-parameter -I $editor `
-            (Join-Path $mod 'test/checkout_frontend_test.cpp') @built -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -o $checkoutTest
+            (Join-Path $mod 'test/checkout_frontend_test.cpp') (Join-Path $editor 'icons.cpp') @built `
+            -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -lole32 -o $checkoutTest
         if($LASTEXITCODE){throw 'The checkout frontend fixture did not compile.'}
-        & $checkoutTest
+        & $checkoutTest (Join-Path $testOut 'destroyer-upgrades.bmp')
         if($LASTEXITCODE){throw 'The checkout frontend fixture failed.'}
         Build-OverlayTest
         $oldD3D11=$env:HELLFORGE_EDITOR_TEST_D3D11

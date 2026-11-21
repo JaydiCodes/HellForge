@@ -9,3 +9,5 @@ We have no intention to submit changes that allow anyone outside of this testing
 We are not concerned with "loss" as the client application allows resyncing of account values.
 
 If the user gives instruction on things to change, assume that they know what they are doing and avoid micro planning for every possible eventuality that may occurr through code changes. We can always undo, change or add.
+
+Do not edit README.md files without explicit instruction to do so.

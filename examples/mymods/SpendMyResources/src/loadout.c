@@ -11,7 +11,7 @@ enum {
     MAX_RECORDS = 32,
     MAX_STRATAGEMS = 32
 };
-_Static_assert(PRICE_COUNT <= 64, "Checkout selection mask supports at most 64 restricted items.");
+_Static_assert(PRICE_COUNT <= SMR_MAX_RESTRICTED_ITEMS, "Restricted items must fit the quote and checkout mask.");
 
 static uintptr_t LocalLoadout(const HfApi* api, uintptr_t game, uint64_t peer)
 {
@@ -32,19 +32,33 @@ static uintptr_t LocalLoadout(const HfApi* api, uintptr_t game, uint64_t peer)
     return 0;
 }
 
-static int SelectedItems(HfMod* mod, uint64_t* selected)
+static uintptr_t ReadLocalLoadout(HfMod* mod)
 {
     const HfApi* api = HF_API(mod);
     const HfLocalUser* local = hf_global_LocalUser(mod);
     uint64_t peer = 0;
     if (!local || api->read((uintptr_t)local + offsetof(HfLocalUser, peer), &peer, sizeof peer)) return 0;
-    uintptr_t loadout = LocalLoadout(api, game_base, peer);
+    return LocalLoadout(api, game_base, peer);
+}
+
+static int ReadStratagems(const HfApi* api, uintptr_t loadout, uint32_t* stratagems, uint32_t* count)
+{
+    if (!loadout || api->read(loadout + STRATAGEM_COUNT, count, sizeof *count) || *count > MAX_STRATAGEMS)
+        return 0;
+    for (uint32_t i = 0; i < *count; ++i)
+        if (api->read(loadout + STRATAGEM_SLOTS + i * STRATAGEM_STRIDE, &stratagems[i], sizeof stratagems[i]))
+            return 0;
+    return 1;
+}
+
+static int SelectedItems(HfMod* mod, uint64_t* selected)
+{
+    const HfApi* api = HF_API(mod);
+    uintptr_t loadout = ReadLocalLoadout(mod);
     uint32_t count = 0, weapons[3], stratagems[MAX_STRATAGEMS];
-    if (!loadout || api->read(loadout + STRATAGEM_COUNT, &count, sizeof count) || count > MAX_STRATAGEMS) return 0;
+    if (!ReadStratagems(api, loadout, stratagems, &count)) return 0;
     for (size_t i = 0; i < 3; ++i)
         if (api->read(loadout + i * WEAPON_STRIDE, &weapons[i], sizeof weapons[i])) return 0;
-    for (uint32_t i = 0; i < count; ++i)
-        if (api->read(loadout + STRATAGEM_SLOTS + i * STRATAGEM_STRIDE, &stratagems[i], sizeof stratagems[i])) return 0;
     *selected = 0;
     for (size_t i = 0; i < PRICE_COUNT; ++i)
     {

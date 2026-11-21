@@ -5,6 +5,7 @@
 #include "game_inventory.c"
 #include "loadout.c"
 #include "ready_gate.c"
+#include "destroyer.c"
 #include "missions.c"
 #include "exchange.c"
 #include "purchases.c"
@@ -36,7 +37,12 @@ int SmrInit(const HfApi* api, HfMod* mod)
     }
     for (size_t i = 0; i < PRICE_COUNT; ++i) kLoadoutPrices[i].requisition = prices[i];
     api->log(mod, "Loaded prices.json (%u items).", (unsigned)PRICE_COUNT);
-    if (hf_on_mission_start(mod, MissionStart, NULL, 0) ||
+    if (!SmrLoadUpgradeConfig(upgrade_tuning, detail, sizeof detail))
+        api->log(mod, "Cannot load destroyer-upgrades.json: %s Destroyer upgrades disabled.", detail);
+    else
+        api->log(mod, "Loaded destroyer-upgrades.json.");
+    if (hf_on_state(mod, UpgradeStateChanged, NULL, 0) ||
+        hf_on_mission_start(mod, MissionStart, NULL, 0) ||
         hf_on_mission_end(mod, MissionEnd, NULL, 0) ||
         hf_on_player_spawn(mod, PlayerSpawn, NULL, 0) ||
         hf_on_game_thread(mod, ShopTick, NULL))

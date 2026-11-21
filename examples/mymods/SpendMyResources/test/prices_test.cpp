@@ -1,14 +1,63 @@
 #include "json.cpp"
 #include "../src/prices.cpp"
+#include "../src/upgrade_config.cpp"
 #include "../src/access_items.h"
 #include <algorithm>
 
 #define CHECK(test) do { if (!(test)) { printf("FAIL line %d: %s\n", __LINE__, #test); exit(1); } } while (0)
 
+static void TestUpgradeConfig(const std::wstring& shippedPath, const std::wstring& tempPath)
+{
+    using namespace hfjson;
+    char result[256] = {};
+    SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT] = {};
+    CHECK(ReadUpgradeConfig(shippedPath, tuning, result, sizeof result));
+    CHECK(tuning[SMR_UPGRADE_ORBITAL].cooldown_percent == -66 && tuning[SMR_UPGRADE_ORBITAL].forge_credits == 10);
+    CHECK(tuning[SMR_UPGRADE_EAGLE].rearm_seconds == 30 && tuning[SMR_UPGRADE_EAGLE].call_in_extra_seconds == 2 &&
+        tuning[SMR_UPGRADE_EAGLE].cooldown_seconds == 20);
+    CHECK(tuning[SMR_UPGRADE_DEFENSIVE].uses == 10 && tuning[SMR_UPGRADE_SUPPORT].uses == 10);
+    std::string text, why;
+    Value valid;
+    CHECK(ReadFile(shippedPath, &text) && Parse(text, &valid, &why));
+    valid.At("orbital").At("cooldown_percent") = Value::MakeNumber(-72.5, false);
+    valid.At("eagle").At("forge_credits") = Value::MakeNumber(7, true);
+    valid.At("support").At("cooldown_seconds") = Value::MakeNumber(2.5, false);
+    valid.At("support").At("uses") = Value::MakeNumber(14, true);
+    CHECK(WriteAtomically(tempPath, Write(valid)));
+    CHECK(ReadUpgradeConfig(tempPath, tuning, result, sizeof result));
+    CHECK(tuning[SMR_UPGRADE_ORBITAL].cooldown_percent == -72.5 && tuning[SMR_UPGRADE_EAGLE].forge_credits == 7);
+    CHECK(tuning[SMR_UPGRADE_SUPPORT].cooldown_seconds == 2.5 && tuning[SMR_UPGRADE_SUPPORT].uses == 14);
+    for (const char* bad : {"0", "-1", "1.5", "1e3", "\"10\"", "4294967296", "1e999"})
+    {
+        Value document = valid, value;
+        CHECK(Parse(bad, &value, &why));
+        document.At("support").At("forge_credits") = value;
+        CHECK(WriteAtomically(tempPath, Write(document)));
+        CHECK(!ReadUpgradeConfig(tempPath, tuning, result, sizeof result) && result[0]);
+        CHECK(tuning[SMR_UPGRADE_ORBITAL].cooldown_percent == -72.5 && tuning[SMR_UPGRADE_EAGLE].forge_credits == 7);
+    }
+    for (int i = 0; i < 6; ++i)
+    {
+        Value document = valid;
+        if (i == 0) document.Erase("eagle");
+        if (i == 1) document.At("support").Erase("uses");
+        if (i == 2) document.At("eagle").At("typo") = Value::MakeNumber(10, true);
+        if (i == 3) document.At("eagle").members.emplace_back("forge_credits", Value::MakeNumber(10, true));
+        if (i == 4) document.At("orbital").At("cooldown_percent") = Value::MakeNumber(-101, true);
+        if (i == 5) document.At("support").At("uses") = Value::MakeNumber(UINT32_MAX, true);
+        CHECK(WriteAtomically(tempPath, Write(document)));
+        CHECK(!ReadUpgradeConfig(tempPath, tuning, result, sizeof result) && result[0]);
+        CHECK(tuning[SMR_UPGRADE_SUPPORT].uses == 14);
+    }
+    CHECK(DeleteFileW(tempPath.c_str()));
+    CHECK(!ReadUpgradeConfig(tempPath, tuning, result, sizeof result) && result[0]);
+    puts("PASS destroyer config: shipped defaults, custom values, strict validation, and atomic failure.");
+}
+
 int main(int argc, char** argv)
 {
     using namespace hfjson;
-    CHECK(argc == 2);
+    CHECK(argc == 3);
     const char* names[PRICE_COUNT];
     unsigned prices[PRICE_COUNT] = {};
     for (size_t i = 0; i < PRICE_COUNT; ++i) names[i] = kLoadoutPrices[i].name;
@@ -62,4 +111,5 @@ int main(int argc, char** argv)
     CHECK(DeleteFileW(path.c_str()));
     CHECK(!ReadPrices(path, names, prices, PRICE_COUNT, result, sizeof result) && result[0]);
     puts("PASS price list: shipped roster, custom and reordered prices, overflow limits, atomic validation, missing/invalid files and entries.");
+    TestUpgradeConfig(Wide(argv[2]), path);
 }

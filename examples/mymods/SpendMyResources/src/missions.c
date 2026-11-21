@@ -29,13 +29,10 @@ static int LogLoadout(HfMod* mod, uintptr_t loadout, const char* when)
 {
     const HfApi* api = HF_API(mod);
     uint32_t weapons[3], count, stratagems[MAX_STRATAGEMS];
-    if (!loadout || api->read(loadout + STRATAGEM_COUNT, &count, sizeof count) || count > MAX_STRATAGEMS)
+    if (!ReadStratagems(api, loadout, stratagems, &count))
         return 0;
     for (uint32_t i = 0; i < 3; ++i)
         if (api->read(loadout + i * WEAPON_STRIDE, &weapons[i], sizeof weapons[i]) || !weapons[i])
-            return 0;
-    for (uint32_t i = 0; i < count; ++i)
-        if (api->read(loadout + STRATAGEM_SLOTS + i * STRATAGEM_STRIDE, &stratagems[i], sizeof stratagems[i]))
             return 0;
 
     api->log(mod, "%s loadout: primary=0x%08X secondary=0x%08X throwable=0x%08X stratagem_slots=%u",
@@ -44,7 +41,17 @@ static int LogLoadout(HfMod* mod, uintptr_t loadout, const char* when)
         api->log(mod, "  stratagem[%u] type=%u", i + 1, stratagems[i]);
     unsigned total = TrackSelectedAccess(mod, weapons, stratagems, count);
     api->log(mod, "  Total listed loadout price: %u Requisition slips (charged at purchase, not again at deployment)", total);
+    ApplyUpgrade(mod, loadout, 0);
     return 1;
+}
+
+static void UpgradeStateChanged(HfMod* mod, const HfStateEvent* event, void* user)
+{
+    /* The SDK marks uses as mission-timed; do not set them after deployment. */
+    if (event->to == HF_STATE_PREPARE_MISSION && event->from != HF_STATE_MISSION)
+        ApplyUpgrade(mod, ReadLocalLoadout(mod), 1);
+    else if (event->from == HF_STATE_PREPARE_MISSION && event->to != HF_STATE_MISSION)
+        ResetUpgrade(mod);
 }
 
 static void MissionStart(HfMod* mod, const HfStateEvent* event, void* user)
@@ -52,6 +59,8 @@ static void MissionStart(HfMod* mod, const HfStateEvent* event, void* user)
     const HfApi* api = HF_API(mod);
     uintptr_t game = api->module_base("game.dll", NULL);
     waiting_for_spawn = 0;
+    SmrFinishDestroyer(0);
+    if (upgraded_count && !DestroyerSolo(mod)) ResetUpgrade(mod);
     if (!game || !LayoutMatches(api, game))
     {
         api->log(mod, "Mission start: loadout not read; game layout does not match the reviewed build");
@@ -84,7 +93,10 @@ static void MissionEnd(HfMod* mod, const HfStateEvent* event, void* user)
     if (waiting_for_spawn)
         HF_API(mod)->log(mod, "Mission end: no local deployment to retry the loadout read");
     waiting_for_spawn = 0;
+    int consumed_upgrade = upgraded_count != 0;
+    ResetUpgrade(mod);
     AcquireSRWLockExclusive(&shop_lock);
+    if (consumed_upgrade) upgrade_purchased = SMR_UPGRADE_NONE;
     for (size_t i = 0; i < PRICE_COUNT; ++i)
         if (deployed_access[i])
         {

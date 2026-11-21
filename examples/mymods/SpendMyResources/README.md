@@ -4,61 +4,11 @@ Spend requisition from your offline profile to equip the restricted items below 
 Items must already be unlocked in the game. The mod checks equipped loadout entries rather than querying each item's
 inventory record; normal game loadout rules still apply.
 
-| Item | Requisition slips |
-|---|---:|
-| R-36 Eruptor | 1,000 |
-| MS-11 Solo Silo | 2,000 |
-| JAR-5 Dominator | 500 |
-| AR-23P Liberator Penetrator | 250 |
-| GP-20 Ultimatum | 1,000 |
-| P/40-K Bolt Pistol | 750 |
-| G/40-K Melta Mine | 500 |
-| G-48 Giga Grenade | 750 |
-| Eagle 500kg Bomb | 500 |
-| RS-422 Railgun | 750 |
-| Orbital Walking Barrage | 500 |
-| Orbital Laser | 1,000 |
-| ARC-3 Arc Thrower | 500 |
-| PLAS-39 Accelerator Rifle | 500 |
-| R-6 Deadeye | 500 |
-| R-63CS Diligence Counter Sniper | 500 |
-| R-72 Censor | 500 |
-| R/40-K Hot-Shot Marksman Rifle | 500 |
-| LAS-5 Scythe | 500 |
-| AR-59 Suppressor | 500 |
-| LAS-17 Double-Edge Sickle | 500 |
-| P-4 Senator | 500 |
-| LAS-98 Laser Cannon | 500 |
-| LAS-99 Quasar Cannon | 500 |
-| M-1000 Maxigun | 500 |
-| PLAS-45 Epoch | 500 |
-| StA-X3 W.A.S.P. Launcher | 500 |
-| GL-28 Belt-Fed Grenade Launcher | 500 |
-| RL-77 Airburst Rocket Launcher | 500 |
-| LIFT-850 Jump Pack | 500 |
-| LIFT-860 Hover Pack | 500 |
-| SH-32 Shield Generator Pack | 500 |
-| EAT-411 Leveller | 500 |
-| EXO-45 Patriot Exosuit | 500 |
-| EXO-49 Emancipator Exosuit | 500 |
-| EXO-51 Lumberer Exosuit | 500 |
-| EXO-55 Breakthrough Exosuit | 500 |
-| Orbital 380mm HE Barrage | 500 |
-| Orbital 120mm HE Barrage | 500 |
-| Orbital Napalm Barrage | 500 |
-| Orbital Railcannon Strike | 500 |
-| AC-8 Autocannon | 500 |
-| A/G-16 Gatling Sentry | 500 |
-| APW-1 Anti-Materiel Rifle | 500 |
-| AX/AR-23 Guard Dog / gun | 500 |
-| GR-8 Recoilless Rifle | 500 |
-| MLS-4X Commando | 500 |
-
 ## Custom prices
 
 Edit [`prices.json`](prices.json) beside the installed mod DLL, then restart the game. No rebuild is needed.
 Change the numbers only; keep every item name exactly as supplied. Prices must be positive whole numbers
-(1 to 330,382,099 Req per item). The table above shows the shipped defaults.
+(1 to 89,478,485 Req per item). The table above shows the shipped defaults.
 
 The file is loaded once at startup. Missing files, missing or duplicate items, unknown names, and invalid prices
 stop the mod from loading and report the reason in the mod log; compiled prices are not silently substituted.
@@ -73,13 +23,20 @@ build `25480438`. Everyone in co-op needs the same version of the mod.
 
 ## Using the shop
 
-1. Equip your loadout. Items retain their normal visibility and unlock requirements.
-2. Press **Ready**. If an equipped restricted item needs access, checkout opens instead of readying up.
-3. Review the equipped restricted items, their individual costs, and the total due. Existing access is not charged again.
-4. Select **Purchase access** to pay the total in one transaction. After success, checkout closes and readies you
+1. Equip your loadout. A read-only panel shows your total requisition cost, the price of each equipped restricted
+   item, any access you've already paid for, and your available balance. It updates as you change gear.
+   Items retain their normal visibility and unlock requirements.
+2. Press **Ready** to open **Destroyer Upgrades**. Choose **Select upgrade** or **Skip upgrade** to continue.
+   Selecting an upgrade does not charge you. Checkout opens if you selected an upgrade or an equipped item needs
+   access. Otherwise, the game continues readying up normally.
+3. Review the individual charges and totals in Requisition and Forge Credits. Existing access is not charged again.
+4. Select **Purchase** to pay for the selected upgrade, restricted gear access, or both. After success, checkout closes and readies you
    automatically. The game's normal loadout checks still apply (including required stratagem slots).
 
-Close checkout with **Escape** or its X to change your loadout without purchasing. F1 does not open the mod.
+Close checkout with **Escape** or its X to change your loadout without purchasing. This clears the unpaid upgrade
+selection. F1 does not open the mod.
+The upgrade and checkout windows block new mouse presses from reaching the game but let left-button releases through,
+so the click that opens the window cannot leave the game holding the button down.
 
 Access is used only when you take the item on a mission and lasts through that mission, including reinforcements.
 Access is session-only and resets when the game closes; the mod does not save access to a file.
@@ -87,9 +44,53 @@ Access for items taken on a mission is consumed when the mission-end event fires
 Purchases are not refunded, including unused access when the game closes.
 
 Purchases deduct from the running game's inventory first, then subtract the same amount from the active offline
-profile JSON. Access is granted only after both steps are verified. A partial failure stops further purchases and
+profile JSON in one write, even when two currencies are used. Access and the selected upgrade are granted only after
+both steps are verified. A partial failure stops further purchases and
 is reported in the shop. This does not refresh the backend's in-memory profile; later backend saves may overwrite
 the file edit.
+
+## Destroyer upgrades
+
+Select a square icon above the description to preview an upgrade. Orbital, Eagle, Defensive, and Support are
+available. Extra Stratagem Slot is preview-only because the mod cannot add a fifth selectable slot.
+
+The picker uses the local HellForge Editor icon cache (`mods\hellforge-editor\game-icons.bin`) when available:
+Orbital Precision Strike, Eagle Airstrike, Gatling Sentry, and Supply Pack. If a sprite is missing, the picker uses
+a drawn fallback. Extra Stratagem Slot always uses a plus icon. No game art is shipped with the mod.
+
+| Upgrade | Default benefit | Default trade-off |
+|---|---|---|
+| Orbital | Equipped orbital strikes and barrages have 66% shorter cooldowns. | Other equipped cooldowns and Eagle rearm are 50% longer. |
+| Eagle | Eagles rearm in 30 seconds. | Equipped Eagles take 2 seconds longer to call in and have a 20-second cooldown between uses. Other equipped cooldowns are 50% longer. |
+| Defensive | Equipped defensive stratagems have no cooldown and 10 uses each. | Other equipped cooldowns and Eagle rearm are 50% longer. |
+| Support | Equipped support stratagems have no cooldown and 10 uses each. | Other equipped cooldowns and Eagle rearm are 50% longer. |
+
+Resupply and objective-granted stratagems such as the objective Hellbomb are unchanged. Nothing on the destroyer
+itself changes. Co-op players can skip the upgrade screen and continue to Ready or checkout normally.
+
+Each upgrade costs **10 Forge Credits by default**, deducted at checkout, not on the upgrade screen. The effects last one solo mission.
+You can buy the upgrade only once before a mission. If you change your loadout before deployment, it applies to the
+stratagems you actually take. A paid upgrade stays available in the current game session until it applies to a mission;
+it is not saved or refunded when you quit. Escape or X closes the upgrade screen without continuing to Ready.
+
+### Configuring upgrade effects and prices
+
+Edit [`destroyer-upgrades.json`](destroyer-upgrades.json) beside the installed mod DLL and restart the game.
+No rebuild is needed. The picker and checkout use the same settings as the mission effects. Back up your edited
+file before redeploying the mod, since deployment copies the shipped config over the installed one.
+
+| Setting | Meaning |
+|---|---|
+| `forge_credits` | Cost for that upgrade (a positive whole number). |
+| `cooldown_percent` | Orbital only: percentage change to equipped orbital cooldowns. `-66` leaves 34% of the original cooldown. |
+| `other_cooldown_percent` | Percentage change to other equipped cooldowns. `50` makes them 50% longer; `0` leaves them unchanged. Also affects Eagle rearm on non-Eagle upgrades. |
+| `cooldown_seconds` | Eagle, Defensive, and Support: fixed cooldown for matching stratagems. `0` removes it. |
+| `call_in_extra_seconds`, `rearm_seconds` | Eagle only: seconds added to call-in time and the fixed Eagle rearm time, respectively. |
+| `uses` | Defensive and Support: uses per matching stratagem (a positive whole number). |
+
+Keep all four sections and their settings. Percentages accept `-100` to `10000`; times accept `0` to `86400`
+seconds. If the file is missing or invalid, the mod logs the error and disables upgrade selection; gear checkout
+and currency exchange still work. Extra Stratagem Slot remains preview-only and is not configurable.
 
 ## Currency exchange (F2)
 
@@ -103,21 +104,23 @@ return, and the running game's destination cap. Close with F2, Escape or X.
 | Common sample | 50 |
 | Rare sample | 100 |
 | Super sample | 200 |
-| Forge Credit | 500 |
+| Forge Credit | 750 |
 
 All pairs work in both directions. Exchanges use exact whole-unit batches: for example, 50 Req = 1 Common,
-2 Common = 1 Rare, and 5 Super = 2 Forge Credits. Any unused source currency stays in your balance; there are no
+2 Common = 1 Rare, and 15 Super = 4 Forge Credits. Any unused source currency stays in your balance; there are no
 fees or rounding losses. Exchanges that exceed your balance or the destination cap are rejected, not clipped.
 Forge Credits use HellForge's existing wallet, not a new currency.
 
-Exchanges run only on the ship, one transaction at a time (shared with access purchases). The mod removes the source
+Exchanges run only on the ship, one transaction at a time (shared with access and upgrade purchases). The mod removes the source
 and adds the destination with native inventory functions, verifies both changes, then updates both amounts in the
 active offline profile JSON in one verified write. A missing destination profile entry is created. A partial failure
 disables both exchanges and access purchases and reports the error; the mod never automatically retries.
 The same backend in-memory profile limitation described above applies. No backend changes are required.
 
-F2 does not open access checkout or trigger Ready. Checkout still opens only when Ready is blocked; it takes priority
-over the exchange menu. Leaving the ship closes the exchange menu and cancels queued exchanges.
+F2 does not open upgrades or access checkout, or trigger Ready. The Ready screens take priority over the exchange
+menu. Leaving the ship closes the exchange menu and cancels queued exchanges.
+
+AGENTS: DO NOT MODIFY BELOW TEXT
 
 ## Design ideas
 
@@ -128,37 +131,48 @@ over the exchange menu. Leaving the ship closes the exchange menu and cancels qu
 		- Common = 50 Points
 		- Rare = 100 Points
 		- Super = 200 Points
-		- FC = 500 Points
+		- FC = 750 Points
 	- In each case spend either: (These can be stacked)
     	- Some items might not have all tiers or have all 3 tiers or just 1 tier
-		- 10 common OR 1 FC = "Plus"
-		- 10 Rare OR 5 FC = "Elite"
-		- 10 Super OR 10 FC = "Super"
-	- Primaries
-    	- Plus: 2 extra mags
-    	- Elite: 
-	- Secondaries
+		- 10 common = "Plus"
+		- 10 Rare = "Elite"
+		- 10 Super = "Super"
+	- Primaries & Secondaries
+    	- Plus: + 20% magazines (or total ammo)
 	- Strats
 		- Eagles
-    		- Plus: +1 use
-    		- Elite: 
+    		- Elite: +1 Use
     		- Super:
         		- 500KG: Airstrike drop pattern 3, meaning many 500Kgs at once
 		- Orbitals
-    		- Plus: 1 extra salvo
     		- Elite: 
+        		- All "barrages": 1 extra Salvo
 		- Support weapons
 		- Backpacks
 		- Vehicles
     		- FRVs
     		- Exosuits
 		- Turrets
-	- Spend either 20 FC or 10K Req to upgrade destroyer (limit to one of either):
-		- Add one more strat slot
-		- Orbitals buff: All equiped orbital strike cooldowns are halved, but other strat cooldowns are doubled.
-		- Eagles buff: All equiped eagles have unlimited uses, but cooldowns are increased by 33%.
-		- Defensive strats buff: All equiped defensive strats have no cooldown, but are limited to 10 uses.
-	- Extremely powerful weapons and stratagems require Req slips, Samples or FC to equip
+	- **Destroyer upgrades** 
+    	- Spend 10 FC to upgrade destroyer (limit to one of either):
+    		- Add one more strat slot
+        		- Debuff: All equiped stratagems have a 10% increased cooldown (Includes Eagle rearm time)
+    		- Orbitals upgrade (Use precision strike icon): 
+        		- Buff: All equiped orbitals cooldowns are reduced by 66%
+        		- Debuff: All other equiped stratagem cooldowns increased by 50% (Includes Eagle rearm time)
+    		- Eagles upgrade  (use airstrike icon):
+        		- buff: Eagles have a 30 second rearm cooldown 
+        		- debuff: Eagles call in time is increased slightly (2 seconds) and their use cooldown is increased to 20 seconds.
+        		- debuff: All other equiped stragem cooldowns increased by 50%
+    		- Defensive upgrade (Use gatling sentry icon)
+        		- buff: All equiped defensive strats have no cooldown, 
+        		- Debuff: defensive strats Limited to 10 uses.
+        		- Debuff: All other equiped strategem cooldowns increased by 50% (Includes Eagle rearm time)
+    		- Support strats buff: 
+        		- buff: All equiped Support strats have no cooldown, 
+        		- Debuff: Support strats Limited to 10 uses.
+        		- Debuff: All other equiped strategem cooldowns increased by 50% (Includes Eagle rearm time)
+	- Extremely powerful weapons and stratagems require Req slips to equip
 		- Primaries
 			- Eruptor
 			- JAR-5 Dominator
@@ -207,4 +221,4 @@ over the exchange menu. Leaving the ship closes the exchange menu and cancels qu
 			- AX/AR-23 Guard Dog / gun
 			- GR-8 Recoilless Rifle
 			- MLS-4X Commando
-			- B-1 Supply pack
+			- B-1 Supply Pack

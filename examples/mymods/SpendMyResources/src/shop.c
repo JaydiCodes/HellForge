@@ -34,6 +34,30 @@ int SmrShopItem(size_t i, SmrItem* out)
     return 1;
 }
 
+int SmrQuoteLoadout(SmrLoadoutQuote* out)
+{
+    out->count = 0;
+    out->total = out->balance = 0;
+    out->balance_ready = 0;
+    AcquireSRWLockShared(&shop_lock);
+    int valid = checkout_valid && !shop_failed;
+    if (valid)
+    {
+        uint64_t unpaid = UnpaidItems(checkout_mask, &out->total);
+        out->balance_ready = inventory_ready;
+        out->balance = wallet;
+        for (size_t i = 0; i < PRICE_COUNT; ++i)
+        {
+            uint64_t bit = UINT64_C(1) << i;
+            if (checkout_mask & bit)
+                out->items[out->count++] = (SmrQuoteLine){kLoadoutPrices[i].name,
+                    unpaid & bit ? kLoadoutPrices[i].requisition : 0};
+        }
+    }
+    ReleaseSRWLockShared(&shop_lock);
+    return valid;
+}
+
 static void ShopTick(HfMod* mod, float dt, void* user)
 {
     const HfApi* api = HF_API(mod);
@@ -55,8 +79,8 @@ static void ShopTick(HfMod* mod, float dt, void* user)
     {
         AcquireSRWLockExclusive(&shop_lock);
         inventory_ready = 0;
-        ReleaseSRWLockExclusive(&shop_lock);
         shop_failed = 1;
+        ReleaseSRWLockExclusive(&shop_lock);
         return;
     }
     uintptr_t manager = Inventory(api);
@@ -75,9 +99,8 @@ static void ShopTick(HfMod* mod, float dt, void* user)
     checkout_mask = selected;
     checkout_valid = selection_read;
     ReleaseSRWLockExclusive(&shop_lock);
-    if (!ready) return;
     if (became_ready && state == CHARGE_IDLE)
         ShopMessage(mod, "Purchases deduct real requisition from this offline profile.");
 
-    ProcessPurchase(mod, manager, balance, state);
+    ProcessPurchase(mod, manager, ready, balance, state);
 }

@@ -122,6 +122,29 @@ static char g_logsFolder[MAX_PATH] = "";
 
 static int g_testPurchases;
 static uint32_t g_shopState = HF_STATE_SHIP;
+static int g_leftPresses, g_leftReleases;
+static UINT (WINAPI* g_testRawInput)(PRAWINPUT, PUINT, UINT);
+
+static LRESULT CALLBACK TestWindowProc(HWND window, UINT message, WPARAM w, LPARAM l)
+{
+    if (message == WM_LBUTTONDOWN) ++g_leftPresses;
+    if (message == WM_LBUTTONUP) ++g_leftReleases;
+    return DefWindowProcW(window, message, w, l);
+}
+
+static UINT WINAPI TestRawInput(PRAWINPUT data, PUINT size, UINT)
+{
+    RAWINPUT packets[3] = {};
+    packets[0].header = {RIM_TYPEMOUSE, sizeof(RAWINPUT)};
+    packets[0].data.mouse.usButtonFlags = RI_MOUSE_LEFT_BUTTON_DOWN;
+    packets[1].header = {RIM_TYPEKEYBOARD, sizeof(RAWINPUT)};
+    packets[2].header = {RIM_TYPEMOUSE, sizeof(RAWINPUT)};
+    packets[2].data.mouse.usButtonFlags = RI_MOUSE_LEFT_BUTTON_UP | RI_MOUSE_WHEEL;
+    packets[2].data.mouse.lLastX = 50;
+    if (!data || !size || *size < sizeof packets) return (UINT)-1;
+    memcpy(data, packets, sizeof packets);
+    return 3;
+}
 static void Log(HfMod*, const char* format, ...)
 {
     char line[512];
@@ -167,6 +190,13 @@ static struct { uintptr_t target; void** original; } g_hooks[64];
 static int g_hookCount;
 static int Hook(HfMod*, uintptr_t target, void* detour, void** original)
 {
+    if (getenv("HELLFORGE_OVERLAY_TEST_SHOP") &&
+        target == (uintptr_t)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetRawInputBuffer"))
+    {
+        g_testRawInput = reinterpret_cast<decltype(g_testRawInput)>(detour);
+        *original = reinterpret_cast<void*>(TestRawInput);
+        return 0;
+    }
     if (MH_CreateHook((void*)target, detour, original) != MH_OK) return 1;
     if (g_hookCount < 64) { g_hooks[g_hookCount].target = target; g_hooks[g_hookCount++].original = original; }
     return MH_EnableHook((void*)target) == MH_OK ? 0 : 1;
@@ -458,7 +488,7 @@ int main(int argc, char** argv)
     }
     g_mod.api = &g_api;
 
-    WNDCLASSEXW type = {sizeof type, 0, DefWindowProcW, 0, 0, GetModuleHandleW(NULL), NULL, LoadCursor(NULL, IDC_ARROW), NULL, NULL, L"OverlayTest", NULL};
+    WNDCLASSEXW type = {sizeof type, 0, shop ? TestWindowProc : DefWindowProcW, 0, 0, GetModuleHandleW(NULL), NULL, LoadCursor(NULL, IDC_ARROW), NULL, NULL, L"OverlayTest", NULL};
     RegisterClassExW(&type);
     HWND window = CreateWindowExW(WS_EX_TOPMOST, type.lpszClassName, L"HellForge overlay test", WS_POPUP | WS_VISIBLE, 0, 0, 1280, 720, NULL, NULL, type.hInstance, NULL);
     ID3D12Device* device = NULL; ID3D12CommandQueue* queue = NULL; IDXGIFactory2* factory; IDXGISwapChain1* chain1; IDXGISwapChain3* chain;
@@ -534,7 +564,20 @@ int main(int argc, char** argv)
         while (PeekMessageW(&message, NULL, 0, 0, PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
         if (shop)
         {
+            if (frame == 9) SendMessageW(window, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(100, 100));
             if (frame == 10 || frame == 50 || frame == 70 || frame == 100 || frame == 115) Key(window, VK_F2);
+            if (frame == 13)
+            {
+                SendMessageW(window, WM_LBUTTONUP, 0, MAKELPARAM(100, 100));
+                if (g_leftPresses != 1 || g_leftReleases != 1)
+                { puts("FAIL shop lost the release of a click that began before input capture"); failures++; }
+                RAWINPUT packets[3] = {};
+                UINT bytes = sizeof packets;
+                if (!g_testRawInput || g_testRawInput(packets, &bytes, sizeof(RAWINPUTHEADER)) != 1 ||
+                    packets[0].header.dwType != RIM_TYPEMOUSE ||
+                    packets[0].data.mouse.usButtonFlags != RI_MOUSE_LEFT_BUTTON_UP || packets[0].data.mouse.lLastX)
+                { puts("FAIL shop must keep only the left release from the raw input buffer"); failures++; }
+            }
             if (frame == 12) Key(window, VK_F1);
             if (frame == 34) Key(window, VK_ESCAPE);
             if (frame == 60) g_shopState = HF_STATE_MISSION;
@@ -543,6 +586,8 @@ int main(int argc, char** argv)
             if (frame == 20 || frame == 26) SendMessageW(window, WM_MOUSEMOVE, 0, button);
             if (frame == 21 || frame == 27) SendMessageW(window, WM_LBUTTONDOWN, MK_LBUTTON, button);
             if (frame == 22 || frame == 28) SendMessageW(window, WM_LBUTTONUP, 0, button);
+            if (frame == 29 && g_leftPresses != 1)
+            { puts("FAIL shop clicks reached the game while capturing input"); failures++; }
         }
         else
         {

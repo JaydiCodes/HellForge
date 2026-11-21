@@ -1,0 +1,26 @@
+{
+  "orbital": {
+    "forge_credits": 30,
+    "cooldown_percent": -66,
+    "other_cooldown_percent": 50
+  },
+  "eagle": {
+    "forge_credits": 30,
+    "rearm_seconds": 30,
+    "call_in_extra_seconds": 2,
+    "cooldown_seconds": 20,
+    "other_cooldown_percent": 50
+  },
+  "defensive": {
+    "forge_credits": 30,
+    "cooldown_seconds": 0,
+    "uses": 10,
+    "other_cooldown_percent": 50
+  },
+  "support": {
+    "forge_credits": 30,
+    "cooldown_seconds": 0,
+    "uses": 5,
+    "other_cooldown_percent": 50
+  }
+}
