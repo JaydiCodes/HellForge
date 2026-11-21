@@ -13,14 +13,12 @@
   },
   "defensive": {
     "forge_credits": 30,
-    "cooldown_seconds": 0,
-    "uses": 10,
+    "cooldown_seconds": 30,
     "other_cooldown_percent": 50
   },
   "support": {
     "forge_credits": 30,
-    "cooldown_seconds": 0,
-    "uses": 5,
+    "cooldown_seconds": 30,
     "other_cooldown_percent": 50
   }
 }

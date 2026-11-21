@@ -50,8 +50,8 @@ static void DescribeUpgrade(SmrUpgrade upgrade, const SmrUpgradeTuning& tuning)
         ImGui::TextWrapped("Eagle rearm: %.6g s. Call-in time: %+.6g s. Cooldown: %.6g s.",
             tuning.rearm_seconds, tuning.call_in_extra_seconds, tuning.cooldown_seconds);
     else
-        ImGui::TextWrapped("Equipped %s stratagems: %.6g s cooldown and %u uses each.",
-            upgrade == SMR_UPGRADE_DEFENSIVE ? "defensive" : "support", tuning.cooldown_seconds, tuning.uses);
+        ImGui::TextWrapped("Equipped %s stratagems: %.6g s cooldown and unlimited uses.",
+            upgrade == SMR_UPGRADE_DEFENSIVE ? "defensive" : "support", tuning.cooldown_seconds);
     ImGui::TextWrapped("Other equipped cooldowns%s: %+.6g%%.",
         upgrade == SMR_UPGRADE_EAGLE ? "" : " and Eagle rearm", tuning.other_cooldown_percent);
 }

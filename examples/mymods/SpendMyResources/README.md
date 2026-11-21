@@ -62,13 +62,13 @@ a drawn fallback. Extra Stratagem Slot always uses a plus icon. No game art is s
 |---|---|---|
 | Orbital | Equipped orbital strikes and barrages have 66% shorter cooldowns. | Other equipped cooldowns and Eagle rearm are 50% longer. |
 | Eagle | Eagles rearm in 30 seconds. | Equipped Eagles take 2 seconds longer to call in and have a 20-second cooldown between uses. Other equipped cooldowns are 50% longer. |
-| Defensive | Equipped defensive stratagems have no cooldown and 10 uses each. | Other equipped cooldowns and Eagle rearm are 50% longer. |
-| Support | Equipped support stratagems have no cooldown and 10 uses each. | Other equipped cooldowns and Eagle rearm are 50% longer. |
+| Defensive | Equipped defensive stratagems have no cooldown and unlimited uses. | Other equipped cooldowns and Eagle rearm are 50% longer. |
+| Support | Equipped support stratagems have no cooldown and unlimited uses. | Other equipped cooldowns and Eagle rearm are 50% longer. |
 
 Resupply and objective-granted stratagems such as the objective Hellbomb are unchanged. Nothing on the destroyer
 itself changes. Co-op players can skip the upgrade screen and continue to Ready or checkout normally.
 
-Each upgrade costs **10 Forge Credits by default**, deducted at checkout, not on the upgrade screen. The effects last one solo mission.
+Each upgrade costs **30 Forge Credits by default**, deducted at checkout, not on the upgrade screen. The effects last one solo mission.
 You can buy the upgrade only once before a mission. If you change your loadout before deployment, it applies to the
 stratagems you actually take. A paid upgrade stays available in the current game session until it applies to a mission;
 it is not saved or refunded when you quit. Escape or X closes the upgrade screen without continuing to Ready.
@@ -86,7 +86,8 @@ file before redeploying the mod, since deployment copies the shipped config over
 | `other_cooldown_percent` | Percentage change to other equipped cooldowns. `50` makes them 50% longer; `0` leaves them unchanged. Also affects Eagle rearm on non-Eagle upgrades. |
 | `cooldown_seconds` | Eagle, Defensive, and Support: fixed cooldown for matching stratagems. `0` removes it. |
 | `call_in_extra_seconds`, `rearm_seconds` | Eagle only: seconds added to call-in time and the fixed Eagle rearm time, respectively. |
-| `uses` | Defensive and Support: uses per matching stratagem (a positive whole number). |
+
+If you reuse an older config, remove the `uses` entries from `defensive` and `support`.
 
 Keep all four sections and their settings. Percentages accept `-100` to `10000`; times accept `0` to `86400`
 seconds. If the file is missing or invalid, the mod logs the error and disables upgrade selection; gear checkout

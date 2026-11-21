@@ -19,8 +19,8 @@ static bool upgradeRequested, upgradeContinued, checkoutPaid;
 static int purchaseCalls;
 static SmrDestroyerStatus upgrade = {10, 1, 1, SMR_UPGRADE_NONE, SMR_UPGRADE_NONE};
 static const SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT] = {
-    {}, {10, -66, 50, 0, 0, 0, 0}, {10, 0, 50, 20, 2, 30, 0},
-    {10, 0, 50, 0, 0, 0, 10}, {7, 0, -25, 1.5, 0, 0, 12},
+    {}, {10, -66, 50, 0, 0, 0}, {10, 0, 50, 20, 2, 30},
+    {10, 0, 50, 0, 0, 0}, {7, 0, -25, 1.5, 0, 0},
 };
 static bool quoteValid = true;
 static SmrLoadoutQuote loadoutQuote = {2000, 1000, 1, 2, {{"R-36 Eruptor", 0}, {"MS-11 Solo Silo", 2000}}};
@@ -292,8 +292,12 @@ int main(int argc, char** argv)
     CHECK(editorapp::destroyerSelection == 0);
     Draw();
     Draw();
+    PressModalButton("##Defensive Upgrade");
+    CheckModalText("Equipped defensive stratagems: 0 s cooldown and unlimited uses.", "and Eagle rearm: +50%",
+        "Cost at checkout: 10 Forge Credits");
     PressModalButton("##Support Upgrade");
-    CheckModalText("1.5 s cooldown and 12 uses each", "and Eagle rearm: -25%", "Cost at checkout: 7 Forge Credits");
+    CheckModalText("Equipped support stratagems: 1.5 s cooldown and unlimited uses.", "and Eagle rearm: -25%",
+        "Cost at checkout: 7 Forge Credits");
     PressModalButton("Select upgrade");
     CHECK(upgrade.selected == SMR_UPGRADE_SUPPORT && upgradeContinued && !purchaseCalls && !modalShown && !automaticReady);
     requested = true;

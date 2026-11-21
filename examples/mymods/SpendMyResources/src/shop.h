@@ -40,7 +40,6 @@ typedef struct SmrUpgradeTuning {
     unsigned forge_credits;
     double cooldown_percent, other_cooldown_percent;
     double cooldown_seconds, call_in_extra_seconds, rearm_seconds;
-    unsigned uses;
 } SmrUpgradeTuning;
 typedef struct SmrDestroyerStatus {
     unsigned credits;

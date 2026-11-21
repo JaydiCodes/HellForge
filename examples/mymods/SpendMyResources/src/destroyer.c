@@ -126,8 +126,9 @@ static int PlanUpgrade(HfMod* mod, uintptr_t loadout, SmrUpgrade upgrade, Upgrad
         else if ((upgrade == SMR_UPGRADE_DEFENSIVE && hud.now.number == HUD_DEFENSIVE) ||
             (upgrade == SMR_UPGRADE_SUPPORT && hud.now.number == HUD_SUPPORT))
         {
+            /* StratagemSettings stores unlimited uses as UINT32_MAX. */
             if (!AddFixedEdit(mod, edits, count, type, &kCooldown, (HfValue)HF_F32(tuning->cooldown_seconds)) ||
-                !AddFixedEdit(mod, edits, count, type, &kUses, (HfValue)HF_U32(tuning->uses))) return 0;
+                !AddFixedEdit(mod, edits, count, type, &kUses, (HfValue)HF_U32(UINT32_MAX))) return 0;
         }
         else if (!AddTimedEdit(mod, edits, count, type, &kCooldown,
             upgrade == SMR_UPGRADE_ORBITAL && orbital ? (100 + tuning->cooldown_percent) / 100 : other_factor, 0))

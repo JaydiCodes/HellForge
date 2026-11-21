@@ -172,8 +172,8 @@ int SmrLoadUpgradeConfig(SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT], char* resul
     tuning[SMR_UPGRADE_ORBITAL] = (SmrUpgradeTuning){.forge_credits = 10, .cooldown_percent = -66, .other_cooldown_percent = 50};
     tuning[SMR_UPGRADE_EAGLE] = (SmrUpgradeTuning){.forge_credits = 10, .other_cooldown_percent = 50,
         .cooldown_seconds = 20, .call_in_extra_seconds = 2, .rearm_seconds = 30};
-    tuning[SMR_UPGRADE_DEFENSIVE] = (SmrUpgradeTuning){.forge_credits = 10, .other_cooldown_percent = 50, .uses = 10};
-    tuning[SMR_UPGRADE_SUPPORT] = (SmrUpgradeTuning){.forge_credits = 13, .other_cooldown_percent = 50, .uses = 10};
+    tuning[SMR_UPGRADE_DEFENSIVE] = (SmrUpgradeTuning){.forge_credits = 10, .other_cooldown_percent = 50};
+    tuning[SMR_UPGRADE_SUPPORT] = (SmrUpgradeTuning){.forge_credits = 13, .other_cooldown_percent = 50};
     return 1;
 }
 
@@ -663,7 +663,7 @@ static void TestUpgradeEffects(void)
     refused_type = 0;
     refused_field = NULL;
     UpgradeStateChanged(&mod, &prepare, NULL);
-    CHECK(sentry_cooldown == 0 && sentry_uses == 10);
+    CHECK(sentry_cooldown == 0 && sentry_uses == UINT32_MAX);
     UpgradeStateChanged(&mod, &abort, NULL);
     CHECK(!upgraded_count && sentry_cooldown == 90 && sentry_uses == 4 && rearm_cooldown == 120);
     CHECK(upgrade_purchased == SMR_UPGRADE_DEFENSIVE);
@@ -682,8 +682,8 @@ static void TestUpgradeEffects(void)
         CHECK(rearm_cooldown == (eagle ? 30 : 180));
         CHECK(eagle_cooldown == (eagle ? 20 : 12) && eagle_call_in == (eagle ? 5 : 3));
         CHECK(second_eagle_cooldown == (eagle ? 20 : 15) && second_eagle_call_in == (eagle ? 6 : 4));
-        CHECK(sentry_cooldown == (defensive ? 0 : 135) && sentry_uses == (defensive ? 10 : 4));
-        CHECK(support_cooldown == (support ? 0 : 120) && support_uses == (support ? 10 : 3));
+        CHECK(sentry_cooldown == (defensive ? 0 : 135) && sentry_uses == (defensive ? UINT32_MAX : 4));
+        CHECK(support_cooldown == (support ? 0 : 120) && support_uses == (support ? UINT32_MAX : 3));
         CHECK(orbital_cooldown == (choice == SMR_UPGRADE_ORBITAL ? 34 : 150));
         int expected = 6 + (eagle ? 2 : defensive || support);
         MissionStart(&mod, NULL, NULL);
@@ -699,7 +699,7 @@ static void TestUpgradeEffects(void)
     UpgradeStateChanged(&mod, &prepare, NULL);
     CHECK(eagle_cooldown == 5.5 && eagle_call_in == 3.5 && rearm_cooldown == 15 && orbital_cooldown == 75);
     MissionEnd(&mod, NULL, NULL);
-    puts("PASS destroyer effects: default and custom tuning, shared rearm, failed or aborted prep, and mission cleanup");
+    puts("PASS destroyer effects: unlimited uses, default and custom tuning, shared rearm, failed or aborted prep, and mission cleanup");
 }
 
 static void TestExpandedCatalog(void)

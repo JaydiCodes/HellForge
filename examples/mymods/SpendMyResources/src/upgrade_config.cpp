@@ -17,8 +17,8 @@ static int ReadUpgradeConfig(const std::wstring& path, SmrUpgradeTuning tuning[S
         return 0;
     }
     constexpr unsigned orbital = 1u << SMR_UPGRADE_ORBITAL, eagle = 1u << SMR_UPGRADE_EAGLE,
-        limitedUses = (1u << SMR_UPGRADE_DEFENSIVE) | (1u << SMR_UPGRADE_SUPPORT),
-        all = orbital | eagle | limitedUses;
+        fixedCooldown = eagle | (1u << SMR_UPGRADE_DEFENSIVE) | (1u << SMR_UPGRADE_SUPPORT),
+        all = orbital | fixedCooldown;
     constexpr const char* sections[] = {"", "orbital", "eagle", "defensive", "support"};
     constexpr struct {
         const char* name;
@@ -30,10 +30,9 @@ static int ReadUpgradeConfig(const std::wstring& path, SmrUpgradeTuning tuning[S
         {"forge_credits", all, 1, UINT32_MAX, nullptr, &SmrUpgradeTuning::forge_credits},
         {"cooldown_percent", orbital, -100, 10000, &SmrUpgradeTuning::cooldown_percent, nullptr},
         {"other_cooldown_percent", all, -100, 10000, &SmrUpgradeTuning::other_cooldown_percent, nullptr},
-        {"cooldown_seconds", eagle | limitedUses, 0, 86400, &SmrUpgradeTuning::cooldown_seconds, nullptr},
+        {"cooldown_seconds", fixedCooldown, 0, 86400, &SmrUpgradeTuning::cooldown_seconds, nullptr},
         {"call_in_extra_seconds", eagle, 0, 86400, &SmrUpgradeTuning::call_in_extra_seconds, nullptr},
         {"rearm_seconds", eagle, 0, 86400, &SmrUpgradeTuning::rearm_seconds, nullptr},
-        {"uses", limitedUses, 1, UINT32_MAX - 1, nullptr, &SmrUpgradeTuning::uses},
     };
     SmrUpgradeTuning loaded[SMR_UPGRADE_COUNT] = {};
     unsigned seenSections = 0;
