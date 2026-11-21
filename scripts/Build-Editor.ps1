@@ -9,11 +9,15 @@
 # its mods, with the game icons extracted from that installation's game copy; -SkipOverlayTest leaves out overlay_test, which
 # needs a GPU and a desktop to draw on, as on CI's hosted runners)
 # Usage: scripts/Build-Editor.ps1 -SpendMyResources [-Test]   (standalone shop; -Test runs native/profile and D3D12/11 fixtures)
-param([string]$Install,[switch]$Test,[switch]$SkipOverlayTest,[switch]$SpendMyResources)
+# Usage: scripts/Build-Editor.ps1 -UnbalancePass [-Test]
+param([string]$Install,[switch]$Test,[switch]$SkipOverlayTest,[switch]$SpendMyResources,[switch]$UnbalancePass)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 if($SpendMyResources -and ($Install -or $SkipOverlayTest)){
     throw '-SpendMyResources builds a standalone mod. Do not combine it with -Install or -SkipOverlayTest.'
+}
+if($UnbalancePass -and ($SpendMyResources -or $Install -or $SkipOverlayTest)){
+    throw '-UnbalancePass builds a standalone mod. Do not combine it with -SpendMyResources, -Install or -SkipOverlayTest.'
 }
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $project=Split-Path -Parent $PSScriptRoot
@@ -50,7 +54,9 @@ if(-not(Test-Path -LiteralPath $marker) -or [IO.File]::ReadAllText($marker) -ne 
     [IO.Compression.ZipFile]::ExtractToDirectory($archive,(Join-Path $project 'tools/imgui'))
     [IO.File]::WriteAllText($marker,$sha)
 }
-$out=if($SpendMyResources){Join-Path $project 'artifacts/SpendMyResources'}else{Join-Path $project 'artifacts/editor/hellforge-editor'}
+$out=if($SpendMyResources){Join-Path $project 'artifacts/SpendMyResources'}elseif($UnbalancePass){
+    Join-Path $project 'artifacts\UnbalancePass'
+}else{Join-Path $project 'artifacts/editor/hellforge-editor'}
 New-Item -ItemType Directory $out -Force|Out-Null
 $sources=@('imgui.cpp','imgui_draw.cpp','imgui_tables.cpp','imgui_widgets.cpp','imgui_demo.cpp','backends/imgui_impl_win32.cpp','backends/imgui_impl_dx11.cpp','backends/imgui_impl_dx12.cpp')|ForEach-Object {Join-Path $imgui $_}
 $common=@('-target','x86_64-windows-gnu','-O2','-std=c++17','-fno-exceptions','-fno-rtti','-I',(Join-Path $project 'native/mod-sdk'),'-I',$imgui,'-I',(Join-Path $imgui 'backends'),'-DIMGUI_DISABLE_OBSOLETE_FUNCTIONS',('-ffile-prefix-map='+$project+'=.')) # source paths in the DLL are relative: it ships
@@ -76,6 +82,55 @@ foreach($source in $sources){
     & $zig c++ @common -w -c $source -o $object
     if($LASTEXITCODE){throw ('Dear ImGui did not compile: '+$source)}
     $built+=$object
+}
+if($UnbalancePass){
+    $mod=Join-Path $project "examples\mymods\JedsDead's Unbalance Pass"
+    $src=Join-Path $mod 'src'
+    $frontend=Join-Path $mod 'overlay'
+    $editor=Join-Path $project 'native\editor'
+    $sdk=Join-Path $project 'native\mod-sdk'
+    $gameplay=Join-Path $objects 'unbalance_pass.o'
+    & $zig cc -target x86_64-windows-gnu -O2 -Wall -Werror -Wno-unused-parameter -I $sdk -DUNBALANCE_OVERLAY `
+        -c (Join-Path $src 'unbalance_pass.c') -o $gameplay
+    if($LASTEXITCODE){throw 'UnBalance Pass gameplay did not compile.'}
+    $dll=Join-Path $out 'unbalance_pass.dll'
+    $renderer=@('editor.cpp','icons.cpp','canvas.cpp','json.cpp','local_stats.cpp','sounds.cpp')|ForEach-Object {Join-Path $editor $_}
+    & $zig c++ @common -shared -Wall -Werror -Wno-unused-parameter -s -I $src -I $editor -I $frontend `
+        '-DHF_OVERLAY_FRONTEND=\"unbalance_frontend.h\"' `
+        @renderer (Join-Path $frontend 'unbalance_frontend.cpp') $gameplay @built `
+        -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -lole32 -luser32 -o $dll
+    if($LASTEXITCODE){throw 'UnBalance Pass overlay did not compile.'}
+    Get-ChildItem -LiteralPath $out -Filter '*.lib' | Remove-Item
+    Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'hellforge-stats.json'),(Join-Path $mod 'README.md'),(Join-Path $project 'LICENSE') -Destination $out
+    Copy-Item -LiteralPath (Join-Path $imgui 'LICENSE.txt') -Destination (Join-Path $out 'imgui-LICENSE.txt')
+    Write-Output "Built standalone mod: $dll"
+    if($Test){
+        New-Item -ItemType Directory $testOut -Force|Out-Null
+        $passivesTest=Join-Path $testOut 'unbalance_passives_test.exe'
+        & $zig cc -target x86_64-windows-gnu -O1 -Wall -Werror -Wno-unused-parameter -I $sdk `
+            (Join-Path $mod 'tests\passives_test.c') -o $passivesTest
+        if($LASTEXITCODE){throw 'The UnBalance Pass fixture did not compile.'}
+        & $passivesTest
+        if($LASTEXITCODE){throw 'The UnBalance Pass fixture failed.'}
+        $settingsTest=Join-Path $testOut 'unbalance_settings_test.exe'
+        $imguiCore=@($built|Where-Object {[IO.Path]::GetFileName($_) -notlike 'imgui_impl_*'})
+        & $zig c++ @common -Wall -Werror -I $sdk -I $src -I $editor `
+            (Join-Path $mod 'tests\settings_test.cpp') (Join-Path $editor 'json.cpp') @imguiCore -o $settingsTest
+        if($LASTEXITCODE){throw 'The UnBalance Pass settings fixture did not compile.'}
+        $settingsDir=Join-Path $testOut ('unbalance-settings-'+[guid]::NewGuid())
+        New-Item -ItemType Directory $settingsDir|Out-Null
+        try {
+            & $settingsTest $settingsDir
+            if($LASTEXITCODE){throw 'The UnBalance Pass settings fixture failed.'}
+        } finally {
+            foreach($file in @('hellforge-jedsdeads-unbalance-pass.json','hellforge-jedsdeads-unbalance-pass.json.ingame.tmp')){
+                $path=Join-Path $settingsDir $file
+                if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path}
+            }
+            if(-not (Get-ChildItem -LiteralPath $settingsDir -Force)){Remove-Item -LiteralPath $settingsDir}
+        }
+    }
+    return
 }
 if($SpendMyResources){
     $mod=Join-Path $project 'examples/mymods/SpendMyResources'
