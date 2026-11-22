@@ -91,16 +91,16 @@ static void ProcessExchange(HfMod* mod, uintptr_t manager)
     }
     inventory_remove(manager, kCurrencies[from].id, debit);
     unsigned after_from = 0, after_to = 0;
-    char detail[192], message[320];
+    char detail[128], message[192];
     if (!ItemRecord(HF_API(mod), manager, kCurrencies[from].id, &after_from) || after_from != before_from - debit)
-        snprintf(detail, sizeof detail, "Runtime deduction failed verification; destination and profile NOT changed.");
+        snprintf(detail, sizeof detail, "Runtime deduction failed verification; ledger unchanged.");
     else
     {
         inventory_add(manager, kCurrencies[to].id, credit, 0, NULL, 0);
         if (!ItemRecord(HF_API(mod), manager, kCurrencies[to].id, &after_to) || after_to != before_to + credit ||
             !ItemRecord(HF_API(mod), manager, kCurrencies[from].id, &after_from) || after_from != before_from - debit)
-            snprintf(detail, sizeof detail, "Runtime addition failed verification; profile NOT changed.");
-        else if (SmrExchangeProfile(logs_folder, kCurrencies[from].id, debit, kCurrencies[to].id, credit, detail, sizeof detail))
+            snprintf(detail, sizeof detail, "Runtime addition failed verification; ledger unchanged.");
+        else if (SaveTransaction(HF_API(mod), manager, detail, sizeof detail))
         {
             AcquireSRWLockExclusive(&shop_lock);
             currency_amount[from] = after_from;
@@ -113,11 +113,6 @@ static void ProcessExchange(HfMod* mod, uintptr_t manager)
             return;
         }
     }
-    AcquireSRWLockExclusive(&shop_lock);
-    exchange.pending = 0;
-    exchange_ready = inventory_ready = 0;
-    shop_failed = 1;
-    ReleaseSRWLockExclusive(&shop_lock);
-    snprintf(message, sizeof message, "Exchange stopped after native update. %s Shop disabled; do not retry.", detail);
-    ShopMessage(mod, message);
+    snprintf(message, sizeof message, "Exchange stopped. %s Shop disabled; do not retry.", detail);
+    StopShop(mod, message);
 }

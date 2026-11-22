@@ -3,7 +3,9 @@
 /* Private implementation units share one translation unit to preserve the standalone mod's build interface.
  * Compile this entry point, not the included implementation files separately. */
 #include "game_inventory.c"
+#include "wallet_runtime.c"
 #include "loadout.c"
+#include "extra_slot.c"
 #include "ready_gate.c"
 #include "destroyer.c"
 #include "missions.c"

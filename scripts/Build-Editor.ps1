@@ -136,8 +136,13 @@ if($SpendMyResources){
     $mod=Join-Path $project 'examples/mymods/SpendMyResources'
     $src=Join-Path $mod 'src'
     $editor=Join-Path $project 'native/editor'
+    $catalogue=Get-Content -LiteralPath (Join-Path $project 'mappings\catalog.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    $extraNames=foreach($entry in ($catalogue.stratagems.PSObject.Properties | Sort-Object Name)){
+        '    {{{0}u, "{1}"}},' -f ([uint32]$entry.Value.id), $entry.Name.Replace('\','\\').Replace('"','\"')
+    }
+    [IO.File]::WriteAllLines((Join-Path $objects 'smr_extra_names.inc'), [string[]]$extraNames)
     $gameplay=Join-Path $objects 'spend_my_resources.o'
-    & $zig cc -target x86_64-windows-gnu -O2 -Wall -Werror -Wno-unused-parameter -I (Join-Path $project 'native/mod-sdk') `
+    & $zig cc -target x86_64-windows-gnu -O2 -Wall -Werror -Wno-unused-parameter -I (Join-Path $project 'native/mod-sdk') -I $objects `
         -c (Join-Path $src 'spend_my_resources.c') -o $gameplay
     if($LASTEXITCODE){throw 'Spend My Resources gameplay did not compile.'}
     $dll=Join-Path $out 'spend_my_resources.dll'
@@ -146,23 +151,23 @@ if($SpendMyResources){
         -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -lole32 -luser32 -o $dll
     if($LASTEXITCODE){throw 'Spend My Resources overlay did not compile.'}
     Get-ChildItem -LiteralPath $out -Filter '*.lib' | Remove-Item
-    Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'README.md'),(Join-Path $mod 'prices.json'),(Join-Path $mod 'destroyer-upgrades.json'),(Join-Path $project 'LICENSE') -Destination $out
+    Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'README.md'),(Join-Path $mod 'extra-stratagem-slot.md'),(Join-Path $mod 'currency-ledger.md'),(Join-Path $mod 'prices.json'),(Join-Path $mod 'destroyer-upgrades.json'),(Join-Path $project 'LICENSE') -Destination $out
     Copy-Item -LiteralPath (Join-Path $imgui 'LICENSE.txt') -Destination (Join-Path $out 'imgui-LICENSE.txt')
     Write-Output "Built standalone mod: $dll"
     if($Test){
         New-Item -ItemType Directory $testOut -Force|Out-Null
         $shopTest=Join-Path $testOut 'shop_test.exe'
-        & $zig cc -target x86_64-windows-gnu -O1 -Wall -Werror -Wno-unused-parameter -I (Join-Path $project 'native/mod-sdk') `
+        & $zig cc -target x86_64-windows-gnu -O1 -Wall -Werror -Wno-unused-parameter -I (Join-Path $project 'native/mod-sdk') -I $objects `
             (Join-Path $mod 'test/shop_test.c') -o $shopTest
         if($LASTEXITCODE){throw 'The resource shop fixture did not compile.'}
         & $shopTest
         if($LASTEXITCODE){throw 'The resource shop fixture failed.'}
-        $profileTest=Join-Path $testOut 'profile_payment_test.exe'
+        $ledgerTest=Join-Path $testOut 'currency_ledger_test.exe'
         & $zig c++ -target x86_64-windows-gnu -O1 -std=c++17 -Wall -Werror -I (Join-Path $project 'native/mod-sdk') -I $editor `
-            (Join-Path $mod 'test/profile_payment_test.cpp') -o $profileTest
-        if($LASTEXITCODE){throw 'The profile payment fixture did not compile.'}
-        & $profileTest
-        if($LASTEXITCODE){throw 'The profile payment fixture failed.'}
+            (Join-Path $mod 'test/currency_ledger_test.cpp') -o $ledgerTest
+        if($LASTEXITCODE){throw 'The currency ledger fixture did not compile.'}
+        & $ledgerTest
+        if($LASTEXITCODE){throw 'The currency ledger fixture failed.'}
         $pricesTest=Join-Path $testOut 'prices_test.exe'
         & $zig c++ -target x86_64-windows-gnu -O1 -std=c++17 -Wall -Werror -I (Join-Path $project 'native/mod-sdk') -I $editor `
             (Join-Path $mod 'test/prices_test.cpp') -o $pricesTest

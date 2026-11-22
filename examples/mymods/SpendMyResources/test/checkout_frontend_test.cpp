@@ -17,10 +17,16 @@ static bool windowClosed;
 static int exchangeCalls;
 static bool upgradeRequested, upgradeContinued, checkoutPaid;
 static int purchaseCalls;
-static SmrDestroyerStatus upgrade = {10, 1, 1, SMR_UPGRADE_NONE, SMR_UPGRADE_NONE};
+static SmrDestroyerStatus upgrade = {50, 1, 1, SMR_UPGRADE_NONE, SMR_UPGRADE_NONE, 0};
 static const SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT] = {
     {}, {10, -66, 50, 0, 0, 0}, {10, 0, 50, 20, 2, 30},
-    {10, -66, 50, 0, 0, 0}, {7, -62.5, -25, 0, 0, 0},
+    {10, -66, 50, 0, 0, 0}, {7, -62.5, -25, 0, 0, 0}, {50, 0, 10, 0, 0, 0},
+};
+static constexpr SmrExtraChoice extraChoices[] = {
+    {HF_STRATAGEM_EAGLE_500KG_BOMB, "Eagle 500kg Bomb", HF_CATEGORY_OFFENSIVE},
+    {HF_STRATAGEM_EAGLE_AIRSTRIKE, "Eagle Airstrike", HF_CATEGORY_OFFENSIVE},
+    {HF_STRATAGEM_MS11_SOLO_SILO, "MS-11 Solo Silo", HF_CATEGORY_SUPPLY},
+    {HF_STRATAGEM_AG16_GATLING_SENTRY, "A/G-16 Gatling Sentry", HF_CATEGORY_DEFENSIVE},
 };
 static bool quoteValid = true;
 static SmrLoadoutQuote loadoutQuote = {2000, 1000, 1, 2, {{"R-36 Eruptor", 0}, {"MS-11 Solo Silo", 2000}}};
@@ -35,7 +41,7 @@ extern "C" int SmrInit(const HfApi*, HfMod*) { return 0; }
 extern "C" void SmrFinishCheckout(int ready)
 {
     if (ready) CHECK(!modalShown);
-    else upgrade.selected = SMR_UPGRADE_NONE;
+    else { upgrade.selected = SMR_UPGRADE_NONE; upgrade.extra = 0; }
     checkoutPaid = false;
     automaticReady = ready != 0;
 }
@@ -47,7 +53,24 @@ extern "C" const SmrUpgradeTuning* SmrGetUpgradeTuning(SmrUpgrade choice)
 {
     return choice > SMR_UPGRADE_NONE && choice < SMR_UPGRADE_COUNT ? &tuning[choice] : nullptr;
 }
-extern "C" int SmrSelectUpgrade(HfMod*, SmrUpgrade selected) { upgrade.selected = selected; return 1; }
+extern "C" int SmrSelectUpgrade(HfMod*, SmrUpgrade selected, uint32_t extra)
+{
+    upgrade.selected = selected;
+    upgrade.extra = extra;
+    return 1;
+}
+extern "C" const char* SmrExtraName(uint32_t type)
+{
+    for (const auto& choice : extraChoices)
+        if (choice.type == type) return choice.name;
+    return nullptr;
+}
+extern "C" size_t SmrExtraChoices(SmrExtraChoice* choices, size_t capacity)
+{
+    size_t count = capacity < IM_ARRAYSIZE(extraChoices) ? capacity : IM_ARRAYSIZE(extraChoices);
+    memcpy(choices, extraChoices, count * sizeof choices[0]);
+    return count;
+}
 extern "C" int SmrBalance(unsigned* balance) { *balance = 5000; return 1; }
 extern "C" int SmrQuoteLoadout(SmrLoadoutQuote* out) { *out = loadoutQuote; return quoteValid; }
 extern "C" int SmrCheckout(unsigned* total, unsigned* credits, int* pending)
@@ -153,7 +176,7 @@ static void SaveUpgradeScreenshot(const char* path, bool expectGameIcons)
     for (const ImDrawList* list : data.CmdLists)
         for (const ImDrawCmd& command : list->CmdBuffer)
             if (command.GetTexID() == icons::Texture()) atlasIndices += command.ElemCount;
-    CHECK(atlasIndices == (expectGameIcons ? 4u * 2 * 6 : 0));
+    CHECK(atlasIndices == (expectGameIcons ? (4 + IM_ARRAYSIZE(extraChoices)) * 2u * 6u : 0));
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
     ID3D11Texture2D* readback = nullptr;
@@ -202,6 +225,22 @@ static void PressModalButton(const char* label)
     GImGui->NavInputSource = ImGuiInputSource_Keyboard;
     editorapp::Modal(nullptr, 1280, 720, 1.0f / 60);
     ImGui::Render();
+}
+
+static ImRect PressExtraTile(uint32_t type)
+{
+    ImGuiWindow* modal = ImGui::FindWindowByName("Spend My Resources - Destroyer Upgrades");
+    CHECK(modal && modal->DC.ChildWindows.Size == 1);
+    ImGuiWindow* grid = modal->DC.ChildWindows[0];
+    const ImGuiID id = ImHashStr("##Stratagem", 0, grid->GetID(static_cast<int>(type)));
+    ImGui::NewFrame();
+    GImGui->NavWindow = grid;
+    GImGui->NavId = GImGui->NavActivateId = GImGui->NavActivateDownId = id;
+    GImGui->NavInputSource = ImGuiInputSource_Keyboard;
+    editorapp::Modal(nullptr, 1280, 720, 1.0f / 60);
+    ImGui::Render();
+    CHECK(editorapp::destroyerExtra == type);
+    return grid->NavRectRel[ImGuiNavLayer_Main];
 }
 
 static void CheckModalText(const char* text, const char* second = nullptr, const char* third = nullptr)
@@ -260,7 +299,6 @@ int main(int argc, char** argv)
     CHECK(modalShown && editorapp::destroyerOpen && !editorapp::shopOpen && !editorapp::NoticeShown());
     Draw();
     Draw();
-    if (argc >= 2) SaveUpgradeScreenshot(argv[1], argc == 3);
     const char* choices[] = {"##Eagle Upgrade", "##Defensive Upgrade", "##Support Upgrade", "##Extra Stratagem Slot"};
     for (size_t i = 0; i < IM_ARRAYSIZE(choices); ++i)
     {
@@ -270,6 +308,26 @@ int main(int argc, char** argv)
     }
     PressModalButton("Select upgrade");
     CHECK(!upgrade.selected && !purchaseCalls && modalShown);
+    CheckModalText("Choose an extra stratagem", "Cost at checkout: 50 Forge Credits", "Selected: None");
+    CheckModalText("Offensive", "Support", "Defensive");
+    const ImRect first = PressExtraTile(HF_STRATAGEM_EAGLE_500KG_BOMB);
+    const ImRect second = PressExtraTile(HF_STRATAGEM_EAGLE_AIRSTRIKE);
+    CHECK(first.Min.y == second.Min.y && first.Max.x < second.Min.x);
+    CheckModalText("Selected: Eagle Airstrike");
+    if (argc >= 2) SaveUpgradeScreenshot(argv[1], argc == 3);
+    PressModalButton("Select upgrade");
+    CHECK(upgrade.selected == SMR_UPGRADE_EXTRA_SLOT && upgrade.extra == HF_STRATAGEM_EAGLE_AIRSTRIKE && !purchaseCalls);
+    requested = true;
+    editorapp::Tick();
+    CHECK(modalShown && editorapp::shopOpen);
+    CheckModalText("Extra stratagem: Eagle Airstrike", "Extra Stratagem Slot - 50 Forge Credits");
+    io.AddKeyEvent(ImGuiKey_Escape, true);
+    Draw();
+    CHECK(!modalShown && !upgrade.selected && !upgrade.extra);
+    io.AddKeyEvent(ImGuiKey_Escape, false);
+    upgradeRequested = true;
+    editorapp::Tick();
+    Draw();
     PressModalButton("##Orbital Upgrade");
     CHECK(editorapp::destroyerSelection == 0);
     PressModalButton("##Eagle Upgrade");

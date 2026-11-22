@@ -17,6 +17,7 @@ static void TestUpgradeConfig(const std::wstring& shippedPath, const std::wstrin
         tuning[SMR_UPGRADE_EAGLE].cooldown_seconds == 20);
     CHECK(tuning[SMR_UPGRADE_DEFENSIVE].cooldown_percent == -66 && tuning[SMR_UPGRADE_SUPPORT].cooldown_percent == -66);
     CHECK(tuning[SMR_UPGRADE_DEFENSIVE].other_cooldown_percent == 100 && tuning[SMR_UPGRADE_SUPPORT].other_cooldown_percent == 100);
+    CHECK(tuning[SMR_UPGRADE_EXTRA_SLOT].forge_credits == 50 && tuning[SMR_UPGRADE_EXTRA_SLOT].other_cooldown_percent == 10);
     std::string text, why;
     Value valid;
     CHECK(ReadFile(shippedPath, &text) && Parse(text, &valid, &why));
@@ -36,7 +37,7 @@ static void TestUpgradeConfig(const std::wstring& shippedPath, const std::wstrin
         CHECK(!ReadUpgradeConfig(tempPath, tuning, result, sizeof result) && result[0]);
         CHECK(tuning[SMR_UPGRADE_ORBITAL].cooldown_percent == -72.5 && tuning[SMR_UPGRADE_EAGLE].forge_credits == 7);
     }
-    for (int i = 0; i < 9; ++i)
+    for (int i = 0; i < 11; ++i)
     {
         Value document = valid;
         if (i == 0) document.Erase("eagle");
@@ -48,10 +49,16 @@ static void TestUpgradeConfig(const std::wstring& shippedPath, const std::wstrin
         if (i == 6) document.At("support").At("uses") = Value::MakeNumber(5, true);
         if (i == 7) document.At("defensive").At("cooldown_seconds") = Value::MakeNumber(30, true);
         if (i == 8) document.At("support").At("cooldown_seconds") = Value::MakeNumber(60, true);
+        if (i == 9) document.At("extra_slot").Erase("forge_credits");
+        if (i == 10) document.At("extra_slot").At("cooldown_percent") = Value::MakeNumber(-30, true);
         CHECK(WriteAtomically(tempPath, Write(document)));
         CHECK(!ReadUpgradeConfig(tempPath, tuning, result, sizeof result) && result[0]);
         CHECK(tuning[SMR_UPGRADE_SUPPORT].cooldown_percent == -62.5 && tuning[SMR_UPGRADE_DEFENSIVE].cooldown_percent == -66);
     }
+    valid.Erase("extra_slot");
+    CHECK(WriteAtomically(tempPath, Write(valid)));
+    CHECK(ReadUpgradeConfig(tempPath, tuning, result, sizeof result));
+    CHECK(tuning[SMR_UPGRADE_EXTRA_SLOT].forge_credits == 0 && tuning[SMR_UPGRADE_SUPPORT].cooldown_percent == -62.5);
     CHECK(DeleteFileW(tempPath.c_str()));
     CHECK(!ReadUpgradeConfig(tempPath, tuning, result, sizeof result) && result[0]);
     puts("PASS destroyer config: shipped defaults, custom values, strict validation, and atomic failure.");

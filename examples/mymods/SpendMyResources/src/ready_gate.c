@@ -89,7 +89,11 @@ static int ReadyInput(uintptr_t button, uintptr_t input)
         return ReadyAccessAllowed(ready_mod, screen + READY_CARD) ? 1 : 0;
     if (activated != 1) return activated;
     if (IsLocalCard(ready_mod, screen + READY_CARD))
+    {
+        if (InterlockedCompareExchange(&destroyer_gate, 0, 0) == DESTROYER_IDLE)
+            RefreshExtraOptions(ready_mod);
         InterlockedCompareExchange(&destroyer_gate, DESTROYER_REQUESTED, DESTROYER_IDLE);
+    }
     return 0;
 }
 

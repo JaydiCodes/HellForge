@@ -45,6 +45,72 @@ static int LogLoadout(HfMod* mod, uintptr_t loadout, const char* when)
     return 1;
 }
 
+static void RetainExtra(HfMod* mod, const char* message)
+{
+    extra_deployment.finished = 1;
+    ShopMessage(mod, message);
+}
+
+static void ExtraSlotTick(HfMod* mod, float dt)
+{
+    if (extra_deployment.finished || upgraded_count) return;
+    const HfApi* api = HF_API(mod);
+    AcquireSRWLockShared(&shop_lock);
+    uint32_t type = upgrade_purchased == SMR_UPGRADE_EXTRA_SLOT ? extra_pick : 0;
+    ReleaseSRWLockShared(&shop_lock);
+    if (!type || api->game_state(mod) != HF_STATE_MISSION || !DestroyerSolo(mod)) return;
+    if (dt > 0) extra_deployment.seconds += dt;
+    if (extra_deployment.seconds < extra_deployment.next_check) return;
+    if (extra_deployment.seconds >= 90)
+    {
+        RetainExtra(mod, "Extra stratagem deployment or assets timed out; purchase retained for a later solo mission.");
+        return;
+    }
+    extra_deployment.next_check = extra_deployment.seconds + 0.25f;
+    if (!extra_deployment.peer) extra_deployment.peer = LocalPeer(mod);
+    ExtraContext context;
+    if (!ReadExtraContext(mod, &context))
+    {
+        extra_deployment.loadout = 0;
+        return;
+    }
+    /* The loadout can be rebuilt in the first deployment update. Wait for the same record on the next poll. */
+    if (context.loadout != extra_deployment.loadout)
+    {
+        extra_deployment.loadout = context.loadout;
+        return;
+    }
+    HfStratagemSettings row;
+    uintptr_t at = EligibleExtra(api, Inventory(api), context.picks, context.count, type, &row);
+    if (!at)
+    {
+        RetainExtra(mod, "Extra stratagem no longer eligible or mission list full; purchase retained for a later solo mission.");
+        return;
+    }
+    int assets = ExtraPackages(mod, at, &row);
+    if (assets == HF_PACKAGE_LOADING) return;
+    if (assets != HF_PACKAGE_RESIDENT)
+    {
+        RetainExtra(mod, "Extra stratagem assets unavailable; purchase retained for a later solo mission.");
+        return;
+    }
+    UpgradeEdit edits[MAX_UPGRADE_EDITS];
+    size_t count;
+    uint32_t added;
+    if (!PlanUpgrade(mod, context.loadout, SMR_UPGRADE_EXTRA_SLOT, type, edits, &count) ||
+        !ApplyUpgradeEdits(mod, edits, count) || !(added = AppendExtra(mod, &context, &row)))
+    {
+        ResetUpgrade(mod);
+        RetainExtra(mod, "Extra stratagem grant could not be verified; purchase retained and not retried in this mission.");
+        return;
+    }
+    extra_deployment.finished = 1;
+    const uint32_t nothing[3] = {0};
+    TrackSelectedAccess(mod, nothing, &type, 1);
+    api->log(mod, "Extra Stratagem Slot active: %s%s (mission entries %u -> %u).",
+        SmrExtraName(type), added == 2 ? " with Eagle Rearm" : "", context.count, context.count + added);
+}
+
 static void UpgradeStateChanged(HfMod* mod, const HfStateEvent* event, void* user)
 {
     /* The SDK marks uses as mission-timed; do not set them after deployment. */
@@ -59,6 +125,7 @@ static void MissionStart(HfMod* mod, const HfStateEvent* event, void* user)
     const HfApi* api = HF_API(mod);
     uintptr_t game = api->module_base("game.dll", NULL);
     waiting_for_spawn = 0;
+    memset(&extra_deployment, 0, sizeof extra_deployment);
     SmrFinishDestroyer(0);
     if (upgraded_count && !DestroyerSolo(mod)) ResetUpgrade(mod);
     if (!game || !LayoutMatches(api, game))
@@ -79,8 +146,9 @@ static void MissionStart(HfMod* mod, const HfStateEvent* event, void* user)
 
 static void PlayerSpawn(HfMod* mod, const HfPlayerEvent* event, void* user)
 {
-    if (!waiting_for_spawn || !event->local)
-        return;
+    if (!event->local) return;
+    if (!extra_deployment.peer) extra_deployment.peer = event->peer;
+    if (!waiting_for_spawn) return;
     waiting_for_spawn = 0;
     const HfApi* api = HF_API(mod);
     uintptr_t game = api->module_base("game.dll", NULL);
@@ -93,10 +161,15 @@ static void MissionEnd(HfMod* mod, const HfStateEvent* event, void* user)
     if (waiting_for_spawn)
         HF_API(mod)->log(mod, "Mission end: no local deployment to retry the loadout read");
     waiting_for_spawn = 0;
+    memset(&extra_deployment, 0, sizeof extra_deployment);
     int consumed_upgrade = upgraded_count != 0;
     ResetUpgrade(mod);
     AcquireSRWLockExclusive(&shop_lock);
-    if (consumed_upgrade) upgrade_purchased = SMR_UPGRADE_NONE;
+    if (consumed_upgrade)
+    {
+        upgrade_purchased = SMR_UPGRADE_NONE;
+        extra_pick = 0;
+    }
     for (size_t i = 0; i < PRICE_COUNT; ++i)
         if (deployed_access[i])
         {

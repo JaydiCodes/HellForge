@@ -105,15 +105,12 @@
   },
   "weapons": {
     "AR-11 Arbitrator": {
-      "attack.primary.projectile": 276,
       "presentation.traits.1": 3085090887
     },
     "AR-61 Tenderizer": {
-      "attack.primary.projectile": 135,
       "presentation.traits.1": 3085090887
     },
     "AR/GL-21 One-Two": {
-      "attack.primary.projectile": 135,
       "presentation.traits.1": 3085090887,
       "presentation.traits.2": 0
     },
@@ -138,26 +135,17 @@
       "fire_mode.modes.1": 1
     },
     "M7S SMG": {
-      "attack.primary.projectile": 215,
       "magazine.magazines_from_supply": 12,
       "magazine.spare_magazines": 12,
       "weapon.horizontal_spread": 20,
       "weapon.vertical_spread": 20
     },
     "MA5C Assault Rifle": {
-      "attack.primary.projectile": 135,
       "magazine.magazines_from_supply": 6,
       "magazine.spare_magazines": 6,
       "magazine.starting_magazines": 4
     },
-    "R-2 Amendment": {
-      "attack.primary.projectile": 305
-    },
-    "R-2124 Constitution": {
-      "attack.feed_primary.projectile": 305
-    },
     "SMG-203 Gallant": {
-      "attack.primary.projectile": 276,
       "attachment.magazine.smg_9x20mm_top_mounted_extended_solvent.ergonomics_modifier": 0,
       "presentation.traits.1": 0,
       "presentation.traits.2": 0,
@@ -184,12 +172,6 @@
       "damage.durable_damage": 45,
       "damage.standard_damage": 115,
       "presentation.traits.1": 3085090887
-    },
-    "A/G-16 Gatling Sentry / weapon": {
-      "attack.primary.projectile": 275
-    },
-    "A/MG-43 Machine Gun Sentry / weapon": {
-      "attack.primary.projectile": 135
     },
     "APW-1 Anti-Materiel Rifle": {
       "damage.primary.durable_damage": 300,
@@ -260,9 +242,6 @@
       "damage.primary.status_1_strength": 100,
       "damage.primary.status_1_type": 39
     },
-    "AX/AR-23 Guard Dog / gun": {
-      "attack.primary.projectile": 276
-    },
     "BR-14 Adjudicator": {
       "damage.ap_large": 2,
       "damage.durable_damage": 50,
@@ -291,18 +270,15 @@
       "weapon.fire_rate": 400
     },
     "EXO-45 Patriot Exosuit / right_gun": {
-      "attack.primary.projectile": 275,
       "weapon.capacity": 2000,
       "windup.wind_down_seconds": 2,
       "windup.wind_up_seconds": 0.1
     },
     "EXO-49 Emancipator Exosuit / left_gun": {
-      "attack.primary.projectile": 115,
       "weapon.capacity": 200,
       "weapon.fire_rate": 200
     },
     "EXO-49 Emancipator Exosuit / right_gun": {
-      "attack.primary.projectile": 115,
       "weapon.capacity": 200,
       "weapon.fire_rate": 200
     },
@@ -475,7 +451,6 @@
       "windup.wind_up_seconds": 0.25
     },
     "M-103 Supply FRV / gun": {
-      "attack.primary.projectile": 276,
       "weapon.capacity": 200
     },
     "M-105 Stalwart": {
@@ -707,7 +682,6 @@
       "damage.primary.status_3_type": 2
     },
     "SMG-32 Reprimand": {
-      "attack.primary.projectile": 135,
       "magazine.magazines_from_supply": 12,
       "magazine.spare_magazines": 12,
       "magazine.starting_magazines": 6,
@@ -716,7 +690,6 @@
       "weapon.vertical_spread": 10
     },
     "SMG/FLAM-34 Stoker": {
-      "attack.primary.projectile": 215,
       "weapon.horizontal_spread": 20,
       "weapon.vertical_spread": 20
     },
@@ -828,11 +801,7 @@
       "explosion.primary_impact.outer_radius": 6,
       "explosion.primary_impact.shockwave_radius": 8
     },
-    "GL-21 Grenade Launcher": {
-      "attack.primary.projectile": 89
-    },
     "RL-77 Airburst Rocket Launcher": {
-      "attack.primary.projectile": 36,
       "projectile.programmable.lifetime": 2
     },
     "LAS-7 Dagger": {

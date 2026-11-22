@@ -10,6 +10,8 @@ tools/
 # Built example mods (scripts/Build-Mod.ps1 rebuilds them)
 examples/mods/*/*.dll
 
+examples/mods/PSSprogression 18512 2 2026-11-07T21-28Z LeT8rb9lR
+
 # Mod data built from the local game copy (game bytes): never committed
 examples/mods/*/data/
 examples/mods/*/build/

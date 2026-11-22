@@ -11,14 +11,18 @@ static HfMod mod = {&api};
 static unsigned char *image, *manager, *history, *profile;
 static HfLocalUser local;
 static HfLocalUser* local_pointer = &local;
+static uintptr_t slot_players, slot_mode;
+static int package_state, grant_calls, refuse_grant;
 static uint32_t game_state = HF_STATE_SHIP;
-static int local_ready = 1, pins_match = 1, profile_refused, remove_failed, profile_calls;
-static unsigned saved_wallet = 5000;
+static int local_ready = 1, pins_match = 1, remove_failed;
+static int wallet_exists, wallet_refused, wallet_writes;
+static SmrWallet stored_wallet;
+#define saved_currency (stored_wallet.amount)
+#define saved_wallet (saved_currency[0])
 static int prices_refused, subscription_calls;
 static int input_result = 1, input_calls, hook_refused;
 static uintptr_t last_button, last_input, unreadable_at;
-static unsigned saved_currency[CURRENCY_COUNT];
-static int add_failed, add_calls, exchange_profile_calls, exchange_profile_refused;
+static int add_failed, add_calls;
 static uint32_t session_role, refused_type;
 static double orbital_cooldown = 100, barrage_cooldown = 50, support_cooldown = 80, resupply_cooldown = 160;
 static double eagle_cooldown = 8, second_eagle_cooldown = 10, eagle_call_in = 3, second_eagle_call_in = 4;
@@ -92,7 +96,12 @@ static int SetLive(HfMod* mod, HfRef type, const HfField* field, const HfValue* 
     return field == &kUses ? HF_APPLIES_MISSION : HF_APPLIES_NOW;
 }
 static int Matches(uintptr_t at, const char* pin) { return pins_match; }
-static uintptr_t Global(HfMod* unused, const char* name) { return local_ready ? (uintptr_t)&local_pointer : 0; }
+static uintptr_t Global(HfMod* unused, const char* name)
+{
+    if (!strcmp(name, "PlayerManager")) return (uintptr_t)&slot_players;
+    if (!strcmp(name, "GameMode")) return (uintptr_t)&slot_mode;
+    return local_ready ? (uintptr_t)&local_pointer : 0;
+}
 static int Subscribe(HfMod* unused, uint32_t kind, HfListener listener, void* data, int32_t priority) { subscription_calls++; return 1; }
 static int OnTick(HfMod* unused, HfTickCallback callback, void* data) { return 1; }
 static int OriginalInput(uintptr_t button, uintptr_t input)
@@ -146,25 +155,38 @@ static void Add(uintptr_t unused, uint32_t id, uint32_t amount, uint32_t source,
 {
     CHECK(!source && !text && !extra);
     add_calls++;
-    if (add_failed != 1) SetAmount(id, Amount(id) + amount - (add_failed == 2 ? 1 : 0));
+    if (add_failed == 1) return;
+    unsigned before;
+    uintptr_t record = ItemRecord(&api, (uintptr_t)manager, id, &before);
+    CHECK(record);
+    unsigned cap;
+    memcpy(&cap, (const void*)(record + 0x18), sizeof cap);
+    uint64_t after = (uint64_t)before + amount - (add_failed == 2 ? 1 : 0);
+    unsigned limit = cap ? cap : UINT_MAX;
+    SetAmount(id, after > limit ? limit : (unsigned)after);
 }
-int SmrExchangeProfile(const char* logs, uint32_t source, unsigned debit, uint32_t target, unsigned credit,
-    char* result, size_t size)
+
+int SmrOpenLedger(const char* logs, const SmrWallet* initial, SmrWallet* saved, char* result, size_t size)
 {
-    size_t from = 0, to = 0;
-    while (from < CURRENCY_COUNT && kCurrencies[from].id != source) ++from;
-    while (to < CURRENCY_COUNT && kCurrencies[to].id != target) ++to;
-    CHECK(from < CURRENCY_COUNT && to < CURRENCY_COUNT && from != to);
-    CHECK(Amount(source) == saved_currency[from] - debit && Amount(target) == saved_currency[to] + credit);
-    exchange_profile_calls++;
-    if (exchange_profile_refused)
+    CHECK(!strcmp(logs, "fixture"));
+    if (!wallet_exists)
     {
-        snprintf(result, size, "Synthetic exchange profile failure.");
-        return 0;
+        stored_wallet = *initial;
+        wallet_exists = 1;
     }
-    saved_currency[from] -= debit;
-    saved_currency[to] += credit;
-    snprintf(result, size, "Exchange profile fixture saved.");
+    *saved = stored_wallet;
+    return 1;
+}
+
+int SmrWriteLedger(const SmrWallet* wallet, char* result, size_t size)
+{
+    CHECK(wallet_exists);
+    for (size_t i = 0; i < CURRENCY_COUNT; ++i)
+        CHECK(wallet->amount[i] == Amount(kCurrencies[i].id));
+    ++wallet_writes;
+    snprintf(result, size, "Wallet fixture %s.", wallet_refused ? "failed" : "saved");
+    if (wallet_refused) return 0;
+    stored_wallet = *wallet;
     return 1;
 }
 int SmrLoadUpgradeConfig(SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT], char* result, size_t size)
@@ -174,6 +196,7 @@ int SmrLoadUpgradeConfig(SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT], char* resul
         .cooldown_seconds = 20, .call_in_extra_seconds = 2, .rearm_seconds = 30};
     tuning[SMR_UPGRADE_DEFENSIVE] = (SmrUpgradeTuning){.forge_credits = 10, .cooldown_percent = -75, .other_cooldown_percent = 50};
     tuning[SMR_UPGRADE_SUPPORT] = (SmrUpgradeTuning){.forge_credits = 13, .cooldown_percent = -50, .other_cooldown_percent = 50};
+    tuning[SMR_UPGRADE_EXTRA_SLOT] = (SmrUpgradeTuning){.forge_credits = 50, .other_cooldown_percent = 10};
     return 1;
 }
 
@@ -194,49 +217,6 @@ int SmrLoadPrices(const char* const* names, unsigned* prices, size_t count, char
     }
     return 1;
 }
-int SmrDeductProfile(const char* logs, uint32_t resource, unsigned cost, char* result, size_t size)
-{
-    if (resource == kCurrencies[FORGE_CREDITS].id)
-    {
-        CHECK(saved_currency[FORGE_CREDITS] >= cost && Amount(resource) == saved_currency[FORGE_CREDITS] - cost);
-        snprintf(result, size, "Forge Credits profile fixture %s.", profile_refused ? "failed" : "saved");
-        if (profile_refused) return 0;
-        saved_currency[FORGE_CREDITS] -= cost;
-        return 1;
-    }
-
-    CHECK(resource == REQUISITION && saved_wallet >= cost);
-    CHECK(Amount(REQUISITION) == saved_wallet - cost);
-    for (size_t i = 0; i < PRICE_COUNT; ++i)
-        if (charge.mask & (UINT64_C(1) << i)) CHECK(!access[i]);
-    profile_calls++;
-    if (profile_refused)
-    {
-        snprintf(result, size, "Synthetic profile write failure.");
-        return 0;
-    }
-    saved_wallet -= cost;
-    snprintf(result, size, "Profile fixture saved.");
-    return 1;
-}
-
-static int pair_calls;
-int SmrDeductProfilePair(const char* logs, uint32_t resource, unsigned cost, uint32_t second, unsigned second_cost,
-    char* result, size_t size)
-{
-    CHECK(resource == REQUISITION && second == kCurrencies[FORGE_CREDITS].id);
-    CHECK(Amount(resource) == saved_wallet - cost && Amount(second) == saved_currency[FORGE_CREDITS] - second_cost);
-    CHECK(!upgrade_purchased);
-    for (size_t i = 0; i < PRICE_COUNT; ++i)
-        if (charge.mask & (UINT64_C(1) << i)) CHECK(!access[i]);
-    ++pair_calls;
-    snprintf(result, size, "Paired profile fixture %s.", profile_refused ? "failed" : "saved");
-    if (profile_refused) return 0;
-    saved_wallet -= cost;
-    saved_currency[FORGE_CREDITS] -= second_cost;
-    return 1;
-}
-
 static int GearCheckout(unsigned* total, int* pending)
 {
     unsigned credits;
@@ -402,16 +382,15 @@ static void ResetExchange(void)
     for (size_t i = 0; i < CURRENCY_COUNT; ++i)
     {
         SetAmount(kCurrencies[i].id, amounts[i]);
-        saved_currency[i] = amounts[i];
         unsigned ignored;
         uintptr_t record = ItemRecord(&api, (uintptr_t)manager, kCurrencies[i].id, &ignored);
         Put32((unsigned char*)record + 0x18, caps[i]);
     }
     Pick(HF_ITEM_AR23_LIBERATOR, 0);
-    shop_failed = remove_failed = add_failed = exchange_profile_refused = 0;
-    exchange_profile_calls = add_calls = 0;
+    shop_failed = remove_failed = add_failed = wallet_refused = 0;
     game_state = HF_STATE_SHIP;
     Tick();
+    wallet_writes = add_calls = 0;
 }
 
 static void TestExchanges(void)
@@ -429,12 +408,12 @@ static void TestExchanges(void)
             CHECK((uint64_t)debit * kCurrencies[from].points == (uint64_t)credit * kCurrencies[to].points);
             unsigned before_from = saved_currency[from], before_to = saved_currency[to];
             CHECK(SmrExchange(&mod, from, to, 1));
-            CHECK(!SmrExchange(&mod, from, to, 1) && exchange_profile_calls == 0);
+            CHECK(!SmrExchange(&mod, from, to, 1) && wallet_writes == 0);
             CHECK(!SmrBuyCheckout(&mod));
             SmrCurrency item;
             CHECK(SmrCurrencyItem(from, &item) && item.pending);
             Tick();
-            CHECK(!exchange.pending && !shop_failed && exchange_profile_calls == 1 && add_calls == 1);
+            CHECK(!exchange.pending && !shop_failed && wallet_writes == 1 && add_calls == 1);
             CHECK(saved_currency[from] == before_from - debit && saved_currency[to] == before_to + credit);
             CHECK(Amount(kCurrencies[from].id) == saved_currency[from] && Amount(kCurrencies[to].id) == saved_currency[to]);
             CHECK(!auto_ready);
@@ -452,21 +431,18 @@ static void TestExchanges(void)
     CHECK(!SmrExchange(&mod, 4, 1, 27)); /* 405 common would exceed 500. */
     CHECK(!SmrExchange(&mod, 4, 2, 11)); /* 165 rare would exceed 250. */
     SetAmount(kCurrencies[3].id, 55);
-    saved_currency[3] = 55;
     Tick();
     CHECK(SmrExchange(&mod, 4, 3, 3)); /* Exactly at the cap is allowed. */
     Tick();
     CHECK(Amount(kCurrencies[3].id) == 100);
     ResetExchange();
     SetAmount(REQUISITION, 101);
-    saved_currency[0] = 101;
     Tick();
     CHECK(SmrExchange(&mod, 0, 1, 2));
     Tick();
     CHECK(Amount(REQUISITION) == 1 && saved_currency[0] == 1); /* Remainder retained. */
     ResetExchange();
     SetAmount(kCurrencies[4].id, 0);
-    saved_currency[4] = 0;
     Tick();
     CHECK(SmrExchange(&mod, 0, 4, 1));
     Tick();
@@ -479,7 +455,7 @@ static void TestExchanges(void)
     CHECK(SmrExchange(&mod, 0, 4, 2));
     game_state = HF_STATE_MISSION;
     Tick();
-    CHECK(!exchange.pending && !exchange_profile_calls && !add_calls && Amount(REQUISITION) == 10000);
+    CHECK(!exchange.pending && !wallet_writes && !add_calls && Amount(REQUISITION) == 10000);
     CHECK(!SmrExchange(&mod, 0, 4, 1));
     ResetExchange();
     charge.state = CHARGE_QUEUED;
@@ -488,19 +464,19 @@ static void TestExchanges(void)
     CHECK(SmrExchange(&mod, 0, 4, 2));
     SetAmount(REQUISITION, 999);
     Tick();
-    CHECK(!exchange.pending && !exchange_profile_calls && !add_calls && Amount(REQUISITION) == 999);
+    CHECK(!exchange.pending && wallet_writes == 1 && !add_calls && saved_wallet == 999);
     ResetExchange();
     CHECK(SmrExchange(&mod, 4, 3, 1));
     SetAmount(kCurrencies[3].id, 100);
     Tick();
-    CHECK(!exchange.pending && !exchange_profile_calls && Amount(kCurrencies[4].id) == 100);
+    CHECK(!exchange.pending && wallet_writes == 1 && saved_currency[3] == 100 && Amount(kCurrencies[4].id) == 100);
     ResetExchange();
     unsigned ignored;
     uintptr_t capped = ItemRecord(&api, (uintptr_t)manager, kCurrencies[3].id, &ignored);
     CHECK(SmrExchange(&mod, 4, 3, 1));
     Put32((unsigned char*)capped + 0x18, 50);
     Tick();
-    CHECK(!exchange.pending && !exchange_profile_calls && Amount(kCurrencies[4].id) == 100);
+    CHECK(!exchange.pending && !wallet_writes && Amount(kCurrencies[4].id) == 100);
     ResetExchange();
     uintptr_t record = ItemRecord(&api, (uintptr_t)manager, kCurrencies[4].id, &ignored);
     unreadable_at = record + 0x18;
@@ -513,27 +489,29 @@ static void TestExchanges(void)
         ResetExchange();
         remove_failed = failure == 0;
         add_failed = failure == 1 ? 1 : (failure == 3 ? 2 : 0);
-        exchange_profile_refused = failure == 2;
+        wallet_refused = failure == 2;
         CHECK(SmrExchange(&mod, 0, 4, 1));
         Tick();
         CHECK(shop_failed && !inventory_ready && !exchange_ready && !exchange.pending);
         CHECK(add_calls == (failure == 0 ? 0 : 1));
-        CHECK(exchange_profile_calls == (failure == 2 ? 1 : 0));
+        CHECK(wallet_writes == (failure == 2 ? 1 : 0));
         CHECK(saved_currency[0] == 10000 && saved_currency[4] == 100);
         CHECK(!SmrExchange(&mod, 0, 4, 1));
         CHECK(!BuyItem(0));
     }
     ResetExchange();
     SetAmount(REQUISITION, 5000);
-    saved_wallet = 5000;
     Tick();
+    wallet_writes = 0;
     puts("PASS exchanges: all 20 pairs, exact batches, remainders, caps, ship-only, stale balance/cap checks, shared transaction exclusion and partial failures");
 }
 
 static void TestDestroyer(void)
 {
     ResetExchange();
-    SetAmount(REQUISITION, saved_wallet);
+    SetAmount(REQUISITION, 5000);
+    Tick();
+    wallet_writes = 0;
     unsigned char* card = calloc(1, READY_PEER + sizeof local.peer);
     CHECK(card);
     memcpy(card + READY_PEER, &local.peer, sizeof local.peer);
@@ -544,28 +522,28 @@ static void TestDestroyer(void)
     Put32(history + LOADOUT + STRATAGEM_COUNT, sizeof picks / sizeof picks[0]);
     for (size_t i = 0; i < sizeof picks / sizeof picks[0]; ++i)
         Put32(history + LOADOUT + STRATAGEM_SLOTS + i * STRATAGEM_STRIDE, picks[i]);
-    CHECK(!SmrSelectUpgrade(&mod, SMR_UPGRADE_ORBITAL));
+    CHECK(!SmrSelectUpgrade(&mod, SMR_UPGRADE_ORBITAL, 0));
     InterlockedExchange(&destroyer_gate, DESTROYER_REQUESTED);
     CHECK(SmrTakeDestroyerRequest());
     session_role = HF_SESSION_HOST;
-    CHECK(!SmrDestroyer(&mod).solo && !SmrSelectUpgrade(&mod, SMR_UPGRADE_ORBITAL));
+    CHECK(!SmrDestroyer(&mod).solo && !SmrSelectUpgrade(&mod, SMR_UPGRADE_ORBITAL, 0));
     session_role = HF_SESSION_SOLO;
-    CHECK(!SmrSelectUpgrade(&mod, SMR_UPGRADE_NONE));
-    CHECK(SmrDestroyer(&mod).available && SmrSelectUpgrade(&mod, SMR_UPGRADE_ORBITAL));
-    CHECK(!SmrSelectUpgrade(&mod, SMR_UPGRADE_EAGLE) && SmrDestroyer(&mod).selected == SMR_UPGRADE_ORBITAL);
+    CHECK(!SmrSelectUpgrade(&mod, SMR_UPGRADE_NONE, 0));
+    CHECK(SmrDestroyer(&mod).available && SmrSelectUpgrade(&mod, SMR_UPGRADE_ORBITAL, 0));
+    CHECK(!SmrSelectUpgrade(&mod, SMR_UPGRADE_EAGLE, 0) && SmrDestroyer(&mod).selected == SMR_UPGRADE_ORBITAL);
     SmrFinishDestroyer(1);
     Tick();
     unsigned total, credits;
     int pending;
     CHECK(SmrCheckout(&total, &credits, &pending) && total == 2500 && credits == 10 && !pending);
-    CHECK(!SmrDestroyer(&mod).purchased && Amount(credit_id) == 100 && !pair_calls);
+    CHECK(!SmrDestroyer(&mod).purchased && Amount(credit_id) == 100 && !wallet_writes);
     SmrFinishCheckout(0);
     CHECK(GearCheckout(&total, &pending));
 
     Pick(HF_ITEM_AR23_LIBERATOR, picks[0]);
     Tick();
     InterlockedExchange(&destroyer_gate, DESTROYER_REQUESTED);
-    CHECK(SmrTakeDestroyerRequest() && SmrSelectUpgrade(&mod, SMR_UPGRADE_ORBITAL));
+    CHECK(SmrTakeDestroyerRequest() && SmrSelectUpgrade(&mod, SMR_UPGRADE_ORBITAL, 0));
     SmrFinishDestroyer(1);
     CHECK(!ReadyAccessAllowed(&mod, (uintptr_t)card) && SmrTakeCheckoutRequest());
     CHECK(SmrCheckout(&total, &credits, &pending) && !total && credits == 10 && !pending);
@@ -573,7 +551,7 @@ static void TestDestroyer(void)
     Tick();
     CHECK(SmrDestroyer(&mod).purchased == SMR_UPGRADE_ORBITAL && SmrCheckoutPaid() && !live_sets);
     CHECK(Amount(credit_id) == 90 && saved_currency[FORGE_CREDITS] == 90);
-    CHECK(Amount(REQUISITION) == saved_wallet && !pair_calls);
+    CHECK(Amount(REQUISITION) == 5000 && saved_wallet == 5000 && wallet_writes == 1);
     SmrFinishCheckout(0);
     Put32(history + LOADOUT + STRATAGEM_COUNT, sizeof picks / sizeof picks[0]);
     for (size_t i = 0; i < sizeof picks / sizeof picks[0]; ++i)
@@ -603,7 +581,7 @@ static void TestDestroyer(void)
 
     Tick();
     InterlockedExchange(&destroyer_gate, DESTROYER_REQUESTED);
-    CHECK(SmrTakeDestroyerRequest() && SmrSelectUpgrade(&mod, SMR_UPGRADE_SUPPORT));
+    CHECK(SmrTakeDestroyerRequest() && SmrSelectUpgrade(&mod, SMR_UPGRADE_SUPPORT, 0));
     SmrFinishDestroyer(1);
     CHECK(SmrCheckout(&total, &credits, &pending) && total == 2500 && credits == 13);
     SetAmount(credit_id, 12);
@@ -612,24 +590,25 @@ static void TestDestroyer(void)
     SetAmount(credit_id, 90);
     Tick();
     CHECK(SmrBuyCheckout(&mod));
-    profile_refused = 1;
+    wallet_writes = 0;
+    wallet_refused = 1;
     Tick();
     size_t silo = PriceIndex("MS-11 Solo Silo");
     CHECK(shop_failed && !upgrade_purchased && !access[silo] && !SmrCheckoutPaid());
-    CHECK(pair_calls == 1 && Amount(credit_id) == 77 && saved_currency[FORGE_CREDITS] == 90 &&
+    CHECK(wallet_writes == 1 && Amount(credit_id) == 77 && saved_currency[FORGE_CREDITS] == 90 &&
         Amount(REQUISITION) == saved_wallet - 2500);
-    profile_refused = 0;
     ResetExchange();
-    SetAmount(REQUISITION, saved_wallet);
+    SetAmount(REQUISITION, 5000);
     Pick(HF_ITEM_AR23_LIBERATOR, picks[2]);
     Tick();
     SmrFinishCheckout(0);
     InterlockedExchange(&destroyer_gate, DESTROYER_REQUESTED);
-    CHECK(SmrTakeDestroyerRequest() && SmrSelectUpgrade(&mod, SMR_UPGRADE_SUPPORT));
+    CHECK(SmrTakeDestroyerRequest() && SmrSelectUpgrade(&mod, SMR_UPGRADE_SUPPORT, 0));
     SmrFinishDestroyer(1);
     CHECK(SmrBuyCheckout(&mod));
+    wallet_writes = 0;
     Tick();
-    CHECK(upgrade_purchased == SMR_UPGRADE_SUPPORT && access[silo] && SmrCheckoutPaid() && pair_calls == 2);
+    CHECK(upgrade_purchased == SMR_UPGRADE_SUPPORT && access[silo] && SmrCheckoutPaid() && wallet_writes == 1);
     CHECK(Amount(credit_id) == 87 && saved_currency[FORGE_CREDITS] == 87 &&
         Amount(REQUISITION) == saved_wallet && saved_wallet == 3000);
     const HfStateEvent prepare = {{0}, HF_STATE_SHIP, HF_STATE_PREPARE_MISSION};
@@ -638,7 +617,6 @@ static void TestDestroyer(void)
     MissionEnd(&mod, NULL, NULL);
     CHECK(!upgrade_purchased);
     SmrFinishCheckout(0);
-    saved_wallet = 5000;
     ResetExchange();
     free(card);
     puts("PASS destroyer: selection is free, upgrade-only and combined checkout, cancellation, rollback, and one-mission cooldowns");
@@ -700,6 +678,263 @@ static void TestUpgradeEffects(void)
     CHECK(eagle_cooldown == 5.5 && eagle_call_in == 3.5 && rearm_cooldown == 15 && orbital_cooldown == 75);
     MissionEnd(&mod, NULL, NULL);
     puts("PASS destroyer effects: percentage cooldowns, unlimited uses, shared rearm, failed or aborted prep, and mission cleanup");
+}
+
+static bool SlotOwned(uintptr_t inventory, uint32_t type)
+{
+    CHECK(inventory == (uintptr_t)manager);
+    return type != HF_STRATAGEM_AG16_GATLING_SENTRY;
+}
+
+static uint32_t SlotPackages(uint64_t* out, uint32_t type, uint32_t unused, uint32_t level)
+{
+    if (type == HF_STRATAGEM_EAGLE_500KG_BOMB)
+    {
+        CHECK(!unused && !level);
+        out[0] = 103;
+        return 1;
+    }
+    CHECK(type == HF_STRATAGEM_MS11_SOLO_SILO && unused == 0 && (level == 0 || level == 2));
+    out[0] = 101;
+    if (level == 2) out[1] = 102;
+    return level == 2 ? 2 : 1;
+}
+
+static int LoadPackage(HfMod* unused, uint64_t package)
+{
+    CHECK(package == 101 || package == 102 || package == 103);
+    return package == 101 && package_state ? HF_PACKAGE_RESIDENT : package_state;
+}
+
+static void SlotGrant(uintptr_t owner, uint32_t player, const ExtraGrantEntry* entry, uint32_t count)
+{
+    CHECK(owner == (uintptr_t)history && player == 193 && count >= 1 && count <= 2);
+    grant_calls++;
+    if (refuse_grant) return;
+    uint32_t slots;
+    memcpy(&slots, history + LOADOUT + STRATAGEM_COUNT, sizeof slots);
+    CHECK(slots + count <= EXTRA_MISSION_LIMIT);
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        HfStratagemSettings row;
+        CHECK(entry[i].mission_grant == 1 && !entry[i].override_uses && !entry[i].uses &&
+            ExtraRow(&api, entry[i].type, &row));
+        unsigned char* at = history + LOADOUT + STRATAGEM_SLOTS + STRATAGEM_STRIDE * (slots + i);
+        memcpy(at, &entry[i], sizeof entry[i]);
+        Put32(at + 4, row.uses);
+    }
+    Put32(history + LOADOUT + STRATAGEM_COUNT, slots + count);
+}
+
+static void TestExtraEagle(void)
+{
+    const uint32_t eagle = HF_STRATAGEM_EAGLE_500KG_BOMB, credit_id = kCurrencies[FORGE_CREDITS].id;
+    const size_t bomb = PriceIndex("Eagle 500kg Bomb");
+    ResetExchange();
+    Pick(HF_ITEM_AR23_LIBERATOR, HF_STRATAGEM_ORBITAL_PRECISION_STRIKE);
+    RefreshExtraOptions(&mod);
+    InterlockedExchange(&destroyer_gate, DESTROYER_REQUESTED);
+    CHECK(SmrTakeDestroyerRequest() && SmrSelectUpgrade(&mod, SMR_UPGRADE_EXTRA_SLOT, eagle));
+    SmrFinishDestroyer(1);
+    Tick();
+    CHECK(SmrBuyCheckout(&mod));
+    Tick();
+    CHECK(SmrCheckoutPaid() && upgrade_purchased == SMR_UPGRADE_EXTRA_SLOT && access[bomb] &&
+        Amount(REQUISITION) == 9500 && Amount(credit_id) == 50);
+    SmrFinishCheckout(0);
+
+    game_state = HF_STATE_MISSION;
+    static const struct { uint32_t count, has_rearm, added; } cases[] = {
+        {15, 0, 0}, {14, 0, 2}, {15, 1, 1}
+    };
+    for (size_t i = 0; i < sizeof cases / sizeof cases[0]; ++i)
+    {
+        const uint32_t count = cases[i].count;
+        ExtraGrantEntry initial[EXTRA_MISSION_LIMIT] = {{.type = HF_STRATAGEM_ORBITAL_PRECISION_STRIKE}};
+        for (uint32_t j = 1; j < count; ++j)
+            initial[j] = (ExtraGrantEntry){.type = HF_STRATAGEM_RESUPPLY, .mission_grant = 1};
+        if (cases[i].has_rearm)
+        {
+            initial[1] = (ExtraGrantEntry){.type = HF_STRATAGEM_EAGLE_AIRSTRIKE, .uses = 2};
+            initial[2] = (ExtraGrantEntry){.type = HF_STRATAGEM_EAGLE_REARM, .uses = UINT32_MAX, .mission_grant = 1};
+            upgrade_purchased = SMR_UPGRADE_EXTRA_SLOT;
+            extra_pick = eagle;
+            access[bomb] = 1;
+        }
+        unsigned char* slots = history + LOADOUT + STRATAGEM_SLOTS;
+        memcpy(slots, initial, sizeof initial);
+        Put32(history + LOADOUT + STRATAGEM_COUNT, count);
+        const int calls = grant_calls;
+        MissionStart(&mod, NULL, NULL);
+        for (int tick = 0; tick < 4; ++tick) ExtraSlotTick(&mod, 1);
+        CHECK(!memcmp(initial, slots, count * sizeof initial[0]));
+        uint32_t picks[MAX_STRATAGEMS], after;
+        CHECK(ReadStratagems(&api, (uintptr_t)history + LOADOUT, picks, &after) && after == count + cases[i].added);
+        if (cases[i].added)
+        {
+            CHECK(grant_calls == calls + 1 && deployed_access[bomb] && picks[after - 1] == eagle);
+            if (!cases[i].has_rearm) CHECK(picks[count] == HF_STRATAGEM_EAGLE_REARM);
+            ExtraGrantEntry granted;
+            memcpy(&granted, slots + (after - 1) * sizeof granted, sizeof granted);
+            CHECK(granted.uses == 2 && granted.mission_grant == 1);
+            CHECK(second_eagle_cooldown == 11 && rearm_cooldown == 132 && upgraded_count == 3 + cases[i].has_rearm);
+        }
+        else CHECK(grant_calls == calls && !upgraded_count && !deployed_access[bomb]);
+        MissionEnd(&mod, NULL, NULL);
+        CHECK(second_eagle_cooldown == 10 && rearm_cooldown == 120 && !upgraded_count);
+        CHECK(cases[i].added ? !upgrade_purchased && !extra_pick && !access[bomb] :
+            upgrade_purchased == SMR_UPGRADE_EXTRA_SLOT && extra_pick == eagle && access[bomb]);
+    }
+    puts("PASS extra Eagles: checkout, two-entry capacity, shared Rearm reuse, stock charges, and cooldown cleanup");
+}
+
+static void TestExtraSlot(void)
+{
+    ResetExchange();
+    api.load_package = LoadPackage;
+    const uint32_t type = HF_STRATAGEM_MS11_SOLO_SILO, credit_id = kCurrencies[FORGE_CREDITS].id;
+    const size_t silo = PriceIndex("MS-11 Solo Silo");
+    unsigned char players[0x430] = {0}, mission[0x18] = {0}, descriptor[12] = {0};
+    unsigned char* hud = calloc(EXTRA_HUD_READY + 1, 1);
+    CHECK(hud);
+    HfGameMode mode = {.mode = 1, .mission = mission};
+    uint32_t map[] = {193, 0};
+    Put32(mission + 0x14, 1);
+    Put32(players + 0x84, 1);
+    Put32(players + 0x88, 1);
+    Put32(players + 0x2E0, 3);
+    Put32(players + 0x3A8, 14);
+    Put32(players + 0xD8, 1);
+    Put32(descriptor + 8, 193);
+    void* ptr = map;
+    memcpy(players + 0xD0, &ptr, sizeof ptr);
+    ptr = descriptor;
+    memcpy(players + 0xE8, &ptr, sizeof ptr);
+    memcpy(players + 0x2C8, &local.peer, sizeof local.peer);
+    slot_players = (uintptr_t)players;
+    slot_mode = (uintptr_t)&mode;
+    PutPointer(EXTRA_HUD, hud);
+    PutPointer(EXTRA_OWNER, history);
+    Put32(image + EXTRA_TABLE_LEA + 3, (uint32_t)(0x5000 - (EXTRA_TABLE_LEA + 7)));
+    HfStratagemSettings rows[] = {
+        {.type = type, .stable_id = 1, .code_length = 6, .uses = 3, .delivery = 2, .package = 101, .hud_type = HUD_SUPPORT},
+        {.type = HF_STRATAGEM_ORBITAL_PRECISION_STRIKE, .stable_id = 2, .code_length = 3, .uses = UINT32_MAX, .delivery = 1},
+        {.type = HF_STRATAGEM_EAGLE_AIRSTRIKE, .stable_id = 3, .code_length = 4, .uses = 2, .delivery = DELIVERY_EAGLE},
+        {.type = HF_STRATAGEM_AG16_GATLING_SENTRY, .stable_id = 4, .code_length = 5, .uses = UINT32_MAX,
+            .delivery = 2, .hud_type = HUD_DEFENSIVE},
+        {.type = HF_STRATAGEM_EAGLE_500KG_BOMB, .stable_id = 5, .code_length = 5, .uses = 2, .delivery = DELIVERY_EAGLE,
+            .package = 103},
+        {.type = HF_STRATAGEM_EAGLE_REARM, .stable_id = 6, .code_length = 4, .uses = UINT32_MAX, .delivery = DELIVERY_REARM},
+    };
+    uint64_t variant[] = {2, 0, 0, 102};
+    ptr = variant;
+    memcpy((unsigned char*)&rows[0] + 0x118, &ptr, sizeof ptr);
+    Put32((unsigned char*)&rows[0] + 0x120, 1);
+    for (size_t i = 0; i < sizeof rows / sizeof rows[0]; ++i)
+        PutPointer(0x5000 + rows[i].type * sizeof(uintptr_t), rows + i);
+    extra_native.available = SlotOwned;
+    extra_native.packages = SlotPackages;
+    extra_native.grant = SlotGrant;
+    Pick(HF_ITEM_AR23_LIBERATOR, HF_STRATAGEM_ORBITAL_PRECISION_STRIKE);
+    RefreshExtraOptions(&mod);
+    SmrExtraChoice choices[4];
+    CHECK(SmrExtraChoices(choices, 4) == 3);
+    CHECK(choices[0].type == HF_STRATAGEM_EAGLE_500KG_BOMB && choices[0].category == HF_CATEGORY_OFFENSIVE);
+    CHECK(choices[1].type == HF_STRATAGEM_EAGLE_AIRSTRIKE && choices[1].category == HF_CATEGORY_OFFENSIVE);
+    CHECK(choices[2].type == type && choices[2].category == HF_CATEGORY_SUPPLY && !strcmp(choices[2].name, "MS-11 Solo Silo"));
+    InterlockedExchange(&destroyer_gate, DESTROYER_REQUESTED);
+    CHECK(SmrTakeDestroyerRequest());
+    CHECK(!SmrSelectUpgrade(&mod, SMR_UPGRADE_EXTRA_SLOT, 0));
+    CHECK(!SmrSelectUpgrade(&mod, SMR_UPGRADE_EXTRA_SLOT, HF_STRATAGEM_EAGLE_REARM));
+    session_role = HF_SESSION_HOST;
+    CHECK(!SmrSelectUpgrade(&mod, SMR_UPGRADE_EXTRA_SLOT, type));
+    session_role = HF_SESSION_SOLO;
+    CHECK(SmrSelectUpgrade(&mod, SMR_UPGRADE_EXTRA_SLOT, type));
+    /* The native picks with prepaid access leave only the extra's requisition due. */
+    const uint32_t native_picks[] = {HF_STRATAGEM_ORBITAL_PRECISION_STRIKE, HF_STRATAGEM_EAGLE_AIRSTRIKE,
+        HF_STRATAGEM_EAGLE_500KG_BOMB, HF_STRATAGEM_AG16_GATLING_SENTRY};
+    Put32(history + LOADOUT + STRATAGEM_COUNT, 4);
+    for (uint32_t i = 0; i < 4; ++i)
+    {
+        unsigned char* at = history + LOADOUT + STRATAGEM_SLOTS + i * STRATAGEM_STRIDE;
+        memset(at, 0, STRATAGEM_STRIDE);
+        Put32(at, native_picks[i]);
+    }
+    access[PriceIndex("Eagle 500kg Bomb")] = 1;
+    access[PriceIndex("A/G-16 Gatling Sentry")] = 1;
+    SmrFinishDestroyer(1);
+    Tick();
+    unsigned total, credits;
+    int pending;
+    CHECK(SmrCheckout(&total, &credits, &pending) && total == 2000 && credits == 50 && !pending);
+    CHECK(SmrBuyCheckout(&mod));
+    Tick();
+    CHECK(!upgrade_purchased && !access[silo] && Amount(REQUISITION) == 10000 && Amount(credit_id) == 100);
+    package_state = HF_PACKAGE_LOADING;
+    CHECK(SmrBuyCheckout(&mod));
+    Tick();
+    CHECK(SmrCheckoutPaid() && upgrade_purchased == SMR_UPGRADE_EXTRA_SLOT && access[silo] &&
+        Amount(REQUISITION) == 8000 && Amount(credit_id) == 50);
+    SmrFinishCheckout(0);
+    CHECK(SmrDestroyer(&mod).extra == type);
+    unsigned char saved_loadout[0x200];
+    memcpy(saved_loadout, profile, sizeof saved_loadout);
+
+    game_state = HF_STATE_MISSION;
+    unsigned char* objective = history + LOADOUT + STRATAGEM_SLOTS + 4 * STRATAGEM_STRIDE;
+    memset(objective, 0, STRATAGEM_STRIDE);
+    Put32(objective, HF_STRATAGEM_ORBITAL_WALKING_BARRAGE);
+    objective[offsetof(ExtraGrantEntry, mission_grant)] = 1;
+    Put32(history + LOADOUT + STRATAGEM_COUNT, 5);
+    MissionStart(&mod, NULL, NULL);
+    ExtraSlotTick(&mod, 1);
+    CHECK(!grant_calls && !upgraded_count);
+    hud[EXTRA_HUD_READY] = 1;
+    ExtraSlotTick(&mod, 1);
+    ExtraSlotTick(&mod, 1);
+    CHECK(!grant_calls && !upgraded_count); /* Only the variant package is still loading. */
+    package_state = HF_PACKAGE_RESIDENT;
+    session_role = HF_SESSION_HOST;
+    ExtraSlotTick(&mod, 1);
+    CHECK(!grant_calls);
+    session_role = HF_SESSION_SOLO;
+    ExtraSlotTick(&mod, 1);
+    CHECK(grant_calls == 1 && deployed_access[silo] && upgraded_count == 6);
+    ExtraGrantEntry deployed;
+    memcpy(&deployed, objective + STRATAGEM_STRIDE, sizeof deployed);
+    CHECK(deployed.type == type && deployed.uses == 3 && deployed.mission_grant);
+    CHECK((float)orbital_cooldown == 110 && (float)support_cooldown == 88 && (float)rearm_cooldown == 132 &&
+        barrage_cooldown == 50);
+    ExtraSlotTick(&mod, 1);
+    CHECK(grant_calls == 1 && !memcmp(profile, saved_loadout, sizeof saved_loadout));
+    MissionEnd(&mod, NULL, NULL);
+    CHECK(!upgraded_count && !extra_pick && !upgrade_purchased && !access[silo] && orbital_cooldown == 100 &&
+        support_cooldown == 80 && rearm_cooldown == 120);
+
+    upgrade_purchased = SMR_UPGRADE_EXTRA_SLOT;
+    extra_pick = type;
+    Put32(history + LOADOUT + STRATAGEM_COUNT, EXTRA_MISSION_LIMIT);
+    ExtraSlotTick(&mod, 1);
+    ExtraSlotTick(&mod, 1);
+    MissionEnd(&mod, NULL, NULL);
+    CHECK(grant_calls == 1 && extra_pick == type && upgrade_purchased == SMR_UPGRADE_EXTRA_SLOT);
+    Put32(history + LOADOUT + STRATAGEM_COUNT, 1);
+    refuse_grant = 1;
+    ExtraSlotTick(&mod, 1);
+    ExtraSlotTick(&mod, 1);
+    ExtraSlotTick(&mod, 1);
+    MissionEnd(&mod, NULL, NULL);
+    CHECK(grant_calls == 2 && upgrade_purchased == SMR_UPGRADE_EXTRA_SLOT && !upgraded_count &&
+        orbital_cooldown == 100 && support_cooldown == 80);
+    upgrade_purchased = SMR_UPGRADE_NONE;
+    extra_pick = 0;
+    refuse_grant = 0;
+    TestExtraEagle();
+    memset(&extra_native, 0, sizeof extra_native);
+    api.load_package = NULL;
+    ResetExchange();
+    free(hud);
+    puts("PASS extra slot: eligible picks and checkout, asset gate, single append, native limits, and mission cleanup");
 }
 
 static void TestExpandedCatalog(void)
@@ -766,6 +1001,7 @@ static void TestExpandedCatalog(void)
         Put32(history + LOADOUT + expected[i].slot, expected[i].id);
         if (expected[i].slot == STRATAGEM_SLOTS) Put32(history + LOADOUT + STRATAGEM_COUNT, 1);
         Tick();
+        wallet_writes = 0;
         uint64_t selected;
         unsigned total;
         int pending;
@@ -778,16 +1014,14 @@ static void TestExpandedCatalog(void)
         Tick();
         CHECK(access[index] && saved_wallet == 5000 - expected[i].price &&
             Amount(REQUISITION) == 5000 - expected[i].price);
-        CHECK(profile_calls == 1 && ReadyAccessAllowed(&mod, (uintptr_t)card));
+        CHECK(wallet_writes == 1 && ReadyAccessAllowed(&mod, (uintptr_t)card));
         CHECK(!GearCheckout(&total, &pending) && total == 0);
         SmrFinishCheckout(0);
         MissionStart(&mod, NULL, NULL);
         CHECK(deployed_access[index]);
         MissionEnd(&mod, NULL, NULL);
         CHECK(!access[index] && !deployed_access[index]);
-        saved_wallet = 5000;
         SetAmount(REQUISITION, 5000);
-        profile_calls = 0;
     }
     Pick(HF_ITEM_JAR5_DOMINATOR, HF_STRATAGEM_EAGLE_500KG_BOMB);
     Put32(history + LOADOUT + WEAPON_STRIDE, HF_ITEM_GP20_ULTIMATUM);
@@ -797,37 +1031,87 @@ static void TestExpandedCatalog(void)
     Put32(history + LOADOUT + STRATAGEM_SLOTS + 2 * STRATAGEM_STRIDE, HF_STRATAGEM_ORBITAL_WALKING_BARRAGE);
     Put32(history + LOADOUT + STRATAGEM_SLOTS + 3 * STRATAGEM_STRIDE, HF_STRATAGEM_ORBITAL_LASER);
     Tick();
+    wallet_writes = 0;
     unsigned total;
     int pending;
     CHECK(GearCheckout(&total, &pending) && total == 3500 && !pending);
     CHECK(SmrBuyCheckout(&mod));
     Tick();
-    CHECK(saved_wallet == 1500 && Amount(REQUISITION) == 1500 && profile_calls == 1);
+    CHECK(saved_wallet == 1500 && Amount(REQUISITION) == 1500 && wallet_writes == 1);
     CHECK(!GearCheckout(&total, &pending) && total == 0);
     MissionStart(&mod, NULL, NULL);
     MissionEnd(&mod, NULL, NULL);
     for (size_t i = 0; i < PRICE_COUNT; ++i) CHECK(!access[i]);
     SmrFinishCheckout(0);
-    saved_wallet = 5000;
     SetAmount(REQUISITION, 5000);
-    profile_calls = 0;
     size_t jar = PriceIndex("JAR-5 Dominator");
     kLoadoutPrices[jar].requisition = 1375;
     Pick(HF_ITEM_JAR5_DOMINATOR, 0);
     Tick();
+    wallet_writes = 0;
     CHECK(GearCheckout(&total, &pending) && total == 1375);
     CHECK(SmrBuyCheckout(&mod));
     Tick();
-    CHECK(access[jar] && saved_wallet == 3625 && Amount(REQUISITION) == 3625 && profile_calls == 1);
+    CHECK(access[jar] && saved_wallet == 3625 && Amount(REQUISITION) == 3625 && wallet_writes == 1);
     MissionStart(&mod, NULL, NULL);
     MissionEnd(&mod, NULL, NULL);
     SmrFinishCheckout(0);
     kLoadoutPrices[jar].requisition = 500;
-    saved_wallet = 5000;
     SetAmount(REQUISITION, 5000);
-    profile_calls = 0;
+    Tick();
+    wallet_writes = 0;
     free(card);
     puts("PASS expanded catalogue: all 47 restrictions gate Ready, deduct once, grant access and expire; seven-item checkout costs 3500");
+}
+
+static void TestWalletPersistence(void)
+{
+    ResetExchange();
+    const uint32_t credits = kCurrencies[FORGE_CREDITS].id;
+    const size_t silo = PriceIndex("MS-11 Solo Silo");
+    const unsigned old_eruptor = kLoadoutPrices[0].requisition, old_silo = kLoadoutPrices[silo].requisition;
+    kLoadoutPrices[0].requisition = kLoadoutPrices[silo].requisition = 30000;
+    SetAmount(REQUISITION, 50000);
+    Tick();
+    CHECK(BuyItem(0));
+    Tick();
+    CHECK(saved_wallet == 20000 && access[0]);
+    SmrFinishCheckout(0);
+    game_state = HF_STATE_MISSION;
+    MissionStart(&mod, NULL, NULL);
+    Add((uintptr_t)manager, credits, 10, 0, NULL, 0);
+    Tick();
+    CHECK(saved_currency[FORGE_CREDITS] == 110);
+    MissionEnd(&mod, NULL, NULL);
+    game_state = HF_STATE_PREPARE_SHIP;
+    Add((uintptr_t)manager, REQUISITION, 20000, 0, NULL, 0);
+    Add((uintptr_t)manager, kCurrencies[1].id, 1000, 0, NULL, 0);
+    Tick();
+    CHECK(saved_wallet == 40000 && saved_currency[1] == 500);
+    game_state = HF_STATE_SHIP;
+    Tick();
+    CHECK(BuyItem(silo));
+    Tick();
+    CHECK(saved_wallet == 10000 && access[silo]); /* 60,000 spent after a 50,000 starting balance. */
+    const int before_reload = wallet_writes;
+    Put32(manager + INVENTORY_STATUS, 0);
+    Tick();
+    SetAmount(REQUISITION, 50000); /* The backend never saw either purchase. */
+    SetAmount(credits, 100);
+    Put32(manager + INVENTORY_STATUS, 2);
+    Tick();
+    CHECK(Amount(REQUISITION) == 10000 && Amount(credits) == 110 && wallet_writes == before_reload);
+    ledger_open = 0;
+    ledger_manager = 0;
+    ledger_wallet = (SmrWallet){0};
+    SetAmount(REQUISITION, 50000);
+    SetAmount(credits, 100);
+    Tick();
+    Tick();
+    CHECK(Amount(REQUISITION) == 10000 && Amount(credits) == 110 && wallet_writes == before_reload);
+    kLoadoutPrices[0].requisition = old_eruptor;
+    kLoadoutPrices[silo].requisition = old_silo;
+    puts("PASS wallet: 60,000 Req spent across a mission payout, Forge Credit pickup, sample cap, and restoration without replay");
 }
 
 int main(void)
@@ -884,6 +1168,7 @@ int main(void)
     TestExpandedCatalog();
     TestDestroyer();
     TestUpgradeEffects();
+    TestExtraSlot();
     TestExchanges();
     CHECK(Amount(REQUISITION) == 5000 && !access[0] && !access[silo]);
     SmrLoadoutQuote quote;
@@ -900,14 +1185,14 @@ int main(void)
         quote.balance_ready && quote.balance == 5000);
     CHECK(!strcmp(quote.items[0].name, "R-36 Eruptor") && quote.items[0].due == 750);
     CHECK(!strcmp(quote.items[1].name, "MS-11 Solo Silo") && quote.items[1].due == 2000);
-    CHECK(!profile_calls && !SmrTakeDestroyerRequest() && !SmrTakeCheckoutRequest());
+    CHECK(!wallet_writes && !SmrTakeDestroyerRequest() && !SmrTakeCheckoutRequest());
     unsigned total;
     int pending;
     CHECK(GearCheckout(&total, &pending) && total == 2750 && !pending);
     CHECK(SmrBuyCheckout(&mod));
     CHECK(!SmrBuyCheckout(&mod));
     Tick();
-    CHECK(access[0] && access[silo] && saved_wallet == 2250 && Amount(REQUISITION) == 2250 && profile_calls == 1);
+    CHECK(access[0] && access[silo] && saved_wallet == 2250 && Amount(REQUISITION) == 2250 && wallet_writes == 1);
     CHECK(SmrQuoteLoadout(&quote) && quote.total == 0 && quote.count == 2 &&
         quote.items[0].due == 0 && quote.items[1].due == 0 && quote.balance == 2250);
     CHECK(auto_ready == 1);
@@ -918,19 +1203,18 @@ int main(void)
     CHECK(SmrBuyCheckout(&mod));
     Pick(HF_ITEM_R36_ERUPTOR, 0);
     Tick();
-    CHECK(charge.state == CHARGE_IDLE && !access[silo] && profile_calls == 1);
+    CHECK(charge.state == CHARGE_IDLE && !access[silo] && wallet_writes == 1);
     CHECK(auto_ready == 0);
     access[0] = 0;
-    saved_wallet = 5000;
     SetAmount(REQUISITION, 5000);
-    profile_calls = 0;
     Tick();
+    wallet_writes = 0;
 
     CHECK(BuyItem(0));
     CHECK(!access[0] && Amount(REQUISITION) == 5000);
     CHECK(!BuyItem(0) && !BuyItem(silo));
     WaitFor(CHARGE_IDLE);
-    CHECK(profile_calls == 1 && saved_wallet == 4250);
+    CHECK(wallet_writes == 1 && saved_wallet == 4250);
     CHECK(access[0] && Amount(REQUISITION) == 4250);
     CHECK(access[0] && !access[silo]);
     CHECK(!BuyItem(0));
@@ -991,13 +1275,13 @@ int main(void)
     CHECK(BuyItem(0));
     game_state = HF_STATE_MISSION;
     Tick();
-    CHECK(charge.state == CHARGE_IDLE && profile_calls == 2 && Amount(REQUISITION) == 2250);
+    CHECK(charge.state == CHARGE_IDLE && wallet_writes == 2 && Amount(REQUISITION) == 2250);
     game_state = HF_STATE_SHIP;
     Tick();
     remove_failed = 1;
     CHECK(BuyItem(0));
     Tick();
-    CHECK(shop_failed && !inventory_ready && !access[0] && profile_calls == 2 && Amount(REQUISITION) == 2250);
+    CHECK(shop_failed && !inventory_ready && !access[0] && wallet_writes == 2 && Amount(REQUISITION) == 2250);
     shop_failed = 0;
     charge.state = CHARGE_IDLE;
     remove_failed = 0;
@@ -1015,14 +1299,15 @@ int main(void)
     CHECK(SmrShopItem(0, &item) && item.selected && !BuyItem(0));
     SetAmount(REQUISITION, 2250);
     Tick();
-    profile_refused = 1;
+    wallet_refused = 1;
     CHECK(BuyItem(0));
     Tick();
     CHECK(shop_failed && !inventory_ready);
     CHECK(auto_ready == 0);
     CHECK(!BuyItem(0) && !BuyItem(silo));
     CHECK(!access[0] && Amount(REQUISITION) == 1500 && saved_wallet == 2250);
-    puts("PASS native shop: native deduction before profile edit, access after success only, partial failures stop shop, Ready gate and mission lifetime");
+    puts("PASS native shop: native deduction before wallet save, access after success only, partial failures stop shop, Ready gate and mission lifetime");
+    TestWalletPersistence();
     VirtualFree(image, 0, MEM_RELEASE);
     free(manager); free(history); free(profile);
     return 0;

@@ -2,8 +2,8 @@
   "format": 1,
   "id": "jedsdeads-unbalance-pass",
   "name": "JedsDead's UnBalance Pass",
-  "version": "1.0.0",
-  "description": "A broad gameplay balance pass using HellForge stats, with Blunt-Force Mitigation as a second armor passive in solo play.",
+  "version": "1.0.1",
+  "description": "A broad gameplay balance pass with deferred projectile swaps and Blunt-Force Mitigation as a second armor passive in solo play.",
   "gameplay": true,
   "code": { "dll": "unbalance_pass.dll", "sdk": 6 }
 }

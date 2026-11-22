@@ -1,11 +1,12 @@
 #include <windows.h>
+#include <cstring>
 #include "app.h"
 #include "canvas.h"
 #include "icons.h"
 #include "local_stats.h"
 #include "sounds.h"
 #include "shop_frontend.h"
-#include "profile_payment.cpp"
+#include "currency_ledger.cpp"
 #include "prices.cpp"
 #include "upgrade_config.cpp"
 
@@ -20,9 +21,13 @@ static bool exchangeOpen;
 static bool destroyerOpen;
 static bool loadoutOpen;
 static size_t destroyerSelection;
+static uint32_t destroyerExtra;
 static void (*closeWindow)();
 
 enum class UpgradeIcon { Orbital, Eagle, Defensive, Support, Slot };
+static constexpr ImU32 kOffensiveTint = IM_COL32(226, 94, 74, 255);
+static constexpr ImU32 kSupportTint = IM_COL32(74, 172, 232, 255);
+static constexpr ImU32 kDefensiveTint = IM_COL32(122, 188, 94, 255);
 static constexpr struct {
     const char* name;
     UpgradeIcon icon;
@@ -31,15 +36,15 @@ static constexpr struct {
     SmrUpgrade upgrade;
 } kDestroyerUpgrades[] = {
     {"Orbital Upgrade",
-        UpgradeIcon::Orbital, "Orbital Precision Strike", IM_COL32(226, 94, 74, 255), SMR_UPGRADE_ORBITAL},
+        UpgradeIcon::Orbital, "Orbital Precision Strike", kOffensiveTint, SMR_UPGRADE_ORBITAL},
     {"Eagle Upgrade",
-        UpgradeIcon::Eagle, "Eagle Airstrike", IM_COL32(226, 94, 74, 255), SMR_UPGRADE_EAGLE},
+        UpgradeIcon::Eagle, "Eagle Airstrike", kOffensiveTint, SMR_UPGRADE_EAGLE},
     {"Defensive Upgrade",
-        UpgradeIcon::Defensive, "A/G-16 Gatling Sentry", IM_COL32(122, 188, 94, 255), SMR_UPGRADE_DEFENSIVE},
+        UpgradeIcon::Defensive, "A/G-16 Gatling Sentry", kDefensiveTint, SMR_UPGRADE_DEFENSIVE},
     {"Support Upgrade",
-        UpgradeIcon::Support, "B-1 Supply Pack", IM_COL32(74, 172, 232, 255), SMR_UPGRADE_SUPPORT},
+        UpgradeIcon::Support, "B-1 Supply Pack", kSupportTint, SMR_UPGRADE_SUPPORT},
     {"Extra Stratagem Slot",
-        UpgradeIcon::Slot, nullptr, 0, SMR_UPGRADE_NONE},
+        UpgradeIcon::Slot, nullptr, 0, SMR_UPGRADE_EXTRA_SLOT},
 };
 
 static void DescribeUpgrade(SmrUpgrade upgrade, const SmrUpgradeTuning& tuning)
@@ -49,6 +54,13 @@ static void DescribeUpgrade(SmrUpgrade upgrade, const SmrUpgradeTuning& tuning)
     else if (upgrade == SMR_UPGRADE_EAGLE)
         ImGui::TextWrapped("Eagle rearm: %.6g s. Call-in time: %+.6g s. Cooldown: %.6g s.",
             tuning.rearm_seconds, tuning.call_in_extra_seconds, tuning.cooldown_seconds);
+    else if (upgrade == SMR_UPGRADE_EXTRA_SLOT)
+    {
+        ImGui::TextWrapped("Receive one owned stratagem after deployment. Your four loadout slots stay unchanged.");
+        ImGui::TextWrapped("Equipped cooldowns, the extra stratagem and Eagle rearm: %+.6g%%.",
+            tuning.other_cooldown_percent);
+        return;
+    }
     else
         ImGui::TextWrapped("Equipped %s stratagems: %+.6g%% to cooldowns and unlimited uses.",
             upgrade == SMR_UPGRADE_DEFENSIVE ? "defensive" : "support", tuning.cooldown_percent);
@@ -88,7 +100,7 @@ void Init(const Host& host)
     if (!host.modsFolder.empty())
         atlas = hfjson::Wide(host.modsFolder) + L"\\hellforge-editor\\game-icons.bin";
     if (!icons::Load(atlas) && api->log)
-        api->log(mod, "No local game icon cache available; using drawn upgrade icons.");
+        api->log(mod, "No local game icon cache available; using fallback icons and named stratagem tiles.");
 }
 
 void Opened()
@@ -130,6 +142,7 @@ void Tick()
         }
         destroyerOpen = true;
         destroyerSelection = 0;
+        destroyerExtra = 0;
         showCheckout(true);
     }
     if (!destroyerOpen && SmrTakeCheckoutRequest() && loadout)
@@ -157,7 +170,7 @@ void Tick()
     }
 }
 
-static bool DrawGameUpgradeIcon(const char* sprite, ImU32 tint, ImVec2 center, float size)
+static bool DrawGameStratagemIcon(const char* sprite, ImU32 tint, ImVec2 center, float size)
 {
     if (!sprite || !icons::Texture()) return false;
     const icons::Icon* layer = icons::Find(icons::STRATAGEM, sprite);
@@ -232,7 +245,7 @@ static void DestroyerPicker()
                 ImGui::GetStyle().FrameRounding, 0, 1.5f);
         const auto& choice = kDestroyerUpgrades[i];
         const ImVec2 center((min.x + max.x) / 2, (min.y + max.y) / 2);
-        if (!DrawGameUpgradeIcon(choice.sprite, choice.tint, center, side * 0.76f))
+        if (!DrawGameStratagemIcon(choice.sprite, choice.tint, center, side * 0.76f))
             DrawUpgradeIcon(choice.icon, center, side / 52);
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip) || ImGui::IsItemFocused())
             ImGui::SetTooltip("%s", choice.name);
@@ -240,29 +253,119 @@ static void DestroyerPicker()
     ImGui::Separator();
 }
 
+static void ExtraTile(const SmrExtraChoice& choice, ImU32 tint, float side)
+{
+    ImGui::PushID(static_cast<int>(choice.type));
+    const bool selected = choice.type == destroyerExtra;
+    if (selected) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+    if (ImGui::Button("##Stratagem", ImVec2(side, side))) destroyerExtra = choice.type;
+    if (selected) ImGui::PopStyleColor();
+    if (ImGui::IsItemVisible())
+    {
+        const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
+        const ImVec2 center((min.x + max.x) / 2, (min.y + max.y) / 2);
+        ImDrawList* draw = ImGui::GetWindowDrawList();
+        if (!DrawGameStratagemIcon(choice.name, tint, center, side * 0.84f))
+        {
+            const char* caption = choice.name;
+            if (std::strncmp(caption, "Eagle ", 6) == 0) caption += 6;
+            else if (std::strncmp(caption, "Orbital ", 8) == 0) caption += 8;
+            const ImVec4 clip(min.x + 3, min.y + 3, max.x - 3, max.y - 3);
+            const float wrap = clip.z - clip.x;
+            const ImVec2 text = ImGui::CalcTextSize(caption, nullptr, false, wrap);
+            const float y = center.y - text.y / 2;
+            draw->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                ImVec2(center.x - text.x / 2, y > clip.y ? y : clip.y),
+                ImGui::GetColorU32(tint), caption, nullptr, wrap, &clip);
+        }
+        if (choice.type == destroyerExtra)
+            draw->AddRect(min, max, ImGui::GetColorU32(ImGuiCol_Text), ImGui::GetStyle().FrameRounding, 0, 1.5f);
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip) || ImGui::IsItemFocused())
+        ImGui::SetTooltip("%s", choice.name);
+    ImGui::PopID();
+}
+
+static bool ExtraPicker(float width, float height)
+{
+    SmrExtraChoice choices[SMR_MAX_EXTRA_CHOICES];
+    const size_t count = SmrExtraChoices(choices, IM_ARRAYSIZE(choices));
+    if (!count)
+    {
+        ImGui::TextDisabled("No eligible extras. Check your loadout and the mod log.");
+        return false;
+    }
+    static constexpr struct { uint32_t category; const char* name; ImU32 tint; } groups[] = {
+        {HF_CATEGORY_OFFENSIVE, "Offensive", kOffensiveTint},
+        {HF_CATEGORY_SUPPLY, "Support", kSupportTint},
+        {HF_CATEGORY_DEFENSIVE, "Defensive", kDefensiveTint},
+        {HF_CATEGORY_SPECIAL, "Special", IM_COL32(214, 186, 110, 255)},
+    };
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float side = ImGui::GetFrameHeight() * 2.5f, gap = style.ItemSpacing.x;
+    const float preferred = 8 * side + 7 * gap + 2 * style.WindowPadding.x + style.ScrollbarSize;
+    const float limit = width * 0.9f;
+    ImGui::TextUnformatted("Choose an extra stratagem");
+    if (ImGui::BeginChild("Extra stratagem grid", ImVec2(preferred < limit ? preferred : limit, height * 0.38f),
+        ImGuiChildFlags_Borders))
+    {
+        const int fit = static_cast<int>((ImGui::GetContentRegionAvail().x + gap) / (side + gap));
+        const int columns = fit > 0 ? fit : 1;
+        for (const auto& group : groups)
+        {
+            int column = 0;
+            for (size_t i = 0; i < count; ++i)
+            {
+                const auto& choice = choices[i];
+                if (choice.category != group.category) continue;
+                if (!column)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, group.tint);
+                    ImGui::SeparatorText(group.name);
+                    ImGui::PopStyleColor();
+                }
+                if (column++ % columns) ImGui::SameLine();
+                ExtraTile(choice, group.tint, side);
+            }
+        }
+    }
+    ImGui::EndChild();
+    for (size_t i = 0; i < count; ++i)
+        if (choices[i].type == destroyerExtra)
+        {
+            ImGui::TextWrapped("Selected: %s", choices[i].name);
+            return true;
+        }
+    ImGui::TextDisabled("Selected: None");
+    return false;
+}
+
 static void DestroyerFrame(float width, float height)
 {
-    ImGui::SetNextWindowPos(ImVec2(width / 2, height / 2), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowPos(ImVec2(width / 2, height / 2), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     SmrDestroyerStatus upgrade = SmrDestroyer(mod);
     bool visible = true, proceed = false;
     if (ImGui::Begin("Spend My Resources - Destroyer Upgrades", &visible,
-            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings))
+            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove))
     {
         DestroyerPicker();
         const auto& choice = kDestroyerUpgrades[destroyerSelection];
         const SmrUpgradeTuning* tuning = SmrGetUpgradeTuning(choice.upgrade);
+        const bool extraSlot = choice.upgrade == SMR_UPGRADE_EXTRA_SLOT;
         ImGui::TextUnformatted(choice.name);
         ImGui::PushTextWrapPos(420);
         if (tuning) DescribeUpgrade(choice.upgrade, *tuning);
-        else if (!choice.upgrade)
-            ImGui::TextWrapped("Planned: One extra slot, with 10%% longer cooldowns for equipped stratagems and Eagle rearm.");
+        else if (extraSlot)
+            ImGui::TextWrapped("Extra slot disabled: check the extra_slot section in destroyer-upgrades.json and the mod log.");
         else ImGui::TextWrapped("Upgrades disabled: check destroyer-upgrades.json and the mod log.");
         ImGui::PopTextWrapPos();
         ImGui::TextDisabled("One solo mission. Resupply and objective stratagems are unchanged.");
         ImGui::Separator();
         if (upgrade.purchased) ImGui::Text("%s already purchased for your next solo mission.", UpgradeName(upgrade.purchased));
-        if (!choice.upgrade) ImGui::TextDisabled("Unavailable: adding a fifth slot is not supported yet.");
-        else if (tuning && !upgrade.purchased)
+        if (upgrade.purchased == SMR_UPGRADE_EXTRA_SLOT)
+            if (const char* name = SmrExtraName(upgrade.extra)) ImGui::Text("Extra stratagem: %s", name);
+        bool extraPicked = false;
+        if (tuning && !upgrade.purchased)
         {
             if (!upgrade.solo) ImGui::TextDisabled("Destroyer upgrades are available in solo play only.");
             else if (!upgrade.available) ImGui::TextDisabled("Upgrade selection unavailable.");
@@ -270,16 +373,15 @@ static void DestroyerFrame(float width, float height)
             {
                 ImGui::Text("Cost at checkout: %u Forge Credits", tuning->forge_credits);
                 ImGui::TextDisabled("Available: %u Forge Credits", upgrade.credits);
+                if (extraSlot) extraPicked = ExtraPicker(width, height);
             }
         }
-        if (choice.upgrade)
-        {
-            const bool canSelect = tuning && upgrade.available && !upgrade.purchased;
-            ImGui::BeginDisabled(!canSelect);
-            if (ImGui::Button("Select upgrade") && canSelect) proceed = SmrSelectUpgrade(mod, choice.upgrade) != 0;
-            ImGui::EndDisabled();
-            ImGui::SameLine();
-        }
+        const bool canSelect = tuning && upgrade.available && !upgrade.purchased && (!extraSlot || extraPicked);
+        ImGui::BeginDisabled(!canSelect);
+        if (ImGui::Button("Select upgrade") && canSelect)
+            proceed = SmrSelectUpgrade(mod, choice.upgrade, extraSlot ? destroyerExtra : 0) != 0;
+        ImGui::EndDisabled();
+        ImGui::SameLine();
         if (ImGui::Button(upgrade.purchased ? "Continue" : "Skip upgrade")) proceed = true;
         char message[192];
         SmrMessage(message, sizeof message);
@@ -306,7 +408,7 @@ static void CheckoutFrame(float width, float height)
         bool ready = SmrBalance(&balance) != 0;
         if (ready) ImGui::Text("Requisition slips: %u", balance);
         else ImGui::TextDisabled("Requisition slips: unavailable");
-        ImGui::TextDisabled("Purchases charge your saved offline profile.");
+        ImGui::TextDisabled("Purchases charge your saved Spend My Resources wallet.");
         ImGui::Separator();
         SmrItem item;
         bool listed = false;
@@ -322,6 +424,8 @@ static void CheckoutFrame(float width, float height)
         {
             SmrDestroyerStatus upgrade = SmrDestroyer(mod);
             ImGui::Text("%s - %u Forge Credits", UpgradeName(upgrade.selected), credits);
+            if (upgrade.selected == SMR_UPGRADE_EXTRA_SLOT)
+                if (const char* name = SmrExtraName(upgrade.extra)) ImGui::Text("Extra stratagem: %s", name);
             ImGui::TextDisabled("Forge Credits available: %u", upgrade.credits);
             if (upgrade.credits < credits) ImGui::TextDisabled("Not enough Forge Credits.");
         }

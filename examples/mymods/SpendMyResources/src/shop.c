@@ -7,6 +7,17 @@ static void ShopMessage(HfMod* mod, const char* text)
     if (changed) HF_API(mod)->log(mod, "%s", text);
 }
 
+static void StopShop(HfMod* mod, const char* text)
+{
+    AcquireSRWLockExclusive(&shop_lock);
+    inventory_ready = exchange_ready = forge_credits_ready = 0;
+    exchange.pending = 0;
+    charge.state = CHARGE_IDLE;
+    shop_failed = 1;
+    ReleaseSRWLockExclusive(&shop_lock);
+    ShopMessage(mod, text);
+}
+
 int SmrBalance(unsigned* out)
 {
     AcquireSRWLockShared(&shop_lock);
@@ -61,6 +72,7 @@ int SmrQuoteLoadout(SmrLoadoutQuote* out)
 static void ShopTick(HfMod* mod, float dt, void* user)
 {
     const HfApi* api = HF_API(mod);
+    ExtraSlotTick(mod, dt);
     if (shop_failed) return;
     if (!game_base)
     {
@@ -74,6 +86,7 @@ static void ShopTick(HfMod* mod, float dt, void* user)
         game_base = game;
         inventory_remove = (void (*)(uintptr_t, uint32_t, uint32_t))(game + 0x136F5E0);
         inventory_add = (void (*)(uintptr_t, uint32_t, uint32_t, uint32_t, const char*, int))(game + 0x136EF80);
+        InitExtraSlot(mod);
     }
     if (!InstallReadyGate(mod))
     {
@@ -84,6 +97,8 @@ static void ShopTick(HfMod* mod, float dt, void* user)
         return;
     }
     uintptr_t manager = Inventory(api);
+    if (!TrackWallet(mod, manager)) manager = 0;
+    if (shop_failed) return;
     ReadCurrencies(mod, manager);
     ProcessExchange(mod, manager);
     if (shop_failed) return;
@@ -100,7 +115,7 @@ static void ShopTick(HfMod* mod, float dt, void* user)
     checkout_valid = selection_read;
     ReleaseSRWLockExclusive(&shop_lock);
     if (became_ready && state == CHARGE_IDLE)
-        ShopMessage(mod, "Purchases deduct real requisition from this offline profile.");
+        ShopMessage(mod, "Purchases charge your saved Spend My Resources wallet.");
 
     ProcessPurchase(mod, manager, ready, balance, state);
 }

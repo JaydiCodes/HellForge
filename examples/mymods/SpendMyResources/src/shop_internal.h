@@ -1,10 +1,13 @@
 #pragma once
 #include "shop.h"
 #include "access_items.h"
-#include "currencies.h"
+#include "currency_ledger.h"
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
+
+enum { DELIVERY_EAGLE = 0, DELIVERY_ORBITAL = 1, DELIVERY_MISSION = 4, DELIVERY_BARRAGE = 5, DELIVERY_REARM = 7 };
+enum { HUD_MISSION = 1, HUD_SUPPORT = 2, HUD_DEFENSIVE = 3, HUD_SPECIAL = 4 };
 
 static unsigned char access[PRICE_COUNT];
 static unsigned char deployed_access[PRICE_COUNT];
@@ -22,6 +25,7 @@ static uint64_t auto_ready_selection;
 enum { DESTROYER_IDLE, DESTROYER_REQUESTED, DESTROYER_OPEN, DESTROYER_CONTINUE };
 static volatile LONG destroyer_gate;
 static SmrUpgrade upgrade_selected, upgrade_purchased;
+static uint32_t extra_pick;
 static unsigned currency_amount[CURRENCY_COUNT], currency_cap[CURRENCY_COUNT];
 static int exchange_ready, forge_credits_ready;
 static struct {
@@ -36,6 +40,9 @@ static struct {
     uint64_t mask;
     unsigned total, credits;
     SmrUpgrade upgrade;
+    uint32_t extra;
 } charge;
 
 static void ShopMessage(HfMod* mod, const char* text);
+static void StopShop(HfMod* mod, const char* text);
+static int DestroyerSolo(HfMod* mod);

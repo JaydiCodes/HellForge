@@ -13,13 +13,13 @@ static int ReadUpgradeConfig(const std::wstring& path, SmrUpgradeTuning tuning[S
     }
     if (document.kind != Value::Object)
     {
-        snprintf(result, size, "Expected an object containing the four upgrade sections.");
+        snprintf(result, size, "Expected an object containing the upgrade sections.");
         return 0;
     }
     constexpr unsigned eagle = 1u << SMR_UPGRADE_EAGLE,
         percentCooldown = (1u << SMR_UPGRADE_ORBITAL) | (1u << SMR_UPGRADE_DEFENSIVE) | (1u << SMR_UPGRADE_SUPPORT),
-        all = eagle | percentCooldown;
-    constexpr const char* sections[] = {"", "orbital", "eagle", "defensive", "support"};
+        required = eagle | percentCooldown, all = required | (1u << SMR_UPGRADE_EXTRA_SLOT);
+    constexpr const char* sections[] = {"", "orbital", "eagle", "defensive", "support", "extra_slot"};
     constexpr struct {
         const char* name;
         unsigned sections;
@@ -81,7 +81,7 @@ static int ReadUpgradeConfig(const std::wstring& path, SmrUpgradeTuning tuning[S
             }
     }
     for (unsigned i = 1; i < SMR_UPGRADE_COUNT; ++i)
-        if (!(seenSections & (1u << i)))
+        if ((required & (1u << i)) && !(seenSections & (1u << i)))
         {
             snprintf(result, size, "Missing upgrade section: %s.", sections[i]);
             return 0;

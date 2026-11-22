@@ -7,6 +7,7 @@ void SmrFinishCheckout(int ready)
     {
         AcquireSRWLockExclusive(&shop_lock);
         upgrade_selected = SMR_UPGRADE_NONE;
+        if (upgrade_purchased != SMR_UPGRADE_EXTRA_SLOT) extra_pick = 0;
         InterlockedExchange(&auto_ready, 0);
         ReleaseSRWLockExclusive(&shop_lock);
     }
@@ -51,6 +52,7 @@ int SmrBuyCheckout(HfMod* mod)
     charge.total = total;
     charge.credits = credits;
     charge.upgrade = upgrade_selected;
+    charge.extra = upgrade_selected == SMR_UPGRADE_EXTRA_SLOT ? extra_pick : 0;
     charge.state = CHARGE_QUEUED;
     InterlockedExchange(&auto_ready, 0);
     ReleaseSRWLockExclusive(&shop_lock);
@@ -74,8 +76,9 @@ static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, un
     uint64_t unpaid = UnpaidItems(selected, &total), mask = charge.mask;
     unsigned price = charge.total, credits = charge.credits;
     SmrUpgrade upgrade = charge.upgrade;
+    uint32_t extra = charge.extra;
     int upgrade_valid = upgrade && upgrade_selected == upgrade && !upgrade_purchased &&
-        credits == UpgradeCost(upgrade);
+        credits == UpgradeCost(upgrade) && (upgrade != SMR_UPGRADE_EXTRA_SLOT || extra == extra_pick);
     ReleaseSRWLockShared(&shop_lock);
     const HfApi* api = HF_API(mod);
     const uint32_t credit_id = kCurrencies[FORGE_CREDITS].id;
@@ -83,7 +86,7 @@ static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, un
     if (api->game_state(mod) != HF_STATE_SHIP || !manager || !readable || unpaid != mask || total != price ||
         (price && (!balance_ready || balance < price)) ||
         (credits && (!upgrade_valid || !ItemRecord(api, manager, credit_id, &credit_balance) ||
-            credit_balance < credits || !CanApplyUpgrade(mod, upgrade))))
+            credit_balance < credits || !CanApplyUpgrade(mod, upgrade, extra))))
     {
         AcquireSRWLockExclusive(&shop_lock);
         charge.state = CHARGE_IDLE;
@@ -92,15 +95,13 @@ static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, un
         return;
     }
     unsigned after = balance, credits_after = credit_balance;
-    char detail[192], message[320];
+    char detail[128] = "Currency ledger saved.", message[192];
     int paid = 0;
     if ((price && !DeductRuntime(api, manager, REQUISITION, price, balance, &after)) ||
         (credits && !DeductRuntime(api, manager, credit_id, credits, credit_balance, &credits_after)))
-        snprintf(detail, sizeof detail, "Runtime deduction failed verification; profile NOT edited.");
-    else if (price && credits)
-        paid = SmrDeductProfilePair(logs_folder, REQUISITION, price, credit_id, credits, detail, sizeof detail);
+        snprintf(detail, sizeof detail, "Runtime deduction failed verification; ledger unchanged.");
     else
-        paid = SmrDeductProfile(logs_folder, price ? REQUISITION : credit_id, price ? price : credits, detail, sizeof detail);
+        paid = SaveTransaction(api, manager, detail, sizeof detail);
     if (paid)
     {
         AcquireSRWLockExclusive(&shop_lock);
@@ -122,11 +123,6 @@ static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, un
         ShopMessage(mod, "Loadout purchased. Readying automatically.");
         return;
     }
-    AcquireSRWLockExclusive(&shop_lock);
-    inventory_ready = exchange_ready = forge_credits_ready = 0;
-    shop_failed = 1;
-    charge.state = CHARGE_IDLE;
-    ReleaseSRWLockExclusive(&shop_lock);
-    snprintf(message, sizeof message, "Purchase stopped after native deduction. %s No access or upgrade granted; shop disabled.", detail);
-    ShopMessage(mod, message);
+    snprintf(message, sizeof message, "Purchase stopped. %s No access or upgrade granted; shop disabled.", detail);
+    StopShop(mod, message);
 }

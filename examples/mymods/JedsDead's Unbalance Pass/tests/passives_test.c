@@ -19,6 +19,9 @@ static HfPassives state;
 static int row_ready = 1, live_allowed = 1;
 static unsigned live_calls, releases;
 static double multiplier = 0.3;
+static HfRef swap_targets[19];
+static unsigned swap_calls, feed_calls;
+static int refuse_arbitrator;
 
 static void Log(HfMod* mod, const char* format, ...)
 {
@@ -67,6 +70,30 @@ static int SetLive(HfMod* mod, HfRef target, const HfField* field, const HfValue
     return HF_APPLIES_NOW;
 }
 
+static int SetField(HfMod* mod, HfRef target, const HfField* field, const HfValue* value)
+{
+    assert(target && swap_calls < sizeof swap_targets / sizeof swap_targets[0]);
+    for (unsigned i = 0; i < swap_calls; i++) assert(swap_targets[i] != target);
+    swap_targets[swap_calls++] = target;
+    assert(field->size == 4 && field->type == HF_TYPE_U32 && value->type == HF_TYPE_U32);
+    if (target == HF_ENTITY_R2124_CONSTITUTION)
+    {
+        assert(!strcmp(field->component, "WeaponRoundsComponentData") && field->offset == 64 && value->number == 305);
+        feed_calls++;
+    }
+    else
+    {
+        assert(!strcmp(field->component, "ProjectileWeaponComponentData") && field->offset == 0);
+        if (target == HF_ENTITY_AR61_TENDERIZER) assert(value->number == 135);
+        if (target == HF_ENTITY_AR11_ARBITRATOR)
+        {
+            assert(value->number == 276);
+            return refuse_arbitrator;
+        }
+    }
+    return 0;
+}
+
 int main(void)
 {
     HfApi api = {0};
@@ -86,6 +113,8 @@ int main(void)
     api.size = offsetof(HfApi, on_game_thread);
     assert(hellforge_mod_init(&api, &mod) != 0 && set_calls == 0);
     api.size = sizeof api;
+    assert(hellforge_mod_init(&api, &mod) != 0 && set_calls == 0 && swap_calls == 0);
+    api.set_field = SetField;
 
     set_result = 0;
     assert(hellforge_mod_init(&api, &mod) != 0 && set_calls == 1 && registered_tick == NULL);
@@ -93,10 +122,17 @@ int main(void)
     tick_result = 0;
     assert(hellforge_mod_init(&api, &mod) != 0 && set_calls == 3);
     assert(last_armor == HF_PASSIVE_KIT && last_second == HF_PASSIVE_KIT);
+    assert(swap_calls == 0);
 
     tick_result = 1;
+    refuse_arbitrator = 1;
+    assert(hellforge_mod_init(&api, &mod) == 0);
+    assert(swap_calls == 19 && feed_calls == 1 && strstr(last_log, "18 queued, 1 refused"));
+    swap_calls = feed_calls = 0;
+    refuse_arbitrator = 0;
     assert(hellforge_mod_init(&api, &mod) == 0);
     assert(last_armor == HF_PASSIVE_KIT && last_second == BLUNT_FORCE_MITIGATION && registered_tick);
+    assert(swap_calls == 19 && feed_calls == 1 && strstr(last_log, "19 queued, 0 refused"));
 
     state.want_armor = HF_PASSIVE_KIT;
     state.want_second = BLUNT_FORCE_MITIGATION;
@@ -161,6 +197,6 @@ int main(void)
     readable = 0;
     registered_tick(&mod, 0.25f, NULL);
     assert(releases == 3 && multiplier == 0.3 && UnbalanceMitigationStatus() == UNBALANCE_WAITING);
-    puts("passive override tests passed");
+    puts("passive override and deferred projectile swap tests passed");
     return 0;
 }

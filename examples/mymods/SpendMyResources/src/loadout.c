@@ -32,13 +32,18 @@ static uintptr_t LocalLoadout(const HfApi* api, uintptr_t game, uint64_t peer)
     return 0;
 }
 
-static uintptr_t ReadLocalLoadout(HfMod* mod)
+static uint64_t LocalPeer(HfMod* mod)
 {
     const HfApi* api = HF_API(mod);
     const HfLocalUser* local = hf_global_LocalUser(mod);
     uint64_t peer = 0;
     if (!local || api->read((uintptr_t)local + offsetof(HfLocalUser, peer), &peer, sizeof peer)) return 0;
-    return LocalLoadout(api, game_base, peer);
+    return peer;
+}
+
+static uintptr_t ReadLocalLoadout(HfMod* mod)
+{
+    return LocalLoadout(HF_API(mod), game_base, LocalPeer(mod));
 }
 
 static int ReadStratagems(const HfApi* api, uintptr_t loadout, uint32_t* stratagems, uint32_t* count)
@@ -51,6 +56,13 @@ static int ReadStratagems(const HfApi* api, uintptr_t loadout, uint32_t* stratag
     return 1;
 }
 
+static int ContainsPick(const uint32_t* picks, uint32_t count, uint32_t type)
+{
+    for (uint32_t i = 0; i < count; ++i)
+        if (picks[i] == type) return 1;
+    return 0;
+}
+
 static int SelectedItems(HfMod* mod, uint64_t* selected)
 {
     const HfApi* api = HF_API(mod);
@@ -59,13 +71,18 @@ static int SelectedItems(HfMod* mod, uint64_t* selected)
     if (!ReadStratagems(api, loadout, stratagems, &count)) return 0;
     for (size_t i = 0; i < 3; ++i)
         if (api->read(loadout + i * WEAPON_STRIDE, &weapons[i], sizeof weapons[i])) return 0;
+    AcquireSRWLockShared(&shop_lock);
+    uint32_t extra = upgrade_selected == SMR_UPGRADE_EXTRA_SLOT || upgrade_purchased == SMR_UPGRADE_EXTRA_SLOT ?
+        extra_pick : 0;
+    ReleaseSRWLockShared(&shop_lock);
+    if (extra && (api->game_state(mod) != HF_STATE_SHIP || !DestroyerSolo(mod))) extra = 0;
     *selected = 0;
     for (size_t i = 0; i < PRICE_COUNT; ++i)
     {
         int weapon = kLoadoutPrices[i].kind == PRICE_WEAPON;
-        const uint32_t* picks = weapon ? weapons : stratagems;
-        for (uint32_t j = 0; j < (weapon ? 3u : count); ++j)
-            if (picks[j] == kLoadoutPrices[i].id) *selected |= UINT64_C(1) << i;
+        uint32_t type = kLoadoutPrices[i].id;
+        if (weapon ? ContainsPick(weapons, 3, type) : type == extra || ContainsPick(stratagems, count, type))
+            *selected |= UINT64_C(1) << i;
     }
     return 1;
 }

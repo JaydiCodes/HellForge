@@ -20,5 +20,9 @@
     "forge_credits": 50,
     "cooldown_percent": -66,
     "other_cooldown_percent": 100
+  },
+  "extra_slot": {
+    "forge_credits": 50,
+    "other_cooldown_percent": 10
   }
 }

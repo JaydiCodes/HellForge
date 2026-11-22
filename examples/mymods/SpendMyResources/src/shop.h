@@ -34,7 +34,7 @@ typedef struct SmrCurrency {
 
 typedef enum SmrUpgrade {
     SMR_UPGRADE_NONE, SMR_UPGRADE_ORBITAL, SMR_UPGRADE_EAGLE, SMR_UPGRADE_DEFENSIVE, SMR_UPGRADE_SUPPORT,
-    SMR_UPGRADE_COUNT
+    SMR_UPGRADE_EXTRA_SLOT, SMR_UPGRADE_COUNT
 } SmrUpgrade;
 typedef struct SmrUpgradeTuning {
     unsigned forge_credits;
@@ -45,12 +45,22 @@ typedef struct SmrDestroyerStatus {
     unsigned credits;
     int available, solo;
     SmrUpgrade selected, purchased;
+    uint32_t extra;
 } SmrDestroyerStatus;
+
+enum { SMR_MAX_EXTRA_CHOICES = 149 };
+typedef struct SmrExtraChoice {
+    uint32_t type;
+    const char* name;
+    uint32_t category; /* HF_CATEGORY_... */
+} SmrExtraChoice;
 
 int SmrTakeDestroyerRequest(void);
 void SmrFinishDestroyer(int proceed);
 SmrDestroyerStatus SmrDestroyer(HfMod* mod);
-int SmrSelectUpgrade(HfMod* mod, SmrUpgrade upgrade);
+int SmrSelectUpgrade(HfMod* mod, SmrUpgrade upgrade, uint32_t extra);
+size_t SmrExtraChoices(SmrExtraChoice* choices, size_t capacity);
+const char* SmrExtraName(uint32_t type);
 const SmrUpgradeTuning* SmrGetUpgradeTuning(SmrUpgrade upgrade);
 int SmrLoadUpgradeConfig(SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT], char* result, size_t size);
 
@@ -64,15 +74,10 @@ int SmrCheckout(unsigned* total, unsigned* credits, int* pending);
 int SmrCheckoutPaid(void);
 int SmrTakeCheckoutRequest(void);
 void SmrFinishCheckout(int ready);
-int SmrDeductProfile(const char* logs, uint32_t resource, unsigned cost, char* result, size_t size);
-int SmrDeductProfilePair(const char* logs, uint32_t resource, unsigned cost, uint32_t second, unsigned second_cost,
-    char* result, size_t size);
 int SmrLoadPrices(const char* const* names, unsigned* prices, size_t count, char* result, size_t size);
 int SmrCurrencyItem(size_t i, SmrCurrency* out);
 int SmrExchangeQuote(size_t from, size_t to, unsigned batches, unsigned* debit, unsigned* credit);
 int SmrExchange(HfMod* mod, size_t from, size_t to, unsigned batches);
-int SmrExchangeProfile(const char* logs, uint32_t source, unsigned debit, uint32_t target, unsigned credit,
-    char* result, size_t size);
 
 #ifdef __cplusplus
 }

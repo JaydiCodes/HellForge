@@ -5,8 +5,6 @@ static const HfField kDelivery = HF_FIELD(StratagemSettings, delivery);
 static const HfField kHudType = HF_FIELD(StratagemSettings, hud_type);
 static const HfField kUses = HF_FIELD(StratagemSettings, uses);
 static const HfField kCallIn = HF_FIELD(StratagemSettings, call_in_time);
-enum { DELIVERY_EAGLE = 0, DELIVERY_ORBITAL = 1, DELIVERY_BARRAGE = 5 };
-enum { HUD_MISSION = 1, HUD_SUPPORT = 2, HUD_DEFENSIVE = 3 };
 enum { MAX_UPGRADE_EDITS = MAX_STRATAGEMS * 2 + 1 };
 typedef struct UpgradeEdit {
     uint32_t type;
@@ -56,19 +54,24 @@ SmrDestroyerStatus SmrDestroyer(HfMod* mod)
     AcquireSRWLockShared(&shop_lock);
     SmrDestroyerStatus status = {currency_amount[FORGE_CREDITS],
         solo && forge_credits_ready && !shop_failed && !upgrade_purchased && !upgrade_selected,
-        solo, upgrade_selected, upgrade_purchased};
+        solo, upgrade_selected, upgrade_purchased, extra_pick};
     ReleaseSRWLockShared(&shop_lock);
     return status;
 }
 
-int SmrSelectUpgrade(HfMod* mod, SmrUpgrade upgrade)
+int SmrSelectUpgrade(HfMod* mod, SmrUpgrade upgrade, uint32_t extra)
 {
     int eligible = HF_API(mod)->game_state(mod) == HF_STATE_SHIP && DestroyerSolo(mod);
     AcquireSRWLockExclusive(&shop_lock);
     int allowed = eligible && SmrGetUpgradeTuning(upgrade) &&
         InterlockedCompareExchange(&destroyer_gate, 0, 0) == DESTROYER_OPEN &&
-        forge_credits_ready && !shop_failed && !upgrade_purchased && !upgrade_selected;
-    if (allowed) upgrade_selected = upgrade;
+        forge_credits_ready && !shop_failed && !upgrade_purchased && !upgrade_selected &&
+        (upgrade == SMR_UPGRADE_EXTRA_SLOT ? ExtraOptionListed(extra) : extra == 0);
+    if (allowed)
+    {
+        upgrade_selected = upgrade;
+        extra_pick = extra;
+    }
     ReleaseSRWLockExclusive(&shop_lock);
     if (!allowed) ShopMessage(mod, "Destroyer upgrade selection unavailable.");
     return allowed;
@@ -94,13 +97,20 @@ static int AddFixedEdit(HfMod* mod, UpgradeEdit* edits, size_t* count, uint32_t 
     return 1;
 }
 
-static int PlanUpgrade(HfMod* mod, uintptr_t loadout, SmrUpgrade upgrade, UpgradeEdit* edits, size_t* count)
+static int PlanUpgrade(HfMod* mod, uintptr_t loadout, SmrUpgrade upgrade, uint32_t extra, UpgradeEdit* edits, size_t* count)
 {
     const HfApi* api = HF_API(mod);
     uint32_t picks[MAX_STRATAGEMS], slots;
     *count = 0;
     const SmrUpgradeTuning* tuning = SmrGetUpgradeTuning(upgrade);
     if (!tuning || !ReadStratagems(api, loadout, picks, &slots)) return 0;
+    uint32_t native_slots = slots;
+    if (extra)
+    {
+        if (slots >= MAX_STRATAGEMS || ContainsPick(picks, slots, extra)) return 0;
+        picks[slots++] = extra;
+    }
+    int deployed_extra = extra && api->game_state(mod) == HF_STATE_MISSION;
     const double cooldown_factor = (100 + tuning->cooldown_percent) / 100;
     const double other_factor = 1 + tuning->other_cooldown_percent / 100;
     int has_eagle = 0;
@@ -109,6 +119,13 @@ static int PlanUpgrade(HfMod* mod, uintptr_t loadout, SmrUpgrade upgrade, Upgrad
         uint32_t type = picks[i];
         if (!type || type == HF_STRATAGEM_RESUPPLY || type == HF_STRATAGEM_DROPOFF_HELLBOMB ||
             type == HF_STRATAGEM_EAGLE_REARM) continue;
+        if (deployed_extra && i < native_slots)
+        {
+            uint8_t mission_grant;
+            if (api->read(loadout + STRATAGEM_SLOTS + i * STRATAGEM_STRIDE + offsetof(ExtraGrantEntry, mission_grant),
+                &mission_grant, sizeof mission_grant)) return 0;
+            if (mission_grant) continue;
+        }
         uint32_t j = 0;
         while (j < i && picks[j] != type) ++j;
         if (j < i) continue;
@@ -149,11 +166,26 @@ static int PlanUpgrade(HfMod* mod, uintptr_t loadout, SmrUpgrade upgrade, Upgrad
     return *count != 0;
 }
 
-static int CanApplyUpgrade(HfMod* mod, SmrUpgrade upgrade)
+static int CanApplyUpgrade(HfMod* mod, SmrUpgrade upgrade, uint32_t extra)
 {
+    const HfApi* api = HF_API(mod);
     UpgradeEdit edits[MAX_UPGRADE_EDITS];
     size_t count;
-    return DestroyerSolo(mod) && PlanUpgrade(mod, ReadLocalLoadout(mod), upgrade, edits, &count);
+    uintptr_t loadout = ReadLocalLoadout(mod);
+    if (!DestroyerSolo(mod) || !PlanUpgrade(mod, loadout, upgrade, extra, edits, &count)) return 0;
+    if (upgrade == SMR_UPGRADE_EXTRA_SLOT)
+    {
+        HfStratagemSettings row;
+        uint32_t picks[MAX_STRATAGEMS], slots;
+        if (!ReadStratagems(api, loadout, picks, &slots)) return 0;
+        uintptr_t at = EligibleExtra(api, Inventory(api), picks, slots, extra, &row);
+        if (!at || !ExtraPackages(mod, at, &row))
+        {
+            api->log(mod, "Extra Stratagem Slot checkout refused: pick is no longer eligible or its assets are unavailable.");
+            return 0;
+        }
+    }
+    return 1;
 }
 
 static void ResetUpgrade(HfMod* mod)
@@ -166,16 +198,26 @@ static void ResetUpgrade(HfMod* mod)
     }
 }
 
+static int ApplyUpgradeEdits(HfMod* mod, const UpgradeEdit* edits, size_t count)
+{
+    for (size_t i = 0; i < count; ++i)
+    {
+        if (!HF_API(mod)->set_live(mod, edits[i].type, edits[i].field, &edits[i].value, 0)) return 0;
+        applied_edits[upgraded_count++] = edits[i];
+    }
+    return 1;
+}
+
 static void ApplyUpgrade(HfMod* mod, uintptr_t loadout, int preparing)
 {
     AcquireSRWLockShared(&shop_lock);
     SmrUpgrade purchased = upgrade_purchased;
     ReleaseSRWLockShared(&shop_lock);
-    if (!purchased || upgraded_count || !DestroyerSolo(mod)) return;
+    if (!purchased || purchased == SMR_UPGRADE_EXTRA_SLOT || upgraded_count || !DestroyerSolo(mod)) return;
     const HfApi* api = HF_API(mod);
     UpgradeEdit edits[MAX_UPGRADE_EDITS];
     size_t count;
-    if (PlanUpgrade(mod, loadout, purchased, edits, &count))
+    if (PlanUpgrade(mod, loadout, purchased, 0, edits, &count))
     {
         if (!preparing)
             for (size_t i = 0; i < count; ++i)
@@ -184,12 +226,7 @@ static void ApplyUpgrade(HfMod* mod, uintptr_t loadout, int preparing)
                     ShopMessage(mod, "Too late to set stratagem uses; upgrade retained for a later solo mission.");
                     return;
                 }
-        for (size_t i = 0; i < count; ++i)
-        {
-            if (!api->set_live(mod, edits[i].type, edits[i].field, &edits[i].value, 0)) break;
-            applied_edits[upgraded_count++] = edits[i];
-        }
-        if (upgraded_count == count)
+        if (ApplyUpgradeEdits(mod, edits, count))
         {
             api->log(mod, "Destroyer upgrade %d active: %u stratagem fields updated.", purchased, (unsigned)count);
             return;
