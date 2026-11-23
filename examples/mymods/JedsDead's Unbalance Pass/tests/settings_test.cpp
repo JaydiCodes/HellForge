@@ -22,8 +22,10 @@ int main(int argc, char** argv)
     const editorapp::Host host{&api, nullptr, {}, {}, nullptr, nullptr, nullptr};
 
     assert(CanOpenOverlay(&api, nullptr) && hf_overlay_hotkey == VK_F7);
-    gameState = HF_STATE_MISSION;
+    gameState = HF_STATE_PREPARE_MISSION;
     assert(!CanOpenOverlay(&api, nullptr));
+    gameState = HF_STATE_MISSION;
+    assert(CanOpenOverlay(&api, nullptr));
 
     editorapp::Init(host);
     assert(requested == 70 && logs == 0);

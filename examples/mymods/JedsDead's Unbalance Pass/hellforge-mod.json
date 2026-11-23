@@ -3,7 +3,7 @@
   "id": "jedsdeads-unbalance-pass",
   "name": "JedsDead's UnBalance Pass",
   "version": "1.0.1",
-  "description": "A broad gameplay balance pass with deferred projectile swaps and Blunt-Force Mitigation as a second armor passive in solo play.",
+  "description": "A broad gameplay balance pass with deferred projectile swaps and Blunt-Force Mitigation as a second armor passive in solo play. With the overlay build, press F7 on the ship or in a mission for knockdown mitigation settings.",
   "gameplay": true,
   "code": { "dll": "unbalance_pass.dll", "sdk": 6 }
 }
