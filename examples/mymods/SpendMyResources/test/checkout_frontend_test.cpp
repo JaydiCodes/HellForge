@@ -17,10 +17,11 @@ static bool windowClosed;
 static int exchangeCalls;
 static bool upgradeRequested, upgradeContinued, checkoutPaid;
 static int purchaseCalls;
-static SmrDestroyerStatus upgrade = {50, 1, 1, SMR_UPGRADE_NONE, SMR_UPGRADE_NONE, 0};
+static SmrDestroyerStatus upgrade = {{0, 40, 20, 3, 50}, 1, 1, SMR_UPGRADE_NONE, SMR_UPGRADE_NONE, 0};
 static const SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT] = {
-    {}, {10, -66, 50, 0, 0, 0}, {10, 0, 50, 20, 2, 30},
-    {10, -66, 50, 0, 0, 0}, {7, -62.5, -25, 0, 0, 0}, {50, 0, 10, 0, 0, 0},
+    {}, {{0, 10, 5, 1, 10}, -66, 50, 0, 0, 0}, {{0, 10, 5, 1, 10}, 0, 50, 20, 2, 30},
+    {{0, 10, 5, 1, 10}, -66, 50, 0, 0, 0}, {{0, 2, 0, 1, 7}, -62.5, -25, 0, 0, 0},
+    {{0, 10, 5, 1, 50}, 0, 10, 0, 0, 0},
 };
 static constexpr SmrExtraChoice extraChoices[] = {
     {HF_STRATAGEM_EAGLE_500KG_BOMB, "Eagle 500kg Bomb", HF_CATEGORY_OFFENSIVE},
@@ -73,12 +74,12 @@ extern "C" size_t SmrExtraChoices(SmrExtraChoice* choices, size_t capacity)
 }
 extern "C" int SmrBalance(unsigned* balance) { *balance = 5000; return 1; }
 extern "C" int SmrQuoteLoadout(SmrLoadoutQuote* out) { *out = loadoutQuote; return quoteValid; }
-extern "C" int SmrCheckout(unsigned* total, unsigned* credits, int* pending)
+extern "C" int SmrCheckout(unsigned* total, unsigned upgrade_price[CURRENCY_COUNT], int* pending)
 {
     *total = due;
-    *credits = tuning[upgrade.selected].forge_credits;
+    memcpy(upgrade_price, tuning[upgrade.selected].price, sizeof tuning[0].price);
     *pending = transactionPending;
-    return (due || *credits) && !transactionPending;
+    return (due || upgrade_price[FORGE_CREDITS]) && !transactionPending;
 }
 extern "C" int SmrCheckoutPaid() { return checkoutPaid; }
 extern "C" int SmrBuyCheckout(HfMod*) { ++purchaseCalls; transactionPending = 1; return 1; }
@@ -308,7 +309,10 @@ int main(int argc, char** argv)
     }
     PressModalButton("Select upgrade");
     CHECK(!upgrade.selected && !purchaseCalls && modalShown);
-    CheckModalText("Choose an extra stratagem", "Cost at checkout: 50 Forge Credits", "Selected: None");
+    CheckModalText("Choose an extra stratagem", "Cost at checkout:", "Selected: None");
+    CheckModalText("50 Forge Credits (50 available)", "10 Common samples (40 available)",
+        "1 Super sample (3 available)");
+    CheckModalText("5 Rare samples (20 available)");
     CheckModalText("Offensive", "Support", "Defensive");
     const ImRect first = PressExtraTile(HF_STRATAGEM_EAGLE_500KG_BOMB);
     const ImRect second = PressExtraTile(HF_STRATAGEM_EAGLE_AIRSTRIKE);
@@ -320,7 +324,8 @@ int main(int argc, char** argv)
     requested = true;
     editorapp::Tick();
     CHECK(modalShown && editorapp::shopOpen);
-    CheckModalText("Extra stratagem: Eagle Airstrike", "Extra Stratagem Slot - 50 Forge Credits");
+    CheckModalText("Extra stratagem: Eagle Airstrike", "Extra Stratagem Slot",
+        "Total due: 2750 Req + 50 Forge Credits + 10 Common samples + 5 Rare samples + 1 Super sample");
     io.AddKeyEvent(ImGuiKey_Escape, true);
     Draw();
     CHECK(!modalShown && !upgrade.selected && !upgrade.extra);
@@ -352,18 +357,22 @@ int main(int argc, char** argv)
     Draw();
     PressModalButton("##Defensive Upgrade");
     CheckModalText("Equipped defensive stratagems: -66% to cooldowns and unlimited uses.", "and Eagle rearm: +50%",
-        "Cost at checkout: 10 Forge Credits");
+        "10 Forge Credits (50 available)");
     PressModalButton("##Support Upgrade");
     CheckModalText("Equipped support stratagems: -62.5% to cooldowns and unlimited uses.", "and Eagle rearm: -25%",
-        "Cost at checkout: 7 Forge Credits");
+        "7 Forge Credits (50 available)");
     PressModalButton("Select upgrade");
     CHECK(upgrade.selected == SMR_UPGRADE_SUPPORT && upgradeContinued && !purchaseCalls && !modalShown && !automaticReady);
     requested = true;
     editorapp::Tick();
     CHECK(modalShown && editorapp::shopOpen);
-    CheckModalText("Total due: 2750 Req + 7 Forge Credits");
+    CheckModalText("Total due: 2750 Req + 7 Forge Credits + 2 Common samples + 1 Super sample",
+        "2 Common samples (40 available)", "1 Super sample (3 available)");
+    upgrade.balance[SUPER_SAMPLES] = 0;
+    CheckModalText("1 Super sample (0 available, not enough)");
+    upgrade.balance[SUPER_SAMPLES] = 3;
     due = 0;
-    CheckModalText("Total due: 7 Forge Credits");
+    CheckModalText("Total due: 7 Forge Credits + 2 Common samples + 1 Super sample");
     PressModalButton("Purchase");
     CHECK(purchaseCalls == 1 && transactionPending && !upgrade.purchased);
     transactionPending = 0;

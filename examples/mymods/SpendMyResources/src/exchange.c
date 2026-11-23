@@ -58,16 +58,16 @@ static void ReadCurrencies(HfMod* mod, uintptr_t manager)
 {
     unsigned amounts[CURRENCY_COUNT] = {0}, caps[CURRENCY_COUNT] = {0};
     int on_ship = manager && HF_API(mod)->game_state(mod) == HF_STATE_SHIP;
-    int ready = on_ship, credits_ready = 0;
+    int ready = on_ship, funds_ready = on_ship;
     for (size_t i = 0; i < CURRENCY_COUNT && on_ship; ++i)
     {
         uintptr_t record = ItemRecord(HF_API(mod), manager, kCurrencies[i].id, &amounts[i]);
         ready &= record && !HF_API(mod)->read(record + 0x18, &caps[i], sizeof caps[i]);
-        if (i == FORGE_CREDITS) credits_ready = record != 0;
+        if (i) funds_ready &= record != 0;
     }
     AcquireSRWLockExclusive(&shop_lock);
     exchange_ready = ready;
-    forge_credits_ready = credits_ready;
+    upgrade_funds_ready = funds_ready;
     memcpy(currency_amount, amounts, sizeof amounts);
     memcpy(currency_cap, caps, sizeof caps);
     ReleaseSRWLockExclusive(&shop_lock);

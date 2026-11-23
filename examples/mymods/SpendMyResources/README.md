@@ -136,27 +136,29 @@ AGENTS: DO NOT MODIFY BELOW TEXT
 		- FC = 750 Points
 	- In each case spend either: (These can be stacked)
     	- Some items might not have all tiers or have all 3 tiers or just 1 tier
-		- 10 common = "Plus"
-		- 10 Rare = "Elite"
-		- 10 Super = "Super"
+		- 50 common = "Plus"
+		- 25 Rare = "Elite"
+		- 5 Super = "Super"
+    - Helldiver:
+        - Plus: +1 stim
+        - Elite: 1 of either:
+            - +25% armor rating
+            - +25% sprint speed, -10% stamina
+            - +25% stamina, -10% sprint speed
+        - Super: 1 of either:
+            - When reaching 10% HP, auto stim. Only once every 30 seconds.
 	- Primaries & Secondaries
-    	- Plus: + 20% magazines (or total ammo)
+    	- Plus: +2 Mags
+    	- Elite: 2 choices
+        	- Direct hit AP +1, Direct hit Durable damage -25%
+        	- Direct hit AP -1, Direct hit Durable damage +25%
 	- Strats
 		- Eagles
     		- Elite: +1 Use
     		- Super:
-        		- 500KG: Airstrike drop pattern 3, meaning many 500Kgs at once
-		- Orbitals
-    		- Elite: 
-        		- All "barrages": 1 extra Salvo
-		- Support weapons
-		- Backpacks
-		- Vehicles
-    		- FRVs
-    		- Exosuits
-		- Turrets
+        		- 500KG: Airstrike drop pattern 0, meaning many 500Kgs at once
 	- **Destroyer upgrades** 
-    	- Spend 10 FC to upgrade destroyer (limit to one of either):
+    	- Spend 50 FC + 10 common + 5 rare + 1 super to upgrade destroyer (limit to one of either):
     		- Add one more strat slot
         		- Debuff: All equiped stratagems have a 10% increased cooldown (Includes Eagle rearm time)
     		- Orbitals upgrade (Use precision strike icon): 

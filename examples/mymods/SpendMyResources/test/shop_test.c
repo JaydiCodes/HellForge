@@ -191,12 +191,12 @@ int SmrWriteLedger(const SmrWallet* wallet, char* result, size_t size)
 }
 int SmrLoadUpgradeConfig(SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT], char* result, size_t size)
 {
-    tuning[SMR_UPGRADE_ORBITAL] = (SmrUpgradeTuning){.forge_credits = 10, .cooldown_percent = -66, .other_cooldown_percent = 50};
-    tuning[SMR_UPGRADE_EAGLE] = (SmrUpgradeTuning){.forge_credits = 10, .other_cooldown_percent = 50,
+    tuning[SMR_UPGRADE_ORBITAL] = (SmrUpgradeTuning){.price = {0, 10, 5, 1, 10}, .cooldown_percent = -66, .other_cooldown_percent = 50};
+    tuning[SMR_UPGRADE_EAGLE] = (SmrUpgradeTuning){.price = {0, 10, 5, 1, 10}, .other_cooldown_percent = 50,
         .cooldown_seconds = 20, .call_in_extra_seconds = 2, .rearm_seconds = 30};
-    tuning[SMR_UPGRADE_DEFENSIVE] = (SmrUpgradeTuning){.forge_credits = 10, .cooldown_percent = -75, .other_cooldown_percent = 50};
-    tuning[SMR_UPGRADE_SUPPORT] = (SmrUpgradeTuning){.forge_credits = 13, .cooldown_percent = -50, .other_cooldown_percent = 50};
-    tuning[SMR_UPGRADE_EXTRA_SLOT] = (SmrUpgradeTuning){.forge_credits = 50, .other_cooldown_percent = 10};
+    tuning[SMR_UPGRADE_DEFENSIVE] = (SmrUpgradeTuning){.price = {0, 10, 5, 1, 10}, .cooldown_percent = -75, .other_cooldown_percent = 50};
+    tuning[SMR_UPGRADE_SUPPORT] = (SmrUpgradeTuning){.price = {0, 10, 5, 1, 13}, .cooldown_percent = -50, .other_cooldown_percent = 50};
+    tuning[SMR_UPGRADE_EXTRA_SLOT] = (SmrUpgradeTuning){.price = {[FORGE_CREDITS] = 50}, .other_cooldown_percent = 10};
     return 1;
 }
 
@@ -219,9 +219,9 @@ int SmrLoadPrices(const char* const* names, unsigned* prices, size_t count, char
 }
 static int GearCheckout(unsigned* total, int* pending)
 {
-    unsigned credits;
-    int ready = SmrCheckout(total, &credits, pending);
-    CHECK(!credits);
+    unsigned price[CURRENCY_COUNT];
+    int ready = SmrCheckout(total, price, pending);
+    for (size_t i = 0; i < CURRENCY_COUNT; ++i) CHECK(!price[i]);
     return ready;
 }
 static void Tick(void) { ShopTick(&mod, 1.0f / 60.0f, NULL); }
@@ -515,7 +515,8 @@ static void TestDestroyer(void)
     unsigned char* card = calloc(1, READY_PEER + sizeof local.peer);
     CHECK(card);
     memcpy(card + READY_PEER, &local.peer, sizeof local.peer);
-    const uint32_t credit_id = kCurrencies[FORGE_CREDITS].id;
+    const uint32_t credit_id = kCurrencies[FORGE_CREDITS].id, common_id = kCurrencies[COMMON_SAMPLES].id;
+    const uint32_t rare_id = kCurrencies[RARE_SAMPLES].id, super_id = kCurrencies[SUPER_SAMPLES].id;
     const uint32_t picks[] = {HF_STRATAGEM_ORBITAL_PRECISION_STRIKE, HF_STRATAGEM_ORBITAL_WALKING_BARRAGE,
         HF_STRATAGEM_MS11_SOLO_SILO, HF_STRATAGEM_ORBITAL_PRECISION_STRIKE, HF_STRATAGEM_RESUPPLY,
         HF_STRATAGEM_DROPOFF_HELLBOMB};
@@ -533,9 +534,11 @@ static void TestDestroyer(void)
     CHECK(!SmrSelectUpgrade(&mod, SMR_UPGRADE_EAGLE, 0) && SmrDestroyer(&mod).selected == SMR_UPGRADE_ORBITAL);
     SmrFinishDestroyer(1);
     Tick();
-    unsigned total, credits;
+    unsigned total, price[CURRENCY_COUNT];
+    const unsigned orbital_price[CURRENCY_COUNT] = {0, 10, 5, 1, 10};
     int pending;
-    CHECK(SmrCheckout(&total, &credits, &pending) && total == 2500 && credits == 10 && !pending);
+    CHECK(SmrCheckout(&total, price, &pending) && total == 2500 && !pending &&
+        !memcmp(price, orbital_price, sizeof price));
     CHECK(!SmrDestroyer(&mod).purchased && Amount(credit_id) == 100 && !wallet_writes);
     SmrFinishCheckout(0);
     CHECK(GearCheckout(&total, &pending));
@@ -546,11 +549,14 @@ static void TestDestroyer(void)
     CHECK(SmrTakeDestroyerRequest() && SmrSelectUpgrade(&mod, SMR_UPGRADE_ORBITAL, 0));
     SmrFinishDestroyer(1);
     CHECK(!ReadyAccessAllowed(&mod, (uintptr_t)card) && SmrTakeCheckoutRequest());
-    CHECK(SmrCheckout(&total, &credits, &pending) && !total && credits == 10 && !pending);
+    CHECK(SmrCheckout(&total, price, &pending) && !total && price[FORGE_CREDITS] == 10 && !pending);
     CHECK(SmrBuyCheckout(&mod) && !SmrExchange(&mod, 0, FORGE_CREDITS, 1));
     Tick();
     CHECK(SmrDestroyer(&mod).purchased == SMR_UPGRADE_ORBITAL && SmrCheckoutPaid() && !live_sets);
     CHECK(Amount(credit_id) == 90 && saved_currency[FORGE_CREDITS] == 90);
+    CHECK(Amount(common_id) == 90 && Amount(rare_id) == 95 && Amount(super_id) == 49);
+    CHECK(saved_currency[COMMON_SAMPLES] == 90 && saved_currency[RARE_SAMPLES] == 95 &&
+        saved_currency[SUPER_SAMPLES] == 49 && SmrDestroyer(&mod).balance[SUPER_SAMPLES] == 49);
     CHECK(Amount(REQUISITION) == 5000 && saved_wallet == 5000 && wallet_writes == 1);
     SmrFinishCheckout(0);
     Put32(history + LOADOUT + STRATAGEM_COUNT, sizeof picks / sizeof picks[0]);
@@ -583,11 +589,25 @@ static void TestDestroyer(void)
     InterlockedExchange(&destroyer_gate, DESTROYER_REQUESTED);
     CHECK(SmrTakeDestroyerRequest() && SmrSelectUpgrade(&mod, SMR_UPGRADE_SUPPORT, 0));
     SmrFinishDestroyer(1);
-    CHECK(SmrCheckout(&total, &credits, &pending) && total == 2500 && credits == 13);
+    CHECK(SmrCheckout(&total, price, &pending) && total == 2500 && price[FORGE_CREDITS] == 13);
     SetAmount(credit_id, 12);
     Tick();
-    CHECK(!SmrCheckout(&total, &credits, &pending) && credits == 13 && !SmrBuyCheckout(&mod));
+    CHECK(!SmrCheckout(&total, price, &pending) && price[FORGE_CREDITS] == 13 && !SmrBuyCheckout(&mod));
     SetAmount(credit_id, 90);
+    SetAmount(super_id, 0);
+    Tick();
+    CHECK(!SmrCheckout(&total, price, &pending) && price[SUPER_SAMPLES] == 1 && !SmrBuyCheckout(&mod));
+    SetAmount(super_id, 49);
+    Tick();
+    unsigned requisition = Amount(REQUISITION);
+    CHECK(SmrBuyCheckout(&mod));
+    SetAmount(rare_id, 4);
+    Tick();
+    CHECK(charge.state == CHARGE_IDLE && !shop_failed && !upgrade_purchased && !SmrCheckoutPaid() &&
+        upgrade_selected == SMR_UPGRADE_SUPPORT);
+    CHECK(Amount(REQUISITION) == requisition && Amount(credit_id) == 90 && Amount(common_id) == 90 &&
+        Amount(rare_id) == 4 && Amount(super_id) == 49);
+    SetAmount(rare_id, 95);
     Tick();
     CHECK(SmrBuyCheckout(&mod));
     wallet_writes = 0;
@@ -597,6 +617,8 @@ static void TestDestroyer(void)
     CHECK(shop_failed && !upgrade_purchased && !access[silo] && !SmrCheckoutPaid());
     CHECK(wallet_writes == 1 && Amount(credit_id) == 77 && saved_currency[FORGE_CREDITS] == 90 &&
         Amount(REQUISITION) == saved_wallet - 2500);
+    CHECK(Amount(common_id) == 80 && Amount(rare_id) == 90 && Amount(super_id) == 48 &&
+        saved_currency[COMMON_SAMPLES] == 90 && saved_currency[RARE_SAMPLES] == 95 && saved_currency[SUPER_SAMPLES] == 49);
     ResetExchange();
     SetAmount(REQUISITION, 5000);
     Pick(HF_ITEM_AR23_LIBERATOR, picks[2]);
@@ -611,6 +633,8 @@ static void TestDestroyer(void)
     CHECK(upgrade_purchased == SMR_UPGRADE_SUPPORT && access[silo] && SmrCheckoutPaid() && wallet_writes == 1);
     CHECK(Amount(credit_id) == 87 && saved_currency[FORGE_CREDITS] == 87 &&
         Amount(REQUISITION) == saved_wallet && saved_wallet == 3000);
+    CHECK(Amount(common_id) == 90 && Amount(rare_id) == 95 && Amount(super_id) == 49 &&
+        saved_currency[COMMON_SAMPLES] == 90 && saved_currency[RARE_SAMPLES] == 95 && saved_currency[SUPER_SAMPLES] == 49);
     const HfStateEvent prepare = {{0}, HF_STATE_SHIP, HF_STATE_PREPARE_MISSION};
     UpgradeStateChanged(&mod, &prepare, NULL);
     MissionStart(&mod, NULL, NULL);
@@ -671,7 +695,7 @@ static void TestUpgradeEffects(void)
         CHECK(eagle_cooldown == 8 && eagle_call_in == 3 && second_eagle_cooldown == 10 && second_eagle_call_in == 4);
         CHECK(sentry_cooldown == 90 && sentry_uses == 4 && support_cooldown == 80 && support_uses == 3);
     }
-    upgrade_tuning[SMR_UPGRADE_EAGLE] = (SmrUpgradeTuning){.forge_credits = 7, .other_cooldown_percent = -25,
+    upgrade_tuning[SMR_UPGRADE_EAGLE] = (SmrUpgradeTuning){.price = {[FORGE_CREDITS] = 7}, .other_cooldown_percent = -25,
         .cooldown_seconds = 5.5, .call_in_extra_seconds = 0.5, .rearm_seconds = 15};
     upgrade_purchased = SMR_UPGRADE_EAGLE;
     UpgradeStateChanged(&mod, &prepare, NULL);
@@ -864,9 +888,9 @@ static void TestExtraSlot(void)
     access[PriceIndex("A/G-16 Gatling Sentry")] = 1;
     SmrFinishDestroyer(1);
     Tick();
-    unsigned total, credits;
+    unsigned total, price[CURRENCY_COUNT];
     int pending;
-    CHECK(SmrCheckout(&total, &credits, &pending) && total == 2000 && credits == 50 && !pending);
+    CHECK(SmrCheckout(&total, price, &pending) && total == 2000 && price[FORGE_CREDITS] == 50 && !pending);
     CHECK(SmrBuyCheckout(&mod));
     Tick();
     CHECK(!upgrade_purchased && !access[silo] && Amount(REQUISITION) == 10000 && Amount(credit_id) == 100);

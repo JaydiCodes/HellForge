@@ -1,11 +1,17 @@
 {
   "orbital": {
     "forge_credits": 50,
+    "common_samples": 10,
+    "rare_samples": 5,
+    "super_samples": 1,
     "cooldown_percent": -66,
     "other_cooldown_percent": 50
   },
   "eagle": {
     "forge_credits": 50,
+    "common_samples": 10,
+    "rare_samples": 5,
+    "super_samples": 1,
     "rearm_seconds": 30,
     "call_in_extra_seconds": 2,
     "cooldown_seconds": 20,
@@ -13,16 +19,25 @@
   },
   "defensive": {
     "forge_credits": 50,
+    "common_samples": 10,
+    "rare_samples": 5,
+    "super_samples": 1,
     "cooldown_percent": -66,
     "other_cooldown_percent": 100
   },
   "support": {
     "forge_credits": 50,
+    "common_samples": 10,
+    "rare_samples": 5,
+    "super_samples": 1,
     "cooldown_percent": -66,
     "other_cooldown_percent": 100
   },
   "extra_slot": {
     "forge_credits": 50,
+    "common_samples": 10,
+    "rare_samples": 5,
+    "super_samples": 1,
     "other_cooldown_percent": 10
   }
 }

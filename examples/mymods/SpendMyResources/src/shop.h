@@ -1,5 +1,6 @@
 #pragma once
 #include "hellforge_mod.h"
+#include "currencies.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,12 +38,12 @@ typedef enum SmrUpgrade {
     SMR_UPGRADE_EXTRA_SLOT, SMR_UPGRADE_COUNT
 } SmrUpgrade;
 typedef struct SmrUpgradeTuning {
-    unsigned forge_credits;
+    unsigned price[CURRENCY_COUNT]; /* kCurrencies order; upgrades never cost requisition. */
     double cooldown_percent, other_cooldown_percent;
     double cooldown_seconds, call_in_extra_seconds, rearm_seconds;
 } SmrUpgradeTuning;
 typedef struct SmrDestroyerStatus {
-    unsigned credits;
+    unsigned balance[CURRENCY_COUNT];
     int available, solo;
     SmrUpgrade selected, purchased;
     uint32_t extra;
@@ -70,7 +71,7 @@ int SmrQuoteLoadout(SmrLoadoutQuote* out);
 int SmrBalance(unsigned* out);
 void SmrMessage(char* out, size_t size);
 int SmrBuyCheckout(HfMod* mod);
-int SmrCheckout(unsigned* total, unsigned* credits, int* pending);
+int SmrCheckout(unsigned* total, unsigned upgrade_price[CURRENCY_COUNT], int* pending);
 int SmrCheckoutPaid(void);
 int SmrTakeCheckoutRequest(void);
 void SmrFinishCheckout(int ready);

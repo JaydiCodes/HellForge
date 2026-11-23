@@ -18,14 +18,16 @@ static SmrUpgradeTuning upgrade_tuning[SMR_UPGRADE_COUNT];
 const SmrUpgradeTuning* SmrGetUpgradeTuning(SmrUpgrade upgrade)
 {
     if (upgrade <= SMR_UPGRADE_NONE || upgrade >= SMR_UPGRADE_COUNT ||
-        !upgrade_tuning[upgrade].forge_credits) return NULL;
+        !upgrade_tuning[upgrade].price[FORGE_CREDITS]) return NULL;
     return &upgrade_tuning[upgrade];
 }
 
-static unsigned UpgradeCost(SmrUpgrade upgrade)
+static int UpgradePrice(SmrUpgrade upgrade, unsigned price[CURRENCY_COUNT])
 {
     const SmrUpgradeTuning* tuning = SmrGetUpgradeTuning(upgrade);
-    return tuning ? tuning->forge_credits : 0;
+    if (tuning) memcpy(price, tuning->price, sizeof tuning->price);
+    else memset(price, 0, sizeof tuning->price);
+    return tuning != NULL;
 }
 
 int SmrTakeDestroyerRequest(void)
@@ -52,9 +54,10 @@ SmrDestroyerStatus SmrDestroyer(HfMod* mod)
 {
     int solo = DestroyerSolo(mod);
     AcquireSRWLockShared(&shop_lock);
-    SmrDestroyerStatus status = {currency_amount[FORGE_CREDITS],
-        solo && forge_credits_ready && !shop_failed && !upgrade_purchased && !upgrade_selected,
+    SmrDestroyerStatus status = {{0},
+        solo && upgrade_funds_ready && !shop_failed && !upgrade_purchased && !upgrade_selected,
         solo, upgrade_selected, upgrade_purchased, extra_pick};
+    memcpy(status.balance, currency_amount, sizeof status.balance);
     ReleaseSRWLockShared(&shop_lock);
     return status;
 }
@@ -65,7 +68,7 @@ int SmrSelectUpgrade(HfMod* mod, SmrUpgrade upgrade, uint32_t extra)
     AcquireSRWLockExclusive(&shop_lock);
     int allowed = eligible && SmrGetUpgradeTuning(upgrade) &&
         InterlockedCompareExchange(&destroyer_gate, 0, 0) == DESTROYER_OPEN &&
-        forge_credits_ready && !shop_failed && !upgrade_purchased && !upgrade_selected &&
+        upgrade_funds_ready && !shop_failed && !upgrade_purchased && !upgrade_selected &&
         (upgrade == SMR_UPGRADE_EXTRA_SLOT ? ExtraOptionListed(extra) : extra == 0);
     if (allowed)
     {

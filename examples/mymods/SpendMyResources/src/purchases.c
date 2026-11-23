@@ -15,21 +15,28 @@ void SmrFinishCheckout(int ready)
 
 int SmrCheckoutPaid(void) { return InterlockedCompareExchange(&auto_ready, 0, 0) == 1; }
 
-static int CheckoutFits(unsigned total, unsigned credits)
+static int UpgradeAffordable(const unsigned price[CURRENCY_COUNT], const unsigned balance[CURRENCY_COUNT])
 {
-    return checkout_valid && !shop_failed && (total || credits) &&
-        charge.state == CHARGE_IDLE && !exchange.pending &&
-        (!total || (inventory_ready && wallet >= total)) &&
-        (!credits || (forge_credits_ready && currency_amount[FORGE_CREDITS] >= credits));
+    for (size_t i = 1; i < CURRENCY_COUNT; ++i)
+        if (balance[i] < price[i]) return 0;
+    return 1;
 }
 
-int SmrCheckout(unsigned* total, unsigned* credits, int* pending)
+static int CheckoutFits(unsigned total, int upgrade, const unsigned price[CURRENCY_COUNT])
+{
+    return checkout_valid && !shop_failed && (total || upgrade) &&
+        charge.state == CHARGE_IDLE && !exchange.pending &&
+        (!total || (inventory_ready && wallet >= total)) &&
+        (!upgrade || (upgrade_funds_ready && UpgradeAffordable(price, currency_amount)));
+}
+
+int SmrCheckout(unsigned* total, unsigned upgrade_price[CURRENCY_COUNT], int* pending)
 {
     AcquireSRWLockShared(&shop_lock);
     UnpaidItems(checkout_mask, total);
-    *credits = UpgradeCost(upgrade_selected);
+    int upgrade = UpgradePrice(upgrade_selected, upgrade_price);
     *pending = charge.state != CHARGE_IDLE || exchange.pending;
-    int ready = CheckoutFits(*total, *credits);
+    int ready = CheckoutFits(*total, upgrade, upgrade_price);
     ReleaseSRWLockShared(&shop_lock);
     return ready;
 }
@@ -39,10 +46,10 @@ int SmrBuyCheckout(HfMod* mod)
     const HfApi* api = HF_API(mod);
     if (api->game_state(mod) != HF_STATE_SHIP) return 0;
     AcquireSRWLockExclusive(&shop_lock);
-    unsigned total;
+    unsigned total, upgrade_price[CURRENCY_COUNT];
     uint64_t unpaid = UnpaidItems(checkout_mask, &total);
-    unsigned credits = UpgradeCost(upgrade_selected);
-    if (!CheckoutFits(total, credits))
+    int upgrade = UpgradePrice(upgrade_selected, upgrade_price);
+    if (!CheckoutFits(total, upgrade, upgrade_price))
     {
         ReleaseSRWLockExclusive(&shop_lock);
         ShopMessage(mod, "Checkout unavailable: check the loadout, balance and pending purchase.");
@@ -50,9 +57,9 @@ int SmrBuyCheckout(HfMod* mod)
     }
     charge.mask = unpaid;
     charge.total = total;
-    charge.credits = credits;
-    charge.upgrade = upgrade_selected;
-    charge.extra = upgrade_selected == SMR_UPGRADE_EXTRA_SLOT ? extra_pick : 0;
+    memcpy(charge.upgrade_price, upgrade_price, sizeof upgrade_price);
+    charge.upgrade = upgrade ? upgrade_selected : SMR_UPGRADE_NONE;
+    charge.extra = charge.upgrade == SMR_UPGRADE_EXTRA_SLOT ? extra_pick : 0;
     charge.state = CHARGE_QUEUED;
     InterlockedExchange(&auto_ready, 0);
     ReleaseSRWLockExclusive(&shop_lock);
@@ -66,27 +73,37 @@ static int DeductRuntime(const HfApi* api, uintptr_t manager, uint32_t id, unsig
     return ItemRecord(api, manager, id, after) && *after == before - cost;
 }
 
+static int UpgradeFunded(const HfApi* api, uintptr_t manager, const unsigned price[CURRENCY_COUNT],
+    unsigned before[CURRENCY_COUNT])
+{
+    for (size_t i = 1; i < CURRENCY_COUNT; ++i)
+        if (price[i] && (!ItemRecord(api, manager, kCurrencies[i].id, &before[i]) || before[i] < price[i]))
+            return 0;
+    return 1;
+}
+
 static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, unsigned balance, int state)
 {
     if (state != CHARGE_QUEUED) return;
     uint64_t selected = 0;
-    unsigned total = 0;
+    unsigned total = 0, upgrade_price[CURRENCY_COUNT], expected[CURRENCY_COUNT];
     int readable = SelectedItems(mod, &selected);
     AcquireSRWLockShared(&shop_lock);
     uint64_t unpaid = UnpaidItems(selected, &total), mask = charge.mask;
-    unsigned price = charge.total, credits = charge.credits;
+    unsigned price = charge.total;
+    memcpy(upgrade_price, charge.upgrade_price, sizeof upgrade_price);
     SmrUpgrade upgrade = charge.upgrade;
     uint32_t extra = charge.extra;
     int upgrade_valid = upgrade && upgrade_selected == upgrade && !upgrade_purchased &&
-        credits == UpgradeCost(upgrade) && (upgrade != SMR_UPGRADE_EXTRA_SLOT || extra == extra_pick);
+        UpgradePrice(upgrade, expected) && !memcmp(expected, upgrade_price, sizeof expected) &&
+        (upgrade != SMR_UPGRADE_EXTRA_SLOT || extra == extra_pick);
     ReleaseSRWLockShared(&shop_lock);
     const HfApi* api = HF_API(mod);
-    const uint32_t credit_id = kCurrencies[FORGE_CREDITS].id;
-    unsigned credit_balance = 0;
+    unsigned before[CURRENCY_COUNT] = {0};
     if (api->game_state(mod) != HF_STATE_SHIP || !manager || !readable || unpaid != mask || total != price ||
         (price && (!balance_ready || balance < price)) ||
-        (credits && (!upgrade_valid || !ItemRecord(api, manager, credit_id, &credit_balance) ||
-            credit_balance < credits || !CanApplyUpgrade(mod, upgrade, extra))))
+        (upgrade && (!upgrade_valid || !UpgradeFunded(api, manager, upgrade_price, before) ||
+            !CanApplyUpgrade(mod, upgrade, extra))))
     {
         AcquireSRWLockExclusive(&shop_lock);
         charge.state = CHARGE_IDLE;
@@ -94,11 +111,14 @@ static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, un
         ShopMessage(mod, "Purchase cancelled: loadout, upgrade or funds unavailable. Nothing deducted.");
         return;
     }
-    unsigned after = balance, credits_after = credit_balance;
+    unsigned after = balance, upgrade_after[CURRENCY_COUNT];
+    memcpy(upgrade_after, before, sizeof before);
     char detail[128] = "Currency ledger saved.", message[192];
-    int paid = 0;
-    if ((price && !DeductRuntime(api, manager, REQUISITION, price, balance, &after)) ||
-        (credits && !DeductRuntime(api, manager, credit_id, credits, credit_balance, &credits_after)))
+    int paid = 0, deducted = !price || DeductRuntime(api, manager, REQUISITION, price, balance, &after);
+    for (size_t i = 1; i < CURRENCY_COUNT && deducted; ++i)
+        if (upgrade_price[i])
+            deducted = DeductRuntime(api, manager, kCurrencies[i].id, upgrade_price[i], before[i], &upgrade_after[i]);
+    if (!deducted)
         snprintf(detail, sizeof detail, "Runtime deduction failed verification; ledger unchanged.");
     else
         paid = SaveTransaction(api, manager, detail, sizeof detail);
@@ -108,18 +128,20 @@ static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, un
         wallet = after;
         for (size_t i = 0; i < PRICE_COUNT; ++i)
             if (mask & (UINT64_C(1) << i)) access[i] = 1;
-        if (credits)
+        if (upgrade)
         {
             upgrade_purchased = upgrade;
             upgrade_selected = SMR_UPGRADE_NONE;
-            currency_amount[FORGE_CREDITS] = credits_after;
+            for (size_t i = 1; i < CURRENCY_COUNT; ++i)
+                if (upgrade_price[i]) currency_amount[i] = upgrade_after[i];
         }
         charge.state = CHARGE_IDLE;
         auto_ready_selection = selected;
         InterlockedExchange(&auto_ready, 1);
         ReleaseSRWLockExclusive(&shop_lock);
-        api->log(mod, "Purchased loadout: %u Req and %u Forge Credits, access mask 0x%llX. %s",
-            price, credits, (unsigned long long)mask, detail);
+        api->log(mod, "Purchased loadout: %u Req, %u Forge Credits, %u Common, %u Rare and %u Super samples, "
+            "access mask 0x%llX. %s", price, upgrade_price[FORGE_CREDITS], upgrade_price[COMMON_SAMPLES],
+            upgrade_price[RARE_SAMPLES], upgrade_price[SUPER_SAMPLES], (unsigned long long)mask, detail);
         ShopMessage(mod, "Loadout purchased. Readying automatically.");
         return;
     }

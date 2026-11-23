@@ -10,7 +10,7 @@ static void ShopMessage(HfMod* mod, const char* text)
 static void StopShop(HfMod* mod, const char* text)
 {
     AcquireSRWLockExclusive(&shop_lock);
-    inventory_ready = exchange_ready = forge_credits_ready = 0;
+    inventory_ready = exchange_ready = upgrade_funds_ready = 0;
     exchange.pending = 0;
     charge.state = CHARGE_IDLE;
     shop_failed = 1;

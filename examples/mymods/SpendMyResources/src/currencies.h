@@ -12,4 +12,7 @@ static const struct {
     {0xDAC0E9DBu, "Super samples", 200},
     {0x6C3C83C1u, "Forge Credits", 750}
 };
-enum { FORGE_CREDITS = 4, CURRENCY_COUNT = sizeof kCurrencies / sizeof kCurrencies[0] };
+enum {
+    COMMON_SAMPLES = 1, RARE_SAMPLES = 2, SUPER_SAMPLES = 3, FORGE_CREDITS = 4,
+    CURRENCY_COUNT = sizeof kCurrencies / sizeof kCurrencies[0]
+};

@@ -24,15 +24,18 @@ static int ReadUpgradeConfig(const std::wstring& path, SmrUpgradeTuning tuning[S
         const char* name;
         unsigned sections;
         double min, max;
-        double SmrUpgradeTuning::* number;
-        unsigned SmrUpgradeTuning::* integer;
+        double SmrUpgradeTuning::* number; /* null for whole-number prices */
+        size_t currency;
     } fields[] = {
-        {"forge_credits", all, 1, UINT32_MAX, nullptr, &SmrUpgradeTuning::forge_credits},
-        {"cooldown_percent", percentCooldown, -100, 10000, &SmrUpgradeTuning::cooldown_percent, nullptr},
-        {"other_cooldown_percent", all, -100, 10000, &SmrUpgradeTuning::other_cooldown_percent, nullptr},
-        {"cooldown_seconds", eagle, 0, 86400, &SmrUpgradeTuning::cooldown_seconds, nullptr},
-        {"call_in_extra_seconds", eagle, 0, 86400, &SmrUpgradeTuning::call_in_extra_seconds, nullptr},
-        {"rearm_seconds", eagle, 0, 86400, &SmrUpgradeTuning::rearm_seconds, nullptr},
+        {"forge_credits", all, 1, UINT32_MAX, nullptr, FORGE_CREDITS},
+        {"common_samples", all, 0, UINT32_MAX, nullptr, COMMON_SAMPLES},
+        {"rare_samples", all, 0, UINT32_MAX, nullptr, RARE_SAMPLES},
+        {"super_samples", all, 0, UINT32_MAX, nullptr, SUPER_SAMPLES},
+        {"cooldown_percent", percentCooldown, -100, 10000, &SmrUpgradeTuning::cooldown_percent, 0},
+        {"other_cooldown_percent", all, -100, 10000, &SmrUpgradeTuning::other_cooldown_percent, 0},
+        {"cooldown_seconds", eagle, 0, 86400, &SmrUpgradeTuning::cooldown_seconds, 0},
+        {"call_in_extra_seconds", eagle, 0, 86400, &SmrUpgradeTuning::call_in_extra_seconds, 0},
+        {"rearm_seconds", eagle, 0, 86400, &SmrUpgradeTuning::rearm_seconds, 0},
     };
     SmrUpgradeTuning loaded[SMR_UPGRADE_COUNT] = {};
     unsigned seenSections = 0;
@@ -63,14 +66,14 @@ static int ReadUpgradeConfig(const std::wstring& path, SmrUpgradeTuning tuning[S
             const double number = strtod(value.text.c_str(), &end);
             if (value.kind != Value::Number || end == value.text.c_str() || *end ||
                 !std::isfinite(number) || number < field.min || number > field.max ||
-                (field.integer && value.text.find_first_not_of("0123456789") != std::string::npos))
+                (!field.number && value.text.find_first_not_of("0123456789") != std::string::npos))
             {
                 snprintf(result, size, "%s.%s must be a %s from %.0f to %.0f.", sections[index], field.name,
-                    field.integer ? "whole number" : "number", field.min, field.max);
+                    field.number ? "number" : "whole number", field.min, field.max);
                 return 0;
             }
-            if (field.integer) loaded[index].*field.integer = static_cast<unsigned>(number);
-            else loaded[index].*field.number = number;
+            if (field.number) loaded[index].*field.number = number;
+            else loaded[index].price[field.currency] = static_cast<unsigned>(number);
             seen |= 1u << i;
         }
         for (size_t i = 0; i < sizeof fields / sizeof fields[0]; ++i)

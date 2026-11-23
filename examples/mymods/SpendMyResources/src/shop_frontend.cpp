@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <cstring>
+#include <string>
 #include "app.h"
 #include "canvas.h"
 #include "icons.h"
@@ -46,6 +47,22 @@ static constexpr struct {
     {"Extra Stratagem Slot",
         UpgradeIcon::Slot, nullptr, 0, SMR_UPGRADE_EXTRA_SLOT},
 };
+static constexpr size_t kUpgradeCurrencies[] = {FORGE_CREDITS, COMMON_SAMPLES, RARE_SAMPLES, SUPER_SAMPLES};
+
+static std::string Amount(unsigned amount, const char* name)
+{
+    std::string text = std::to_string(amount) + " " + name;
+    if (amount == 1 && text.back() == 's') text.pop_back();
+    return text;
+}
+
+static void UpgradeCostLines(const unsigned price[CURRENCY_COUNT], const unsigned balance[CURRENCY_COUNT])
+{
+    for (size_t i : kUpgradeCurrencies)
+        if (price[i])
+            ImGui::BulletText("%s (%u available%s)", Amount(price[i], kCurrencies[i].name).c_str(), balance[i],
+                balance[i] < price[i] ? ", not enough" : "");
+}
 
 static void DescribeUpgrade(SmrUpgrade upgrade, const SmrUpgradeTuning& tuning)
 {
@@ -161,9 +178,9 @@ void Tick()
         if (!loadout) CloseCheckout();
         else if (purchasePending)
         {
-            unsigned total, credits;
+            unsigned total, price[CURRENCY_COUNT];
             int pending;
-            SmrCheckout(&total, &credits, &pending);
+            SmrCheckout(&total, price, &pending);
             if (SmrCheckoutPaid()) CloseCheckout(true);
             else if (!pending) purchasePending = false;
         }
@@ -371,8 +388,8 @@ static void DestroyerFrame(float width, float height)
             else if (!upgrade.available) ImGui::TextDisabled("Upgrade selection unavailable.");
             else
             {
-                ImGui::Text("Cost at checkout: %u Forge Credits", tuning->forge_credits);
-                ImGui::TextDisabled("Available: %u Forge Credits", upgrade.credits);
+                ImGui::TextUnformatted("Cost at checkout:");
+                UpgradeCostLines(tuning->price, upgrade.balance);
                 if (extraSlot) extraPicked = ExtraPicker(width, height);
             }
         }
@@ -398,9 +415,11 @@ static void CheckoutFrame(float width, float height)
 {
     ImGui::SetNextWindowPos(ImVec2(width / 2, height / 2), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     bool visible = true;
-    unsigned total, credits;
+    unsigned total, price[CURRENCY_COUNT];
     int pending;
-    bool canBuy = SmrCheckout(&total, &credits, &pending) != 0;
+    bool canBuy = SmrCheckout(&total, price, &pending) != 0;
+    /* Configured upgrades always cost Forge Credits. */
+    const bool upgradeDue = price[FORGE_CREDITS] != 0;
     if (ImGui::Begin("Spend My Resources", pending ? nullptr : &visible,
             ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings))
     {
@@ -420,19 +439,22 @@ static void CheckoutFrame(float width, float height)
             if (item.access) ImGui::Text("%s - Access ready (0 Req due)", item.name);
             else ImGui::Text("%s - %u Req", item.name, item.price);
         }
-        if (credits)
+        if (upgradeDue)
         {
             SmrDestroyerStatus upgrade = SmrDestroyer(mod);
-            ImGui::Text("%s - %u Forge Credits", UpgradeName(upgrade.selected), credits);
+            ImGui::TextUnformatted(UpgradeName(upgrade.selected));
             if (upgrade.selected == SMR_UPGRADE_EXTRA_SLOT)
                 if (const char* name = SmrExtraName(upgrade.extra)) ImGui::Text("Extra stratagem: %s", name);
-            ImGui::TextDisabled("Forge Credits available: %u", upgrade.credits);
-            if (upgrade.credits < credits) ImGui::TextDisabled("Not enough Forge Credits.");
+            UpgradeCostLines(price, upgrade.balance);
         }
         ImGui::Separator();
-        if (credits && total) ImGui::Text("Total due: %u Req + %u Forge Credits", total, credits);
-        else if (credits) ImGui::Text("Total due: %u Forge Credits", credits);
-        else ImGui::Text("Total due: %u Req", total);
+        std::string totalDue;
+        if (total || !upgradeDue) totalDue = std::to_string(total) + " Req";
+        for (size_t i : kUpgradeCurrencies)
+            if (price[i]) totalDue += (totalDue.empty() ? "" : " + ") + Amount(price[i], kCurrencies[i].name);
+        ImGui::PushTextWrapPos(440);
+        ImGui::TextWrapped("Total due: %s", totalDue.c_str());
+        ImGui::PopTextWrapPos();
         ImGui::BeginDisabled(!canBuy);
         if (ImGui::Button(pending ? "Purchasing..." : "Purchase") && canBuy)
             purchasePending = SmrBuyCheckout(mod) != 0;
