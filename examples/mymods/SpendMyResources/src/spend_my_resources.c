@@ -1,17 +1,17 @@
-#include "shop_internal.h"
+#include "shop/shop_internal.h"
 
 /* Private implementation units share one translation unit to preserve the standalone mod's build interface.
  * Compile this entry point, not the included implementation files separately. */
-#include "game_inventory.c"
-#include "wallet_runtime.c"
-#include "loadout.c"
-#include "extra_slot.c"
-#include "ready_gate.c"
-#include "destroyer.c"
-#include "missions.c"
-#include "exchange.c"
-#include "purchases.c"
-#include "shop.c"
+#include "gameplay/game_inventory.c"
+#include "currency/wallet_runtime.c"
+#include "gameplay/loadout.c"
+#include "gameplay/extra_slot.c"
+#include "shop/ready_gate.c"
+#include "gameplay/destroyer.c"
+#include "gameplay/missions.c"
+#include "currency/exchange.c"
+#include "shop/purchases.c"
+#include "shop/shop.c"
 
 int SmrInit(const HfApi* api, HfMod* mod)
 {

@@ -7,9 +7,9 @@
 #include "local_stats.h"
 #include "sounds.h"
 #include "shop_frontend.h"
-#include "currency_ledger.cpp"
-#include "prices.cpp"
-#include "upgrade_config.cpp"
+#include "../currency/currency_ledger.cpp"
+#include "../config/prices.cpp"
+#include "../config/upgrade_config.cpp"
 
 namespace editorapp
 {

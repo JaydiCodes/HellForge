@@ -1,6 +1,6 @@
 #pragma once
 #include "hellforge_mod.h"
-#include "currencies.h"
+#include "../currency/currencies.h"
 
 #ifdef __cplusplus
 extern "C" {

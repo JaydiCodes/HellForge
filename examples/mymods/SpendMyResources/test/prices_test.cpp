@@ -1,7 +1,7 @@
 #include "json.cpp"
-#include "../src/prices.cpp"
-#include "../src/upgrade_config.cpp"
-#include "../src/access_items.h"
+#include "../src/config/prices.cpp"
+#include "../src/config/upgrade_config.cpp"
+#include "../src/access/access_items.h"
 #include <algorithm>
 
 #define CHECK(test) do { if (!(test)) { printf("FAIL line %d: %s\n", __LINE__, #test); exit(1); } } while (0)

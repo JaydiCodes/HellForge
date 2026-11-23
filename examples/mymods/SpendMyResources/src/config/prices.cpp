@@ -1,5 +1,5 @@
 #include "json.h"
-#include "shop.h"
+#include "../shop/shop.h"
 #include <limits>
 
 static int ReadPrices(const std::wstring& path, const char* const* names, unsigned* prices,

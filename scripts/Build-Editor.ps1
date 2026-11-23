@@ -146,8 +146,8 @@ if($SpendMyResources){
         -c (Join-Path $src 'spend_my_resources.c') -o $gameplay
     if($LASTEXITCODE){throw 'Spend My Resources gameplay did not compile.'}
     $dll=Join-Path $out 'spend_my_resources.dll'
-    & $zig c++ @common -shared -Wall -Werror -Wno-unused-parameter -s -I $src -I $editor '-DHF_OVERLAY_FRONTEND=\"shop_frontend.h\"' `
-        (Join-Path $editor 'editor.cpp') (Join-Path $editor 'icons.cpp') (Join-Path $src 'shop_frontend.cpp') $gameplay @built `
+    & $zig c++ @common -shared -Wall -Werror -Wno-unused-parameter -s -I $src -I $editor '-DHF_OVERLAY_FRONTEND=\"shop/shop_frontend.h\"' `
+        (Join-Path $editor 'editor.cpp') (Join-Path $editor 'icons.cpp') (Join-Path $src 'shop/shop_frontend.cpp') $gameplay @built `
         -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -lole32 -luser32 -o $dll
     if($LASTEXITCODE){throw 'Spend My Resources overlay did not compile.'}
     Get-ChildItem -LiteralPath $out -Filter '*.lib' | Remove-Item

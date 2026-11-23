@@ -1,4 +1,4 @@
-#include "../src/currency_ledger.cpp"
+#include "../src/currency/currency_ledger.cpp"
 
 #define CHECK(test) do { if (!(test)) { fprintf(stderr, "FAIL line %d: %s\n", __LINE__, #test); exit(1); } } while (0)
 

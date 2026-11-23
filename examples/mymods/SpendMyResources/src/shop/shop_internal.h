@@ -1,7 +1,7 @@
 #pragma once
 #include "shop.h"
-#include "access_items.h"
-#include "currency_ledger.h"
+#include "../access/access_items.h"
+#include "../currency/currency_ledger.h"
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
