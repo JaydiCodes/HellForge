@@ -1081,8 +1081,8 @@
     },
     "Orbital Precision Strike": {
       "orbital.salvo_interval": 0,
-      "stratagem.call_in_time": 0.5,
-      "stratagem.cooldown": 30
+      "stratagem.call_in_time": 0.0,
+      "stratagem.cooldown": 35
     },
     "Orbital Railcannon Strike": {
       "damage.ap_direct": 12,
