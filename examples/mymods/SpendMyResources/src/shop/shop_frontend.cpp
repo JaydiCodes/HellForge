@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <algorithm>
 #include <cstring>
 #include <string>
 #include "app.h"
@@ -18,12 +19,122 @@ static HfMod* mod;
 static void (*showCheckout)(bool);
 enum class CheckoutPanel { Destroyer, Purchase };
 static CheckoutPanel checkoutPanel;
+static float tabIndicator;
 static bool shopOpen;
 static bool exchangeOpen;
 static bool loadoutOpen;
 static size_t destroyerSelection;
 static uint32_t destroyerExtra;
 static void (*closeWindow)();
+
+static constexpr ImU32 kAccent = IM_COL32(250, 219, 67, 255);
+static constexpr ImU32 kAccentText = IM_COL32(255, 235, 147, 255);
+static constexpr ImU32 kWarning = IM_COL32(251, 161, 119, 255);
+static constexpr ImU32 kSurface = IM_COL32(32, 38, 46, 255);
+static constexpr ImU32 kSelectedSurface = IM_COL32(63, 57, 34, 255);
+static constexpr ImU32 kBorder = IM_COL32(82, 93, 104, 255);
+static constexpr struct {
+    ImGuiCol slot;
+    ImU32 color;
+} kShopPalette[] = {
+    {ImGuiCol_Text, IM_COL32(238, 240, 238, 255)},
+    {ImGuiCol_TextDisabled, IM_COL32(164, 175, 185, 255)},
+    {ImGuiCol_WindowBg, IM_COL32(15, 19, 25, 239)},
+    {ImGuiCol_ChildBg, IM_COL32(10, 13, 18, 90)},
+    {ImGuiCol_PopupBg, IM_COL32(22, 27, 33, 250)},
+    {ImGuiCol_Border, kBorder},
+    {ImGuiCol_FrameBg, IM_COL32(23, 28, 34, 255)},
+    {ImGuiCol_FrameBgHovered, kSurface},
+    {ImGuiCol_FrameBgActive, kSelectedSurface},
+    {ImGuiCol_TitleBg, kSurface},
+    {ImGuiCol_TitleBgActive, kSurface},
+    {ImGuiCol_TitleBgCollapsed, kSurface},
+    {ImGuiCol_Button, kSurface},
+    {ImGuiCol_ButtonHovered, kSurface},
+    {ImGuiCol_ButtonActive, kSelectedSurface},
+    {ImGuiCol_Header, kSelectedSurface},
+    {ImGuiCol_HeaderHovered, IM_COL32(51, 59, 68, 255)},
+    {ImGuiCol_HeaderActive, kSelectedSurface},
+    {ImGuiCol_Separator, kBorder},
+    {ImGuiCol_ScrollbarBg, IM_COL32(9, 13, 18, 130)},
+    {ImGuiCol_ScrollbarGrab, IM_COL32(89, 102, 112, 255)},
+    {ImGuiCol_ScrollbarGrabHovered, IM_COL32(118, 130, 139, 255)},
+    {ImGuiCol_ScrollbarGrabActive, kAccentText},
+    {ImGuiCol_TextSelectedBg, IM_COL32(154, 128, 43, 130)},
+    {ImGuiCol_NavCursor, kAccentText},
+};
+
+struct ShopTheme
+{
+    ShopTheme()
+    {
+        for (const auto& entry : kShopPalette) ImGui::PushStyleColor(entry.slot, entry.color);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarRounding, 0.0f);
+    }
+    ~ShopTheme()
+    {
+        ImGui::PopStyleVar(5);
+        ImGui::PopStyleColor(IM_ARRAYSIZE(kShopPalette));
+    }
+};
+
+static float AnimateHighlight(float progress, bool on, float seconds)
+{
+    const float step = ImGui::GetIO().DeltaTime / seconds;
+    return std::clamp(progress + (on ? step : -step), 0.0f, 1.0f);
+}
+
+static void HoverHighlight(const char* label, bool enabled = true)
+{
+    ImGui::PushID(label);
+    const ImGuiID key = ImGui::GetID("##hover-fade");
+    ImGui::PopID();
+    ImGuiStorage* storage = ImGui::GetStateStorage();
+    const float previous = storage->GetFloat(key);
+    const bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_NoNavOverride);
+    const float fade = enabled ? AnimateHighlight(previous, hovered, 0.12f) : 0.0f;
+    if (fade != previous) storage->SetFloat(key, fade);
+    if (fade <= 0 || !ImGui::IsItemVisible()) return;
+    const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    draw->AddRectFilled(min, max, ImGui::GetColorU32(kAccent, fade * 0.10f));
+    draw->AddRect(min, max, ImGui::GetColorU32(kAccent, fade * 0.65f));
+}
+
+static bool ShopButton(const char* label, bool enabled, bool primary = false)
+{
+    ImGui::BeginDisabled(!enabled);
+    if (primary)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, kAccentText);
+        ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(143, 125, 60, 255));
+    }
+    const bool pressed = ImGui::Button(label);
+    if (primary) ImGui::PopStyleColor(2);
+    HoverHighlight(label, enabled);
+    ImGui::EndDisabled();
+    return enabled && pressed;
+}
+
+static bool UpgradeTile(const char* label, float side, bool selected)
+{
+    if (selected)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Button, kSelectedSurface);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, kSelectedSurface);
+    }
+    const bool pressed = ImGui::Button(label, ImVec2(side, side));
+    if (selected) ImGui::PopStyleColor(2);
+    HoverHighlight(label);
+    if ((selected || pressed) && ImGui::IsItemVisible())
+        ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+            ImGui::GetColorU32(kAccent), 0.0f, 0, 1.5f);
+    return pressed;
+}
 
 enum class UpgradeIcon { Orbital, Eagle, Defensive, Support, Slot };
 static constexpr ImU32 kOffensiveTint = IM_COL32(226, 94, 74, 255);
@@ -146,6 +257,7 @@ void Tick()
         }
         shopOpen = true;
         checkoutPanel = CheckoutPanel::Destroyer;
+        tabIndicator = 0.0f;
         destroyerSelection = 0;
         destroyerExtra = 0;
         showCheckout(true);
@@ -219,16 +331,10 @@ static void DestroyerPicker()
     for (size_t i = 0; i < IM_ARRAYSIZE(kDestroyerUpgrades); ++i)
     {
         if (i) ImGui::SameLine();
-        const bool selected = i == destroyerSelection;
-        if (selected) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
         char label[48];
         snprintf(label, sizeof label, "##%s", kDestroyerUpgrades[i].name);
-        if (ImGui::Button(label, ImVec2(side, side))) destroyerSelection = i;
-        if (selected) ImGui::PopStyleColor();
+        if (UpgradeTile(label, side, i == destroyerSelection)) destroyerSelection = i;
         const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
-        if (i == destroyerSelection)
-            ImGui::GetWindowDrawList()->AddRect(min, max, ImGui::GetColorU32(ImGuiCol_Text),
-                ImGui::GetStyle().FrameRounding, 0, 1.5f);
         const auto& choice = kDestroyerUpgrades[i];
         const ImVec2 center((min.x + max.x) / 2, (min.y + max.y) / 2);
         if (!DrawGameStratagemIcon(choice.sprite, choice.tint, center, side * 0.76f))
@@ -242,10 +348,7 @@ static void DestroyerPicker()
 static void ExtraTile(const SmrExtraChoice& choice, ImU32 tint, float side)
 {
     ImGui::PushID(static_cast<int>(choice.type));
-    const bool selected = choice.type == destroyerExtra;
-    if (selected) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-    if (ImGui::Button("##Stratagem", ImVec2(side, side))) destroyerExtra = choice.type;
-    if (selected) ImGui::PopStyleColor();
+    if (UpgradeTile("##Stratagem", side, choice.type == destroyerExtra)) destroyerExtra = choice.type;
     if (ImGui::IsItemVisible())
     {
         const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
@@ -264,8 +367,6 @@ static void ExtraTile(const SmrExtraChoice& choice, ImU32 tint, float side)
                 ImVec2(center.x - text.x / 2, y > clip.y ? y : clip.y),
                 ImGui::GetColorU32(tint), caption, nullptr, wrap, &clip);
         }
-        if (choice.type == destroyerExtra)
-            draw->AddRect(min, max, ImGui::GetColorU32(ImGuiCol_Text), ImGui::GetStyle().FrameRounding, 0, 1.5f);
     }
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip) || ImGui::IsItemFocused())
         ImGui::SetTooltip("%s", choice.name);
@@ -345,7 +446,7 @@ static bool DestroyerPanel(float height, const SmrDestroyerStatus& upgrade)
     const auto& choice = kDestroyerUpgrades[destroyerSelection];
     const SmrUpgradeTuning* tuning = SmrGetUpgradeTuning(choice.upgrade);
     const bool extraSlot = choice.upgrade == SMR_UPGRADE_EXTRA_SLOT;
-    ImGui::TextUnformatted(choice.name);
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kAccentText), "%s", choice.name);
     if (tuning) DescribeUpgrade(choice.upgrade, *tuning);
     else if (extraSlot)
         ImGui::TextWrapped("Extra slot disabled: check the extra_slot section in destroyer-upgrades.json and the mod log.");
@@ -370,18 +471,13 @@ static bool DestroyerPanel(float height, const SmrDestroyerStatus& upgrade)
 static void DestroyerActions(const SmrDestroyerStatus& upgrade, bool canSelect, bool pending)
 {
     const SmrUpgrade choice = kDestroyerUpgrades[destroyerSelection].upgrade;
-    canSelect = canSelect && !pending;
-    ImGui::BeginDisabled(!canSelect);
-    if (ImGui::Button("Select upgrade") && canSelect &&
+    if (ShopButton("Select upgrade", canSelect && !pending, true) &&
         SmrSelectUpgrade(mod, choice, choice == SMR_UPGRADE_EXTRA_SLOT ? destroyerExtra : 0))
         checkoutPanel = CheckoutPanel::Purchase;
-    ImGui::EndDisabled();
     if (upgrade.selected)
     {
         ImGui::SameLine();
-        ImGui::BeginDisabled(pending);
-        if (ImGui::Button("Remove upgrade") && !pending) SmrSelectUpgrade(mod, SMR_UPGRADE_NONE, 0);
-        ImGui::EndDisabled();
+        if (ShopButton("Remove upgrade", !pending)) SmrSelectUpgrade(mod, SMR_UPGRADE_NONE, 0);
     }
 }
 
@@ -393,7 +489,8 @@ static void PurchasePanel(uint64_t requisition, const unsigned price[CURRENCY_CO
     if (SmrBalance(&balance))
     {
         ImGui::Text("Requisition slips: %u", balance);
-        if (balance < requisition) ImGui::TextDisabled("Not enough requisition for this purchase.");
+        if (balance < requisition)
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kWarning), "Not enough requisition for this purchase.");
     }
     else ImGui::TextDisabled("Requisition slips: unavailable");
     ImGui::TextDisabled("Purchases charge your saved Spend My Resources wallet.");
@@ -432,16 +529,53 @@ static std::string PurchaseTotal(uint64_t requisition, const unsigned price[CURR
 
 static void PurchaseActions(const std::string& totalText, bool hasCharges, SmrCheckoutAction action, int& pending)
 {
+    ImGui::PushStyleColor(ImGuiCol_Text, kAccentText);
     ImGui::TextWrapped("%s", totalText.c_str());
+    ImGui::PopStyleColor();
     const char* label = pending ? "Processing..." : hasCharges ? "Purchase" : "Continue to Ready";
-    const bool canConfirm = action != SMR_CHECKOUT_BLOCKED;
-    ImGui::BeginDisabled(!canConfirm);
-    if (ImGui::Button(label) && canConfirm) pending = SmrConfirmCheckout(mod, action) != 0;
+    if (ShopButton(label, action != SMR_CHECKOUT_BLOCKED, true))
+        pending = SmrConfirmCheckout(mod, action) != 0;
+}
+
+static void CheckoutTabs(bool pending)
+{
+    static constexpr struct { const char* label; CheckoutPanel panel; } tabs[] = {
+        {"Destroyer", CheckoutPanel::Destroyer}, {"Purchase##tab", CheckoutPanel::Purchase}
+    };
+    ImVec2 min[IM_ARRAYSIZE(tabs)], max[IM_ARRAYSIZE(tabs)];
+    ImGui::BeginDisabled(pending);
+    ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
+    for (size_t i = 0; i < IM_ARRAYSIZE(tabs); ++i)
+    {
+        if (i) ImGui::SameLine();
+        const auto& tab = tabs[i];
+        const bool active = checkoutPanel == tab.panel;
+        const ImU32 surface = active ? kSurface : 0u;
+        ImGui::PushStyleColor(ImGuiCol_Header, surface);
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, surface);
+        ImGui::PushStyleColor(ImGuiCol_Text, active ? ImGui::ColorConvertU32ToFloat4(kAccentText) :
+            ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        if (ImGui::Selectable(tab.label, active, 0, ImVec2(100, ImGui::GetFrameHeight())) && !pending)
+            checkoutPanel = tab.panel;
+        ImGui::PopStyleColor(3);
+        min[i] = ImGui::GetItemRectMin();
+        max[i] = ImGui::GetItemRectMax();
+        HoverHighlight(tab.label, !pending);
+    }
+    ImGui::PopStyleVar();
+    tabIndicator = AnimateHighlight(tabIndicator, checkoutPanel == CheckoutPanel::Purchase, 0.16f);
+    const float slide = tabIndicator * tabIndicator * (3.0f - 2.0f * tabIndicator);
+    const float left = min[0].x + (min[1].x - min[0].x) * slide + 3.0f;
+    const float right = max[0].x + (max[1].x - max[0].x) * slide - 3.0f;
+    const float bottom = max[0].y - 1.0f;
+    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(left, bottom - 2.0f), ImVec2(right, bottom),
+        ImGui::GetColorU32(kAccent));
     ImGui::EndDisabled();
 }
 
 static void CheckoutFrame(float width, float height)
 {
+    const ShopTheme theme;
     ImGui::SetNextWindowPos(ImVec2(width / 2, height / 2), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     const float w = width * 0.92f, h = height * 0.92f;
     ImGui::SetNextWindowSize(ImVec2(w < 560 ? w : 560, h < 590 ? h : 590), ImGuiCond_Always);
@@ -452,13 +586,7 @@ static void CheckoutFrame(float width, float height)
     if (ImGui::Begin("Spend My Resources", pending ? nullptr : &visible,
             ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings))
     {
-        ImGui::BeginDisabled(pending != 0);
-        if (ImGui::Selectable("Destroyer", checkoutPanel == CheckoutPanel::Destroyer, 0, ImVec2(100, 0)) && !pending)
-            checkoutPanel = CheckoutPanel::Destroyer;
-        ImGui::SameLine();
-        if (ImGui::Selectable("Purchase##tab", checkoutPanel == CheckoutPanel::Purchase, 0, ImVec2(100, 0)) && !pending)
-            checkoutPanel = CheckoutPanel::Purchase;
-        ImGui::EndDisabled();
+        CheckoutTabs(pending != 0);
         ImGui::Separator();
         const bool destroyer = checkoutPanel == CheckoutPanel::Destroyer;
         const uint64_t requisition = SmrRequisitionDue(gearCost, price);
@@ -495,6 +623,7 @@ static void CheckoutFrame(float width, float height)
 void Frame(ImDrawList*, float width, float height, float)
 {
     if (shopOpen) return;
+    const ShopTheme theme;
     ImGui::SetNextWindowPos(ImVec2(width / 2, height / 2), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     bool visible = true;
     if (ImGui::Begin("Spend My Resources - Currency Exchange", &visible,
@@ -546,10 +675,8 @@ void Frame(ImDrawList*, float width, float height, float)
         if (!quote) ImGui::TextDisabled("Choose different currencies and a positive, valid batch count.");
         else if (!funds) ImGui::TextDisabled("Insufficient source currency.");
         else if (!room) ImGui::TextDisabled("This exchange would exceed the destination cap.");
-        ImGui::BeginDisabled(!ready || pending || !funds || !room);
-        if (ImGui::Button(pending ? "Processing..." : "Exchange"))
+        if (ShopButton(pending ? "Processing..." : "Exchange", ready && !pending && funds && room, true))
             SmrExchange(mod, from, to, static_cast<unsigned>(batches));
-        ImGui::EndDisabled();
         ImGui::TextDisabled("Exact whole-unit batches only. Unspent currency stays in your balance.");
         char message[192];
         SmrMessage(message, sizeof message);
@@ -572,10 +699,10 @@ void ModsChanged() {}
 void Overlay(ImDrawList*, float width, float)
 {
     if (!NoticeShown()) return;
+    const ShopTheme theme;
     SmrLoadoutQuote quote;
     bool valid = SmrQuoteLoadout(mod, &quote) != 0;
     ImGui::SetNextWindowPos(ImVec2(width - 16, 16), ImGuiCond_Always, ImVec2(1, 0));
-    ImGui::SetNextWindowBgAlpha(0.92f);
     if (ImGui::Begin("Loadout cost", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
             ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings))
     {
@@ -583,7 +710,7 @@ void Overlay(ImDrawList*, float width, float)
             ImGui::TextUnformatted("Loadout cost unavailable");
         else
         {
-            ImGui::Text("Loadout cost: %u Req", quote.total);
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kAccentText), "Loadout cost: %u Req", quote.total);
             if (quote.balance_ready) ImGui::TextDisabled("Available: %u Req", quote.balance);
             else ImGui::TextDisabled("Requisition balance unavailable");
             if (quote.count)
@@ -597,7 +724,7 @@ void Overlay(ImDrawList*, float width, float)
                 }
             }
             if (quote.balance_ready && quote.total > quote.balance)
-                ImGui::TextUnformatted("Not enough requisition");
+                ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kWarning), "Not enough requisition");
         }
     }
     ImGui::End();

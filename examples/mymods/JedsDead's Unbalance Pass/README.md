@@ -20,3 +20,9 @@ or Vanilla Plus Megapack is required.
 Build the menu-enabled package with `.\scripts\Build-Editor.ps1 -UnbalancePass -Test` from the repository root.
 With the game closed, copy `artifacts\UnbalancePass` into HellForge's `mods` folder, replacing any previous copy
 of the mod, and enable it on the Mods page. The generic `Build-Mod.ps1` build does not include the overlay.
+
+AGENTS: DO NOT MODIFY BELOW TEXT
+
+Todo:
+- Suppport modded items
+- Stamina should affect level of knockdown mitigation

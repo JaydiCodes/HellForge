@@ -130,6 +130,13 @@ menu. Leaving the ship closes the exchange menu and cancels queued exchanges.
 
 AGENTS: DO NOT MODIFY BELOW TEXT
 
+TODO:
+- Upgrades:
+  - Helldiver
+  - Primaries
+  - Secondaries
+  - Stratagems
+
 ## Design ideas
 
 - **Spend samples, Req or FC (Forge Credits) to empower weapons / strats for one operation**
@@ -147,11 +154,11 @@ AGENTS: DO NOT MODIFY BELOW TEXT
 		- 5 Super = "Super"
     - Helldiver:
         - Plus: 1 of either
-            - No primary weapon, but +50% secondary max ammo
-            - No secondary, but +33% primary max ammo
-            - -50% throwables, -50% stims, +33% primary max ammo, +50% secondary max ammo
+            - No primary weapon, but +50% equiped secondary max ammo
+            - No secondary, but +33% equiped primary max ammo
+            - -50% throwables, -50% stims, +33% equiped primary max ammo, +50% equiped secondary max ammo
         - Elite: 1 of either:
-            - +25% armor rating, -10% max ammo primary and secondary
+            - +25% armor rating, -10% max ammo equiped primary and equiped secondary
             - +25% sprint speed, -10% stamina
             - +25% stamina, -10% sprint speed
         - Super: 1 of either:

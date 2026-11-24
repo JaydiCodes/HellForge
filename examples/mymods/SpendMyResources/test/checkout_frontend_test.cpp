@@ -137,10 +137,11 @@ extern "C" int SmrExchange(HfMod*, size_t from, size_t to, unsigned batches)
     return 1;
 }
 
-static void Draw()
+static void Draw(float dt = 1.0f / 60)
 {
+    ImGui::GetIO().DeltaTime = dt;
     ImGui::NewFrame();
-    editorapp::Modal(nullptr, 1280, 720, 1.0f / 60);
+    editorapp::Modal(nullptr, 1280, 720, dt);
     ImGui::Render();
 }
 
@@ -256,6 +257,7 @@ static ImGuiWindow* PanelWindow()
 static ImRect PressModalButton(const char* label, bool inPanel = false)
 {
     ImGuiWindow* window = inPanel ? PanelWindow() : CheckoutWindow();
+    ImGui::GetIO().DeltaTime = 1.0f / 60;
     ImGui::NewFrame();
     GImGui->NavWindow = window;
     GImGui->NavId = GImGui->NavActivateId = GImGui->NavActivateDownId = window->GetID(label);
@@ -263,6 +265,60 @@ static ImRect PressModalButton(const char* label, bool inPanel = false)
     editorapp::Modal(nullptr, 1280, 720, 1.0f / 60);
     ImGui::Render();
     return window->NavRectRel[ImGuiNavLayer_Main];
+}
+
+static ImVec2 DrawnUnderlineStart(const ImGuiWindow& window)
+{
+    ImVec2 start(FLT_MAX, 0);
+    for (const ImDrawVert& vertex : window.DrawList->VtxBuffer)
+        if (vertex.col == editorapp::kAccent && vertex.pos.x < start.x)
+            start = vertex.pos;
+    CHECK(start.x != FLT_MAX);
+    return start;
+}
+
+static unsigned DrawnHoverAlpha(const ImGuiWindow& window)
+{
+    unsigned strongest = 0;
+    for (const ImDrawVert& vertex : window.DrawList->VtxBuffer)
+        if (vertex.col != editorapp::kAccent &&
+            (vertex.col & ~IM_COL32_A_MASK) == (editorapp::kAccent & ~IM_COL32_A_MASK))
+        {
+            const unsigned alpha = vertex.col >> IM_COL32_A_SHIFT;
+            if (alpha > strongest) strongest = alpha;
+        }
+    return strongest;
+}
+
+static void CheckAnimatedTabs()
+{
+    const ImGuiWindow& window = *CheckoutWindow();
+    const ImVec2 destroyer = DrawnUnderlineStart(window);
+    auto& io = ImGui::GetIO();
+    io.AddMousePosEvent(destroyer.x + 40, destroyer.y - 7);
+    Draw(0.02f);
+    const unsigned earlyHover = DrawnHoverAlpha(window);
+    Draw(0.05f);
+    const unsigned laterHover = DrawnHoverAlpha(window);
+    CHECK(earlyHover > 0 && laterHover > earlyHover);
+    io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+    Draw(0.02f);
+    CHECK(DrawnHoverAlpha(window) > 0 && DrawnHoverAlpha(window) < laterHover);
+    Draw(0.20f);
+    CHECK(DrawnHoverAlpha(window) == 0);
+
+    PressModalButton("Purchase##tab");
+    CHECK(editorapp::checkoutPanel == editorapp::CheckoutPanel::Purchase);
+    const ImVec2 moving = DrawnUnderlineStart(window);
+    Draw(0.20f);
+    const ImVec2 purchase = DrawnUnderlineStart(window);
+    CHECK(destroyer.x < moving.x && moving.x < purchase.x);
+    CHECK(destroyer.y == moving.y && moving.y == purchase.y);
+    CHECK(!purchaseCalls && !continueCalls && modalShown);
+    PressModalButton("Destroyer");
+    Draw(0.20f);
+    CHECK(DrawnUnderlineStart(window).x == destroyer.x);
+    Draw();
 }
 
 static ImRect PressExtraTile(uint32_t type)
@@ -333,6 +389,7 @@ int main(int argc, char** argv)
     CHECK(modalShown && editorapp::shopOpen && !editorapp::NoticeShown());
     Draw();
     Draw();
+    CheckAnimatedTabs();
     ImGuiWindow* checkoutWindow = CheckoutWindow();
     const ImVec2 checkoutPos = checkoutWindow->Pos;
     const int opened = modalChanges;
@@ -490,5 +547,5 @@ int main(int argc, char** argv)
     CHECK(!editorapp::NoticeShown());
     CHECK(!automaticReady);
     ImGui::DestroyContext();
-    puts("PASS frontend: live loadout costs, reversible Destroyer/Purchase panels, confirm or cancel, and ship-only F2 exchange.");
+    puts("PASS frontend: hover fades and sliding underline, live costs, reversible panels, checkout, and F2 exchange.");
 }

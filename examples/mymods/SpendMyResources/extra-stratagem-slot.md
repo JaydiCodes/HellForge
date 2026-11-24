@@ -8,6 +8,9 @@ slots stay unchanged. The extra appears in the mission's stratagem menu after de
 saved to the game's loadout. Restricted extras also need requisition access, just like restricted items in the
 native slots.
 
+The yellow underline marks the active panel, and yellow borders mark the previewed upgrade and chosen extra.
+Hover highlights fade in and out without moving the controls.
+
 The upgrade costs 2,000 requisition slips, 50 Forge Credits, 10 Common samples, 5 Rare samples and 1 Super sample
 by default and increases equipped cooldowns, including the extra and Eagle rearm, by 10%. Edit `forge_credits`,
 `common_samples`, `rare_samples`, `super_samples` and `other_cooldown_percent` in `extra_slot` in
