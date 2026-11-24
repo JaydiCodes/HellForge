@@ -70,7 +70,7 @@ static const uint8_t kPackageFindPin[80] = {
     0x8b, 0x5b, 0x20, 0x4d, 0x8b, 0x04, 0xc3, 0x49, 0x39, 0x50, 0x10, 0x74, 0x21, 0xff, 0xc0, 0x41};
 
 typedef struct RefPackage { uint64_t id; const char* name; } RefPackage;
-/* The packages references need (index + 1 in the rows below; 0: none) */
+/* The packages references and mods need (index + 1 in the rows below; 0: none) */
 static const RefPackage kRefPackages[] = {
     {0x0089BBE3E284FCAAull, "packages/generated/loadout/grenade_launcher"},
     {0x03B4B7A46856CCB2ull, "unnamed loadout package of R-6 Deadeye"},
@@ -251,6 +251,7 @@ static const RefPackage kRefPackages[] = {
     {0xFD3EEF9A0329B2C2ull, "packages/generated/loadout/assault_rifle_nacho"},
     {0xFDE8230C79315087ull, "packages/generated/loadout/expendable_massive_rocket_launcher"},
     {0xFE3EF44300E4A1E2ull, "packages/generated/loadout/orbital_barrage"},
+    {0x662A9D42F834777Eull, "packages/generated/loadout/orbital_laser"},
 };
 
 typedef struct RefRow { uint32_t type; uint16_t package, package2; uint8_t mission, shrapnel; } RefRow;

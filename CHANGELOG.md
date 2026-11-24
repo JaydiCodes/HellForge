@@ -632,6 +632,8 @@ On `dev`, since 0.4.0-beta.
 
 ### For mod makers
 
+- **Mods can load Orbital Laser's assets.** Its vanilla package is in the catalogue, so `load_package` no longer
+  refuses it, even when Orbital Laser is not in the normal loadout.
 - **`modloader.log` follows edits that wait for their tables.** The "deferred edits" line names the tables the waiting
   edits wait for, and a later line says when they apply. The count waiting at first differs between PCs, as the tables
   load at different times. Before, nothing said that they applied later (#352).

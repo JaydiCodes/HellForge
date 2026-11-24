@@ -2602,6 +2602,16 @@ static void RefsFixture(void)
     assert(ApiLoadPackage(mod, 0xABCDEF01ull) == HF_PACKAGE_LOADING && g_heldCount == held + 2);
     g_modPackageCount = 0; g_modPackagesWanted = 0;
 
+    /* A mod can request Orbital Laser without a manifest package or a reference donor. */
+    g_heldCount = g_refRequestedCount = g_refResidentCount = 0;
+    const uint64_t orbitalLaserPackage = 0x662A9D42F834777Eull;
+    assert(ApiLoadPackage(mod, orbitalLaserPackage) == HF_PACKAGE_LOADING);
+    PackagesRequest();
+    assert(g_refRequestedCount == 1 && g_refRequested[0] == orbitalLaserPackage);
+    assert(ApiLoadPackage(mod, orbitalLaserPackage) == HF_PACKAGE_LOADING);
+    g_refResident[g_refResidentCount++] = orbitalLaserPackage;
+    assert(ApiLoadPackage(mod, orbitalLaserPackage) == HF_PACKAGE_RESIDENT);
+
     g_statCount = 0;
     for (int i = 0; i < g_fakeRecordCount; i++) free(g_fakeRecords[i].bytes);
     g_fakeRecordCount = g_componentCount = g_editCount = 0;

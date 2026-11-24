@@ -327,6 +327,12 @@ def main(runtime, out_json, out_header):
     # obj_gen_icbm holds the ICBM launch sequence (HD2Runtime research/sound-events: the bank ships in this package).
     used.setdefault('0x20BDEC2A51065E1F', 'packages/content/gen_icbm (the Launch ICBM objective: its launch sounds)')
 
+    # Extra Stratagem Slot requests Orbital Laser's vanilla package directly. Append it without renumbering references.
+    ids = sorted(used)
+    mod_packages = {'0x662A9D42F834777E': 'packages/generated/loadout/orbital_laser'}
+    ids.extend(sorted(mod_packages.keys() - used.keys()))
+    used = {**mod_packages, **used}
+
     loader = residency['loader']
     engine = loader['engine']
     data = {
@@ -343,7 +349,6 @@ def main(runtime, out_json, out_header):
     }
     Path(out_json).write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n', encoding='utf-8', newline='\n')
 
-    ids = sorted(used)
     index = {pid: i + 1 for i, pid in enumerate(ids)}
 
     def pin(name, hexbytes):
@@ -384,7 +389,7 @@ def main(runtime, out_json, out_header):
          pin('kPackageHasLoadedPin', engine['hasLoadedProof']),
          pin('kPackageFindPin', engine['findProof'] if 'findProof' in engine else engine['findPackageProof']),
          'typedef struct RefPackage { uint64_t id; const char* name; } RefPackage;',
-         '/* The packages references need (index + 1 in the rows below; 0: none) */',
+         '/* The packages references and mods need (index + 1 in the rows below; 0: none) */',
          'static const RefPackage kRefPackages[] = {']
     for pid in ids:
         name = used[pid].replace('\\', '/').replace('"', "'")
