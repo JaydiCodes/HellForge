@@ -74,5 +74,7 @@ static int LayoutMatches(const HfApi* api, uintptr_t game)
             "75 16 48 8D 4F 08 48 83 C2 38 41 B8 F0 09 00 00") &&
         api->code_matches(game + 0x11E8315,
             "3B BE 88 07 00 00 72 11 41 8B 04 24 3B F8 0F 83 C6 01 00 00 48 8B 44 24 70 "
-            "48 8D 0C 7F 48 C1 E1 04");
+            "48 8D 0C 7F 48 C1 E1 04") &&
+        api->code_matches(game + 0x14704FE, "48 8B D5 44 89 64 24 20 E8 15 C5 42 00") &&
+        api->code_matches(game + 0x189CA4E, "48 89 91 F0 ED 01 00 4C 89 81 00 EE 01 00");
 }

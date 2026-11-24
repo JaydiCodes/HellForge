@@ -19,6 +19,7 @@ static int ReadUpgradeConfig(const std::wstring& path, SmrUpgradeTuning tuning[S
     constexpr unsigned eagle = 1u << SMR_UPGRADE_EAGLE,
         percentCooldown = (1u << SMR_UPGRADE_ORBITAL) | (1u << SMR_UPGRADE_DEFENSIVE) | (1u << SMR_UPGRADE_SUPPORT),
         required = eagle | percentCooldown, all = required | (1u << SMR_UPGRADE_EXTRA_SLOT);
+    constexpr unsigned defaultRequisition = 2000;
     constexpr const char* sections[] = {"", "orbital", "eagle", "defensive", "support", "extra_slot"};
     constexpr struct {
         const char* name;
@@ -27,6 +28,7 @@ static int ReadUpgradeConfig(const std::wstring& path, SmrUpgradeTuning tuning[S
         double SmrUpgradeTuning::* number; /* null for whole-number prices */
         size_t currency;
     } fields[] = {
+        {"requisition", all, 0, UINT32_MAX, nullptr, REQUISITION_SLIPS},
         {"forge_credits", all, 1, UINT32_MAX, nullptr, FORGE_CREDITS},
         {"common_samples", all, 0, UINT32_MAX, nullptr, COMMON_SAMPLES},
         {"rare_samples", all, 0, UINT32_MAX, nullptr, RARE_SAMPLES},
@@ -39,6 +41,7 @@ static int ReadUpgradeConfig(const std::wstring& path, SmrUpgradeTuning tuning[S
     };
     SmrUpgradeTuning loaded[SMR_UPGRADE_COUNT] = {};
     unsigned seenSections = 0;
+    bool usedDefaultRequisition = false;
     for (const auto& member : document.members)
     {
         unsigned index = 1;
@@ -79,6 +82,12 @@ static int ReadUpgradeConfig(const std::wstring& path, SmrUpgradeTuning tuning[S
         for (size_t i = 0; i < sizeof fields / sizeof fields[0]; ++i)
             if ((fields[i].sections & bit) && !(seen & (1u << i)))
             {
+                if (!fields[i].number && fields[i].currency == REQUISITION_SLIPS)
+                {
+                    loaded[index].price[REQUISITION_SLIPS] = defaultRequisition;
+                    usedDefaultRequisition = true;
+                    continue;
+                }
                 snprintf(result, size, "Missing setting: %s.%s.", sections[index], fields[i].name);
                 return 0;
             }
@@ -90,6 +99,8 @@ static int ReadUpgradeConfig(const std::wstring& path, SmrUpgradeTuning tuning[S
             return 0;
         }
     for (unsigned i = 0; i < SMR_UPGRADE_COUNT; ++i) tuning[i] = loaded[i];
+    if (usedDefaultRequisition) snprintf(result, size, "Missing requisition settings use %u Req.", defaultRequisition);
+    else if (size) result[0] = '\0';
     return 1;
 }
 

@@ -6,22 +6,22 @@
 #define CHECK(test) do { if (!(test)) { printf("FAIL line %d: %s\n", __LINE__, #test); exit(1); } } while (0)
 
 static bool requested, modalShown;
+static int modalChanges;
 static unsigned due = 2750;
 static int transactionPending;
 static bool automaticReady;
 static HfApi fixtureApi;
-static unsigned char* image;
-static uint32_t menu = 11;
+static bool pickerOpen = true;
 static uint32_t fixtureState = HF_STATE_SHIP;
 static bool windowClosed;
 static int exchangeCalls;
-static bool upgradeRequested, upgradeContinued, checkoutPaid;
-static int purchaseCalls;
-static SmrDestroyerStatus upgrade = {{0, 40, 20, 3, 50}, 1, 1, SMR_UPGRADE_NONE, SMR_UPGRADE_NONE, 0};
+static bool checkoutComplete;
+static int purchaseCalls, continueCalls;
+static SmrDestroyerStatus upgrade = {{5000, 40, 20, 3, 50}, 1, 1, SMR_UPGRADE_NONE, SMR_UPGRADE_NONE, 0};
 static const SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT] = {
-    {}, {{0, 10, 5, 1, 10}, -66, 50, 0, 0, 0}, {{0, 10, 5, 1, 10}, 0, 50, 20, 2, 30},
-    {{0, 10, 5, 1, 10}, -66, 50, 0, 0, 0}, {{0, 2, 0, 1, 7}, -62.5, -25, 0, 0, 0},
-    {{0, 10, 5, 1, 50}, 0, 10, 0, 0, 0},
+    {}, {{2000, 10, 5, 1, 10}, -66, 50, 0, 0, 0}, {{2000, 10, 5, 1, 10}, 0, 50, 20, 2, 30},
+    {{2000, 10, 5, 1, 10}, -66, 50, 0, 0, 0}, {{2000, 2, 0, 1, 7}, -62.5, -25, 0, 0, 0},
+    {{2000, 10, 5, 1, 50}, 0, 10, 0, 0, 0},
 };
 static constexpr SmrExtraChoice extraChoices[] = {
     {HF_STRATAGEM_EAGLE_500KG_BOMB, "Eagle 500kg Bomb", HF_CATEGORY_OFFENSIVE},
@@ -32,10 +32,13 @@ static constexpr SmrExtraChoice extraChoices[] = {
 static bool quoteValid = true;
 static SmrLoadoutQuote loadoutQuote = {2000, 1000, 1, 2, {{"R-36 Eruptor", 0}, {"MS-11 Solo Silo", 2000}}};
 const char* g_hellforgePixelShader = nullptr;
-static int FixtureRead(uintptr_t at, void* out, size_t size) { memcpy(out, (void*)at, size); return 0; }
-static uintptr_t FixtureBase(const char*, size_t*) { return (uintptr_t)image; }
 static uint32_t FixtureState(HfMod*) { return fixtureState; }
-static void Show(bool on) { modalShown = on; }
+static void Show(bool on)
+{
+    CHECK(modalShown != on);
+    modalShown = on;
+    ++modalChanges;
+}
 static void Close() { windowClosed = true; }
 
 extern "C" int SmrInit(const HfApi*, HfMod*) { return 0; }
@@ -43,12 +46,10 @@ extern "C" void SmrFinishCheckout(int ready)
 {
     if (ready) CHECK(!modalShown);
     else { upgrade.selected = SMR_UPGRADE_NONE; upgrade.extra = 0; }
-    checkoutPaid = false;
+    checkoutComplete = false;
     automaticReady = ready != 0;
 }
 extern "C" int SmrTakeCheckoutRequest() { bool value = requested; requested = false; return value; }
-extern "C" int SmrTakeDestroyerRequest() { bool value = upgradeRequested; upgradeRequested = false; return value; }
-extern "C" void SmrFinishDestroyer(int proceed) { if (proceed) CHECK(!modalShown); upgradeContinued = proceed != 0; }
 extern "C" SmrDestroyerStatus SmrDestroyer(HfMod*) { return upgrade; }
 extern "C" const SmrUpgradeTuning* SmrGetUpgradeTuning(SmrUpgrade choice)
 {
@@ -72,21 +73,43 @@ extern "C" size_t SmrExtraChoices(SmrExtraChoice* choices, size_t capacity)
     memcpy(choices, extraChoices, count * sizeof choices[0]);
     return count;
 }
-extern "C" int SmrBalance(unsigned* balance) { *balance = 5000; return 1; }
-extern "C" int SmrQuoteLoadout(SmrLoadoutQuote* out) { *out = loadoutQuote; return quoteValid; }
-extern "C" int SmrCheckout(unsigned* total, unsigned upgrade_price[CURRENCY_COUNT], int* pending)
+extern "C" int SmrBalance(unsigned* balance) { *balance = upgrade.balance[REQUISITION_SLIPS]; return 1; }
+extern "C" int SmrLoadoutOpen(HfMod*) { return pickerOpen && fixtureState == HF_STATE_SHIP; }
+extern "C" int SmrQuoteLoadout(HfMod*, SmrLoadoutQuote* out) { *out = loadoutQuote; return quoteValid; }
+extern "C" SmrCheckoutAction SmrCheckout(unsigned* total, unsigned upgrade_price[CURRENCY_COUNT], int* pending)
 {
     *total = due;
     memcpy(upgrade_price, tuning[upgrade.selected].price, sizeof tuning[0].price);
-    *pending = transactionPending;
-    return (due || upgrade_price[FORGE_CREDITS]) && !transactionPending;
+    *pending = transactionPending || checkoutComplete;
+    if (*pending || (upgrade.selected && !upgrade.solo) ||
+        SmrRequisitionDue(due, upgrade_price) > upgrade.balance[REQUISITION_SLIPS])
+        return SMR_CHECKOUT_BLOCKED;
+    for (size_t i = COMMON_SAMPLES; i < CURRENCY_COUNT; ++i)
+        if (upgrade_price[i] > upgrade.balance[i]) return SMR_CHECKOUT_BLOCKED;
+    return due || upgrade.selected ? SMR_CHECKOUT_PURCHASE : SMR_CHECKOUT_CONTINUE;
 }
-extern "C" int SmrCheckoutPaid() { return checkoutPaid; }
-extern "C" int SmrBuyCheckout(HfMod*) { ++purchaseCalls; transactionPending = 1; return 1; }
+extern "C" int SmrCheckoutComplete() { return checkoutComplete; }
+extern "C" int SmrConfirmCheckout(HfMod*, SmrCheckoutAction action)
+{
+    CHECK(modalShown && action != SMR_CHECKOUT_BLOCKED);
+    unsigned total, price[CURRENCY_COUNT];
+    int pending;
+    CHECK(action == SmrCheckout(&total, price, &pending));
+    if (action == SMR_CHECKOUT_CONTINUE)
+    {
+        ++continueCalls;
+        checkoutComplete = true;
+    }
+    else
+    {
+        ++purchaseCalls;
+        transactionPending = 1;
+    }
+    return 1;
+}
 extern "C" void SmrMessage(char* text, size_t size)
 {
-    snprintf(text, size, "%s", editorapp::destroyerOpen ?
-        "Choose an upgrade or skip to continue." : "Checkout fixture");
+    snprintf(text, size, "Checkout fixture");
 }
 extern "C" int SmrShopItem(size_t i, SmrItem* item)
 {
@@ -216,23 +239,37 @@ static void SaveUpgradeScreenshot(const char* path, bool expectGameIcons)
     device->Release();
 }
 
-static void PressModalButton(const char* label)
+static ImGuiWindow* CheckoutWindow()
 {
-    ImGuiWindow* window = ImGui::FindWindowByName(editorapp::destroyerOpen ?
-        "Spend My Resources - Destroyer Upgrades" : "Spend My Resources");
+    ImGuiWindow* window = ImGui::FindWindowByName("Spend My Resources");
     CHECK(window);
+    return window;
+}
+
+static ImGuiWindow* PanelWindow()
+{
+    ImGuiWindow* window = CheckoutWindow();
+    CHECK(window->DC.ChildWindows.Size == 1);
+    return window->DC.ChildWindows[0];
+}
+
+static ImRect PressModalButton(const char* label, bool inPanel = false)
+{
+    ImGuiWindow* window = inPanel ? PanelWindow() : CheckoutWindow();
     ImGui::NewFrame();
-    GImGui->NavActivateId = GImGui->NavActivateDownId = window->GetID(label);
+    GImGui->NavWindow = window;
+    GImGui->NavId = GImGui->NavActivateId = GImGui->NavActivateDownId = window->GetID(label);
     GImGui->NavInputSource = ImGuiInputSource_Keyboard;
     editorapp::Modal(nullptr, 1280, 720, 1.0f / 60);
     ImGui::Render();
+    return window->NavRectRel[ImGuiNavLayer_Main];
 }
 
 static ImRect PressExtraTile(uint32_t type)
 {
-    ImGuiWindow* modal = ImGui::FindWindowByName("Spend My Resources - Destroyer Upgrades");
-    CHECK(modal && modal->DC.ChildWindows.Size == 1);
-    ImGuiWindow* grid = modal->DC.ChildWindows[0];
+    ImGuiWindow* panel = PanelWindow();
+    CHECK(panel->DC.ChildWindows.Size == 1);
+    ImGuiWindow* grid = panel->DC.ChildWindows[0];
     const ImGuiID id = ImHashStr("##Stratagem", 0, grid->GetID(static_cast<int>(type)));
     ImGui::NewFrame();
     GImGui->NavWindow = grid;
@@ -264,11 +301,7 @@ int main(int argc, char** argv)
         puts("Usage: checkout_frontend_test.exe [screenshot.bmp [HellForge mods folder]]");
         return 2;
     }
-    image = (unsigned char*)VirtualAlloc(nullptr, 0x3480000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    CHECK(image);
-    uintptr_t pointer = (uintptr_t)&menu;
-    memcpy(image + 0x347CE38, &pointer, sizeof pointer);
-    fixtureApi.read = FixtureRead; fixtureApi.module_base = FixtureBase; fixtureApi.game_state = FixtureState;
+    fixtureApi.game_state = FixtureState;
     editorapp::Host host = {};
     host.api = &fixtureApi; host.modal = Show; host.close = Close;
     if (argc == 3) host.modsFolder = argv[2];
@@ -295,15 +328,18 @@ int main(int argc, char** argv)
     CheckCostPanel("Loadout cost: 0 Req", false);
     quoteValid = false;
     CheckCostPanel("Loadout cost unavailable", false);
-    upgradeRequested = true;
+    requested = true;
     editorapp::Tick();
-    CHECK(modalShown && editorapp::destroyerOpen && !editorapp::shopOpen && !editorapp::NoticeShown());
+    CHECK(modalShown && editorapp::shopOpen && !editorapp::NoticeShown());
     Draw();
     Draw();
+    ImGuiWindow* checkoutWindow = CheckoutWindow();
+    const ImVec2 checkoutPos = checkoutWindow->Pos;
+    const int opened = modalChanges;
     const char* choices[] = {"##Eagle Upgrade", "##Defensive Upgrade", "##Support Upgrade", "##Extra Stratagem Slot"};
     for (size_t i = 0; i < IM_ARRAYSIZE(choices); ++i)
     {
-        PressModalButton(choices[i]);
+        PressModalButton(choices[i], true);
         CHECK(editorapp::destroyerSelection == i + 1);
         CHECK(!upgrade.selected && !purchaseCalls && modalShown);
     }
@@ -312,78 +348,98 @@ int main(int argc, char** argv)
     CheckModalText("Choose an extra stratagem", "Cost at checkout:", "Selected: None");
     CheckModalText("50 Forge Credits (50 available)", "10 Common samples (40 available)",
         "1 Super sample (3 available)");
-    CheckModalText("5 Rare samples (20 available)");
+    CheckModalText("5 Rare samples (20 available)", "2000 Requisition slips (5000 available)");
     CheckModalText("Offensive", "Support", "Defensive");
     const ImRect first = PressExtraTile(HF_STRATAGEM_EAGLE_500KG_BOMB);
     const ImRect second = PressExtraTile(HF_STRATAGEM_EAGLE_AIRSTRIKE);
     CHECK(first.Min.y == second.Min.y && first.Max.x < second.Min.x);
     CheckModalText("Selected: Eagle Airstrike");
     if (argc >= 2) SaveUpgradeScreenshot(argv[1], argc == 3);
-    PressModalButton("Select upgrade");
+    const ImRect select = PressModalButton("Select upgrade");
+    CHECK(select.Max.y > select.Min.y && select.Max.y + checkoutPos.y <= checkoutWindow->InnerClipRect.Max.y);
     CHECK(upgrade.selected == SMR_UPGRADE_EXTRA_SLOT && upgrade.extra == HF_STRATAGEM_EAGLE_AIRSTRIKE && !purchaseCalls);
-    requested = true;
-    editorapp::Tick();
-    CHECK(modalShown && editorapp::shopOpen);
     CheckModalText("Extra stratagem: Eagle Airstrike", "Extra Stratagem Slot",
-        "Total due: 2750 Req + 50 Forge Credits + 10 Common samples + 5 Rare samples + 1 Super sample");
-    io.AddKeyEvent(ImGuiKey_Escape, true);
-    Draw();
-    CHECK(!modalShown && !upgrade.selected && !upgrade.extra);
-    io.AddKeyEvent(ImGuiKey_Escape, false);
-    upgradeRequested = true;
-    editorapp::Tick();
-    Draw();
-    PressModalButton("##Orbital Upgrade");
-    CHECK(editorapp::destroyerSelection == 0);
-    PressModalButton("##Eagle Upgrade");
-    PressModalButton("Skip upgrade");
-    CHECK(upgradeContinued && !modalShown && !editorapp::destroyerOpen && !automaticReady);
-    requested = true;
-    editorapp::Tick();
-    CHECK(modalShown && editorapp::shopOpen && !editorapp::NoticeShown());
-    Draw();
-    Draw();
-    CHECK(ImGui::GetDrawData()->TotalVtxCount > 0);
-    CHECK(ImGui::FindWindowByName("Spend My Resources"));
-    io.AddKeyEvent(ImGuiKey_Escape, true);
-    Draw();
-    CHECK(!modalShown && !editorapp::shopOpen);
-    CHECK(!automaticReady);
-    io.AddKeyEvent(ImGuiKey_Escape, false);
-    upgradeRequested = true;
-    editorapp::Tick();
-    CHECK(editorapp::destroyerSelection == 0);
-    Draw();
-    Draw();
-    PressModalButton("##Defensive Upgrade");
+        "Total due: 4750 Req + 50 Forge Credits + 10 Common samples + 5 Rare samples + 1 Super sample");
+    PressModalButton("Destroyer");
+    CheckModalText("Selected for purchase: Extra Stratagem Slot", "Selected: Eagle Airstrike");
+    PressExtraTile(HF_STRATAGEM_EAGLE_500KG_BOMB);
+    PressModalButton("Select upgrade");
+    CheckModalText("Extra stratagem: Eagle 500kg Bomb");
+    PressModalButton("Destroyer");
+    PressModalButton("##Defensive Upgrade", true);
     CheckModalText("Equipped defensive stratagems: -66% to cooldowns and unlimited uses.", "and Eagle rearm: +50%",
         "10 Forge Credits (50 available)");
-    PressModalButton("##Support Upgrade");
+    PressModalButton("##Support Upgrade", true);
     CheckModalText("Equipped support stratagems: -62.5% to cooldowns and unlimited uses.", "and Eagle rearm: -25%",
         "7 Forge Credits (50 available)");
     PressModalButton("Select upgrade");
-    CHECK(upgrade.selected == SMR_UPGRADE_SUPPORT && upgradeContinued && !purchaseCalls && !modalShown && !automaticReady);
-    requested = true;
-    editorapp::Tick();
-    CHECK(modalShown && editorapp::shopOpen);
-    CheckModalText("Total due: 2750 Req + 7 Forge Credits + 2 Common samples + 1 Super sample",
+    CHECK(upgrade.selected == SMR_UPGRADE_SUPPORT && !upgrade.extra && !purchaseCalls);
+    CheckModalText("Total due: 4750 Req + 7 Forge Credits + 2 Common samples + 1 Super sample",
         "2 Common samples (40 available)", "1 Super sample (3 available)");
+    upgrade.balance[REQUISITION_SLIPS] = 4749;
+    CheckModalText("Not enough requisition for this purchase.", "2000 Requisition slips (4749 available)");
+    PressModalButton("Purchase");
+    CHECK(!purchaseCalls);
+    upgrade.balance[REQUISITION_SLIPS] = 5000;
     upgrade.balance[SUPER_SAMPLES] = 0;
     CheckModalText("1 Super sample (0 available, not enough)");
+    PressModalButton("Purchase");
+    CHECK(!purchaseCalls);
     upgrade.balance[SUPER_SAMPLES] = 3;
+    PressModalButton("Destroyer");
+    PressModalButton("Remove upgrade");
+    CHECK(!upgrade.selected);
+    PressModalButton("Purchase##tab");
+    CheckModalText("Total due: 2750 Req");
+    CHECK(modalShown && modalChanges == opened && !purchaseCalls && !automaticReady);
+    CHECK(CheckoutWindow() == checkoutWindow && checkoutWindow->Pos.x == checkoutPos.x && checkoutWindow->Pos.y == checkoutPos.y);
+    PressModalButton("Destroyer");
+    PressModalButton("Select upgrade");
+    CHECK(upgrade.selected == SMR_UPGRADE_SUPPORT);
+    io.AddKeyEvent(ImGuiKey_Escape, true);
+    Draw();
+    CHECK(!modalShown && !editorapp::shopOpen && !upgrade.selected && !upgrade.extra && !automaticReady);
+    io.AddKeyEvent(ImGuiKey_Escape, false);
+
+    upgrade.solo = upgrade.available = 0;
     due = 0;
-    CheckModalText("Total due: 7 Forge Credits + 2 Common samples + 1 Super sample");
+    requested = true;
+    editorapp::Tick();
+    CheckModalText("Destroyer upgrades are available in solo play only.");
+    PressModalButton("Purchase##tab");
+    CheckModalText("Nothing to purchase.");
+    PressModalButton("Continue to Ready");
+    CHECK(continueCalls == 1 && !purchaseCalls && modalShown && !automaticReady);
+    editorapp::Tick();
+    CHECK(!modalShown && automaticReady);
+    automaticReady = false;
+
+    upgrade.solo = upgrade.available = 1;
+    requested = true;
+    editorapp::Tick();
+    CHECK(editorapp::destroyerSelection == 0 && !editorapp::destroyerExtra);
+    Draw();
+    PressModalButton("##Support Upgrade", true);
+    PressModalButton("Select upgrade");
+    due = 0;
+    CheckModalText("Total due: 2000 Req + 7 Forge Credits + 2 Common samples + 1 Super sample");
     PressModalButton("Purchase");
     CHECK(purchaseCalls == 1 && transactionPending && !upgrade.purchased);
+    PressModalButton("Destroyer");
+    CHECK(editorapp::checkoutPanel == editorapp::CheckoutPanel::Purchase);
+    io.AddKeyEvent(ImGuiKey_Escape, true);
+    Draw();
+    CHECK(modalShown && purchaseCalls == 1);
+    io.AddKeyEvent(ImGuiKey_Escape, false);
     transactionPending = 0;
-    checkoutPaid = true;
+    checkoutComplete = true;
     upgrade.purchased = upgrade.selected;
     upgrade.selected = SMR_UPGRADE_NONE;
     editorapp::Tick();
     CHECK(!modalShown && !editorapp::shopOpen && automaticReady);
     automaticReady = false;
     due = 2750;
-    menu = 11;
+    pickerOpen = true;
     editorapp::Opened();
     CHECK(editorapp::exchangeOpen && !editorapp::shopOpen && !modalShown && !editorapp::NoticeShown());
     for (int i = 0; i < 2; ++i)
@@ -419,8 +475,7 @@ int main(int argc, char** argv)
     requested = true;
     editorapp::Tick();
     CHECK(modalShown);
-    editorapp::purchasePending = true;
-    checkoutPaid = true;
+    checkoutComplete = true;
     due = 0;
     editorapp::Tick();
     CHECK(!modalShown);
@@ -429,12 +484,11 @@ int main(int argc, char** argv)
     requested = true;
     editorapp::Tick();
     CHECK(modalShown);
-    menu = 0;
+    pickerOpen = false;
     editorapp::Tick();
     CHECK(!modalShown);
     CHECK(!editorapp::NoticeShown());
     CHECK(!automaticReady);
     ImGui::DestroyContext();
-    VirtualFree(image, 0, MEM_RELEASE);
-    puts("PASS frontend: live read-only loadout costs, upgrade and checkout flow, and ship-only F2 exchange.");
+    puts("PASS frontend: live loadout costs, reversible Destroyer/Purchase panels, confirm or cancel, and ship-only F2 exchange.");
 }

@@ -17,13 +17,11 @@ static int shop_failed;
 static char shop_message[192] = "Waiting for the player's inventory.";
 static SRWLOCK shop_lock = SRWLOCK_INIT;
 static const char* logs_folder;
-static uint64_t checkout_mask;
-static int checkout_valid;
-static volatile LONG checkout_requested;
-static volatile LONG auto_ready;
-static uint64_t auto_ready_selection;
-enum { DESTROYER_IDLE, DESTROYER_REQUESTED, DESTROYER_OPEN, DESTROYER_CONTINUE };
-static volatile LONG destroyer_gate;
+static uint64_t checkout_equipped, ready_selection;
+static int checkout_valid, checkout_solo;
+enum { CHECKOUT_IDLE, CHECKOUT_REQUESTED, CHECKOUT_OPEN, CHECKOUT_CONFIRMED, CHECKOUT_RESUME };
+static volatile LONG checkout_gate;
+static LONG CheckoutGate(void) { return InterlockedCompareExchange(&checkout_gate, 0, 0); }
 static SmrUpgrade upgrade_selected, upgrade_purchased;
 static uint32_t extra_pick;
 static unsigned currency_amount[CURRENCY_COUNT], currency_cap[CURRENCY_COUNT];
@@ -38,7 +36,7 @@ enum { CHARGE_IDLE, CHARGE_QUEUED };
 static struct {
     int state;
     uint64_t mask;
-    unsigned total, upgrade_price[CURRENCY_COUNT];
+    unsigned gear_cost, upgrade_price[CURRENCY_COUNT];
     SmrUpgrade upgrade;
     uint32_t extra;
 } charge;

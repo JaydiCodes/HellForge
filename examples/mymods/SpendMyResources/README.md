@@ -51,8 +51,13 @@ the file edit.
 
 ## Destroyer upgrades
 
-Select a square icon above the description to preview an upgrade. Orbital, Eagle, Defensive, and Support are
-available. Extra Stratagem Slot is preview-only because the mod cannot add a fifth selectable slot.
+Select a square icon above the description to preview an upgrade. Orbital, Eagle, Defensive, Support, and
+[Extra Stratagem Slot](./extra-stratagem-slot.md) are available in solo play. The extra stratagem is granted after
+deployment, without adding a fifth slot to the main loadout.
+
+**Known issue: Orbital Laser in the Extra Stratagem Slot.** HellForge's asset catalogue is missing the Orbital Laser
+package, so checkout is cancelled without deducting any resources. Until HellForge fixes this, equip Orbital Laser in
+one of the four normal stratagem slots in your main loadout instead.
 
 The picker uses the local HellForge Editor icon cache (`mods\hellforge-editor\game-icons.bin`) when available:
 Orbital Precision Strike, Eagle Airstrike, Gatling Sentry, and Supply Pack. If a sprite is missing, the picker uses
@@ -90,9 +95,10 @@ file before redeploying the mod, since deployment copies the shipped config over
 If you reuse an older config, replace `cooldown_seconds` with `cooldown_percent` (for example, `-66`) in
 `defensive` and `support`, and remove any remaining `uses` entries. Keep `cooldown_seconds` in `eagle`.
 
-Keep all four sections and their settings. Percentages accept `-100` to `10000`; times accept `0` to `86400`
+Keep the four required sections and their settings. Percentages accept `-100` to `10000`; times accept `0` to `86400`
 seconds. If the file is missing or invalid, the mod logs the error and disables upgrade selection; gear checkout
-and currency exchange still work. Extra Stratagem Slot remains preview-only and is not configurable.
+and currency exchange still work. The optional `extra_slot` section is described in the
+[Extra Stratagem Slot guide](./extra-stratagem-slot.md).
 
 ## Currency exchange (F2)
 

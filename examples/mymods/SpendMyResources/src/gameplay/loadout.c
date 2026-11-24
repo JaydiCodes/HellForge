@@ -9,7 +9,12 @@ enum {
     STRATAGEM_STRIDE = 0x30,
     STRATAGEM_COUNT = 0x788,
     MAX_RECORDS = 32,
-    MAX_STRATAGEMS = 32
+    MAX_STRATAGEMS = 32,
+    READY_MENU = 0x347CE38,
+    READY_SCREEN = 0xB0,
+    READY_CARD = 0x53A78,
+    READY_SELECTION = 0x1EDF0,
+    READY_PEER = 0x1EE00
 };
 _Static_assert(PRICE_COUNT <= SMR_MAX_RESTRICTED_ITEMS, "Restricted items must fit the quote and checkout mask.");
 
@@ -46,6 +51,38 @@ static uintptr_t ReadLocalLoadout(HfMod* mod)
     return LocalLoadout(HF_API(mod), game_base, LocalPeer(mod));
 }
 
+static uintptr_t BriefingMenu(const HfApi* api, uintptr_t game)
+{
+    uintptr_t menu = game ? Pointer(api, game + READY_MENU) : 0;
+    uint32_t top = 0;
+    return menu && !api->read(menu, &top, sizeof top) && top == 11 ? menu : 0;
+}
+
+int SmrLoadoutOpen(HfMod* mod)
+{
+    const HfApi* api = HF_API(mod);
+    return api->game_state(mod) == HF_STATE_SHIP && BriefingMenu(api, api->module_base("game.dll", NULL));
+}
+
+/* The briefing card borrows its own Loadout (same layout as history), not the last deployed loadout.
+ * 0x14704FE passes the picker copy to 0x189CA20, whose stores at 0x189CA4E bind the pointer and peer. */
+static uintptr_t ReadCardLoadout(HfMod* mod, uintptr_t card)
+{
+    const HfApi* api = HF_API(mod);
+    uint64_t peer = LocalPeer(mod), card_peer;
+    if (!card || !peer || api->read(card + READY_PEER, &card_peer, sizeof card_peer) || card_peer != peer)
+        return 0;
+    return Pointer(api, card + READY_SELECTION);
+}
+
+static uintptr_t ReadPickerLoadout(HfMod* mod, uintptr_t game)
+{
+    const HfApi* api = HF_API(mod);
+    uintptr_t menu = api->game_state(mod) == HF_STATE_SHIP ? BriefingMenu(api, game) : 0;
+    uintptr_t screen = menu ? Pointer(api, menu + READY_SCREEN) : 0;
+    return screen ? ReadCardLoadout(mod, screen + READY_CARD) : 0;
+}
+
 static int ReadStratagems(const HfApi* api, uintptr_t loadout, uint32_t* stratagems, uint32_t* count)
 {
     if (!loadout || api->read(loadout + STRATAGEM_COUNT, count, sizeof *count) || *count > MAX_STRATAGEMS)
@@ -63,28 +100,37 @@ static int ContainsPick(const uint32_t* picks, uint32_t count, uint32_t type)
     return 0;
 }
 
-static int SelectedItems(HfMod* mod, uint64_t* selected)
+static int ReadRestrictedItems(const HfApi* api, uintptr_t loadout, uint64_t* selected)
 {
-    const HfApi* api = HF_API(mod);
-    uintptr_t loadout = ReadLocalLoadout(mod);
     uint32_t count = 0, weapons[3], stratagems[MAX_STRATAGEMS];
     if (!ReadStratagems(api, loadout, stratagems, &count)) return 0;
     for (size_t i = 0; i < 3; ++i)
         if (api->read(loadout + i * WEAPON_STRIDE, &weapons[i], sizeof weapons[i])) return 0;
-    AcquireSRWLockShared(&shop_lock);
-    uint32_t extra = upgrade_selected == SMR_UPGRADE_EXTRA_SLOT || upgrade_purchased == SMR_UPGRADE_EXTRA_SLOT ?
-        extra_pick : 0;
-    ReleaseSRWLockShared(&shop_lock);
-    if (extra && (api->game_state(mod) != HF_STATE_SHIP || !DestroyerSolo(mod))) extra = 0;
     *selected = 0;
     for (size_t i = 0; i < PRICE_COUNT; ++i)
     {
         int weapon = kLoadoutPrices[i].kind == PRICE_WEAPON;
         uint32_t type = kLoadoutPrices[i].id;
-        if (weapon ? ContainsPick(weapons, 3, type) : type == extra || ContainsPick(stratagems, count, type))
+        if (weapon ? ContainsPick(weapons, 3, type) : ContainsPick(stratagems, count, type))
             *selected |= UINT64_C(1) << i;
     }
     return 1;
+}
+
+static int ReadEquippedItems(HfMod* mod, uint64_t* selected)
+{
+    return ReadRestrictedItems(HF_API(mod), ReadPickerLoadout(mod, game_base), selected);
+}
+
+/* Merge the extra under shop_lock so a new or removed upgrade changes the quote immediately. */
+static uint64_t WithExtraAccess(uint64_t equipped, int solo)
+{
+    if (solo && extra_pick &&
+        (upgrade_selected == SMR_UPGRADE_EXTRA_SLOT || upgrade_purchased == SMR_UPGRADE_EXTRA_SLOT))
+        for (size_t i = 0; i < PRICE_COUNT; ++i)
+            if (kLoadoutPrices[i].kind == PRICE_STRATAGEM && kLoadoutPrices[i].id == extra_pick)
+                return equipped | (UINT64_C(1) << i);
+    return equipped;
 }
 
 static uint64_t UnpaidItems(uint64_t selected, unsigned* total)

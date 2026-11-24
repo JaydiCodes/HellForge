@@ -38,7 +38,7 @@ typedef enum SmrUpgrade {
     SMR_UPGRADE_EXTRA_SLOT, SMR_UPGRADE_COUNT
 } SmrUpgrade;
 typedef struct SmrUpgradeTuning {
-    unsigned price[CURRENCY_COUNT]; /* kCurrencies order; upgrades never cost requisition. */
+    unsigned price[CURRENCY_COUNT]; /* kCurrencies order. */
     double cooldown_percent, other_cooldown_percent;
     double cooldown_seconds, call_in_extra_seconds, rearm_seconds;
 } SmrUpgradeTuning;
@@ -56,8 +56,6 @@ typedef struct SmrExtraChoice {
     uint32_t category; /* HF_CATEGORY_... */
 } SmrExtraChoice;
 
-int SmrTakeDestroyerRequest(void);
-void SmrFinishDestroyer(int proceed);
 SmrDestroyerStatus SmrDestroyer(HfMod* mod);
 int SmrSelectUpgrade(HfMod* mod, SmrUpgrade upgrade, uint32_t extra);
 size_t SmrExtraChoices(SmrExtraChoice* choices, size_t capacity);
@@ -67,12 +65,20 @@ int SmrLoadUpgradeConfig(SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT], char* resul
 
 int SmrInit(const HfApi* api, HfMod* mod);
 int SmrShopItem(size_t i, SmrItem* out);
-int SmrQuoteLoadout(SmrLoadoutQuote* out);
+int SmrLoadoutOpen(HfMod* mod);
+int SmrQuoteLoadout(HfMod* mod, SmrLoadoutQuote* out);
 int SmrBalance(unsigned* out);
 void SmrMessage(char* out, size_t size);
-int SmrBuyCheckout(HfMod* mod);
-int SmrCheckout(unsigned* total, unsigned upgrade_price[CURRENCY_COUNT], int* pending);
-int SmrCheckoutPaid(void);
+typedef enum SmrCheckoutAction {
+    SMR_CHECKOUT_BLOCKED, SMR_CHECKOUT_PURCHASE, SMR_CHECKOUT_CONTINUE
+} SmrCheckoutAction;
+int SmrConfirmCheckout(HfMod* mod, SmrCheckoutAction action);
+SmrCheckoutAction SmrCheckout(unsigned* gear_cost, unsigned upgrade_price[CURRENCY_COUNT], int* pending);
+static inline uint64_t SmrRequisitionDue(unsigned gear_cost, const unsigned upgrade_price[CURRENCY_COUNT])
+{
+    return (uint64_t)gear_cost + upgrade_price[REQUISITION_SLIPS];
+}
+int SmrCheckoutComplete(void);
 int SmrTakeCheckoutRequest(void);
 void SmrFinishCheckout(int ready);
 int SmrLoadPrices(const char* const* names, unsigned* prices, size_t count, char* result, size_t size);

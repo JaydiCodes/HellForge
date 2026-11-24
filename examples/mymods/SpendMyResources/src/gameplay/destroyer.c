@@ -30,17 +30,6 @@ static int UpgradePrice(SmrUpgrade upgrade, unsigned price[CURRENCY_COUNT])
     return tuning != NULL;
 }
 
-int SmrTakeDestroyerRequest(void)
-{
-    return InterlockedCompareExchange(&destroyer_gate, DESTROYER_OPEN, DESTROYER_REQUESTED) == DESTROYER_REQUESTED;
-}
-
-void SmrFinishDestroyer(int proceed)
-{
-    if (proceed) InterlockedCompareExchange(&destroyer_gate, DESTROYER_CONTINUE, DESTROYER_OPEN);
-    else InterlockedExchange(&destroyer_gate, DESTROYER_IDLE);
-}
-
 static int DestroyerSolo(HfMod* mod)
 {
     const HfApi* api = HF_API(mod);
@@ -50,12 +39,17 @@ static int DestroyerSolo(HfMod* mod)
     return session.role == HF_SESSION_SOLO;
 }
 
+static int UpgradeSelectionOpen(void)
+{
+    return CheckoutGate() == CHECKOUT_OPEN && charge.state == CHARGE_IDLE && !exchange.pending && !upgrade_purchased;
+}
+
 SmrDestroyerStatus SmrDestroyer(HfMod* mod)
 {
     int solo = DestroyerSolo(mod);
     AcquireSRWLockShared(&shop_lock);
     SmrDestroyerStatus status = {{0},
-        solo && upgrade_funds_ready && !shop_failed && !upgrade_purchased && !upgrade_selected,
+        solo && upgrade_funds_ready && !shop_failed && UpgradeSelectionOpen(),
         solo, upgrade_selected, upgrade_purchased, extra_pick};
     memcpy(status.balance, currency_amount, sizeof status.balance);
     ReleaseSRWLockShared(&shop_lock);
@@ -64,16 +58,18 @@ SmrDestroyerStatus SmrDestroyer(HfMod* mod)
 
 int SmrSelectUpgrade(HfMod* mod, SmrUpgrade upgrade, uint32_t extra)
 {
-    int eligible = HF_API(mod)->game_state(mod) == HF_STATE_SHIP && DestroyerSolo(mod);
+    int on_ship = HF_API(mod)->game_state(mod) == HF_STATE_SHIP;
+    int solo = on_ship && DestroyerSolo(mod);
     AcquireSRWLockExclusive(&shop_lock);
-    int allowed = eligible && SmrGetUpgradeTuning(upgrade) &&
-        InterlockedCompareExchange(&destroyer_gate, 0, 0) == DESTROYER_OPEN &&
-        upgrade_funds_ready && !shop_failed && !upgrade_purchased && !upgrade_selected &&
-        (upgrade == SMR_UPGRADE_EXTRA_SLOT ? ExtraOptionListed(extra) : extra == 0);
+    int allowed = on_ship && UpgradeSelectionOpen() &&
+        (upgrade == SMR_UPGRADE_NONE ? extra == 0 :
+            solo && upgrade_funds_ready && !shop_failed && SmrGetUpgradeTuning(upgrade) &&
+            (upgrade == SMR_UPGRADE_EXTRA_SLOT ? ExtraOptionListed(extra) : extra == 0));
     if (allowed)
     {
         upgrade_selected = upgrade;
         extra_pick = extra;
+        checkout_solo = solo;
     }
     ReleaseSRWLockExclusive(&shop_lock);
     if (!allowed) ShopMessage(mod, "Destroyer upgrade selection unavailable.");
@@ -174,7 +170,7 @@ static int CanApplyUpgrade(HfMod* mod, SmrUpgrade upgrade, uint32_t extra)
     const HfApi* api = HF_API(mod);
     UpgradeEdit edits[MAX_UPGRADE_EDITS];
     size_t count;
-    uintptr_t loadout = ReadLocalLoadout(mod);
+    uintptr_t loadout = ReadPickerLoadout(mod, game_base);
     if (!DestroyerSolo(mod) || !PlanUpgrade(mod, loadout, upgrade, extra, edits, &count)) return 0;
     if (upgrade == SMR_UPGRADE_EXTRA_SLOT)
     {

@@ -12,30 +12,34 @@ static void TestUpgradeConfig(const std::wstring& shippedPath, const std::wstrin
     char result[256] = {};
     SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT] = {};
     CHECK(ReadUpgradeConfig(shippedPath, tuning, result, sizeof result));
-    const unsigned shippedPrice[CURRENCY_COUNT] = {0, 10, 5, 1, 50};
+    const unsigned shippedPrice[CURRENCY_COUNT] = {2000, 10, 5, 1, 50};
     for (int upgrade = SMR_UPGRADE_ORBITAL; upgrade < SMR_UPGRADE_COUNT; ++upgrade)
         CHECK(!memcmp(tuning[upgrade].price, shippedPrice, sizeof shippedPrice));
     CHECK(tuning[SMR_UPGRADE_ORBITAL].cooldown_percent == -66);
     CHECK(tuning[SMR_UPGRADE_EAGLE].rearm_seconds == 30 && tuning[SMR_UPGRADE_EAGLE].call_in_extra_seconds == 2 &&
         tuning[SMR_UPGRADE_EAGLE].cooldown_seconds == 20);
     CHECK(tuning[SMR_UPGRADE_DEFENSIVE].cooldown_percent == -66 && tuning[SMR_UPGRADE_SUPPORT].cooldown_percent == -66);
-    CHECK(tuning[SMR_UPGRADE_DEFENSIVE].other_cooldown_percent == 100 && tuning[SMR_UPGRADE_SUPPORT].other_cooldown_percent == 100);
+    CHECK(tuning[SMR_UPGRADE_DEFENSIVE].other_cooldown_percent == 50 && tuning[SMR_UPGRADE_SUPPORT].other_cooldown_percent == 50);
     CHECK(tuning[SMR_UPGRADE_EXTRA_SLOT].other_cooldown_percent == 10);
     std::string text, why;
     Value valid;
     CHECK(ReadFile(shippedPath, &text) && Parse(text, &valid, &why));
     valid.At("orbital").At("cooldown_percent") = Value::MakeNumber(-72.5, false);
+    valid.At("eagle").At("requisition") = Value::MakeNumber(1375, true);
     valid.At("eagle").At("forge_credits") = Value::MakeNumber(7, true);
     valid.At("eagle").At("common_samples") = Value::MakeNumber(0, true);
     valid.At("eagle").At("super_samples") = Value::MakeNumber(3, true);
     valid.At("support").At("cooldown_percent") = Value::MakeNumber(-62.5, false);
+    valid.At("support").At("requisition") = Value::MakeNumber(0, true);
     CHECK(WriteAtomically(tempPath, Write(valid)));
     CHECK(ReadUpgradeConfig(tempPath, tuning, result, sizeof result));
-    const unsigned eaglePrice[CURRENCY_COUNT] = {0, 0, 5, 3, 7};
+    const unsigned eaglePrice[CURRENCY_COUNT] = {1375, 0, 5, 3, 7};
     CHECK(tuning[SMR_UPGRADE_ORBITAL].cooldown_percent == -72.5 &&
         !memcmp(tuning[SMR_UPGRADE_EAGLE].price, eaglePrice, sizeof eaglePrice));
     CHECK(tuning[SMR_UPGRADE_SUPPORT].cooldown_percent == -62.5 && tuning[SMR_UPGRADE_DEFENSIVE].cooldown_percent == -66);
+    CHECK(tuning[SMR_UPGRADE_SUPPORT].price[REQUISITION_SLIPS] == 0);
     const struct { const char* field; const char* value; } badPrices[] = {
+        {"requisition", "-1"}, {"requisition", "1.5"}, {"requisition", "\"2000\""}, {"requisition", "4294967296"},
         {"forge_credits", "0"}, {"forge_credits", "-1"}, {"forge_credits", "1.5"}, {"forge_credits", "1e3"},
         {"forge_credits", "\"10\""}, {"forge_credits", "4294967296"}, {"forge_credits", "1e999"},
         {"common_samples", "-1"}, {"rare_samples", "2.5"}, {"super_samples", "\"1\""}, {"super_samples", "4294967296"},
@@ -68,9 +72,12 @@ static void TestUpgradeConfig(const std::wstring& shippedPath, const std::wstrin
         CHECK(!ReadUpgradeConfig(tempPath, tuning, result, sizeof result) && result[0]);
         CHECK(tuning[SMR_UPGRADE_SUPPORT].cooldown_percent == -62.5 && tuning[SMR_UPGRADE_DEFENSIVE].cooldown_percent == -66);
     }
+    valid.At("eagle").Erase("requisition");
     valid.Erase("extra_slot");
     CHECK(WriteAtomically(tempPath, Write(valid)));
-    CHECK(ReadUpgradeConfig(tempPath, tuning, result, sizeof result));
+    CHECK(ReadUpgradeConfig(tempPath, tuning, result, sizeof result) && strstr(result, "2000 Req"));
+    CHECK(tuning[SMR_UPGRADE_EAGLE].price[REQUISITION_SLIPS] == 2000 &&
+        tuning[SMR_UPGRADE_SUPPORT].price[REQUISITION_SLIPS] == 0);
     CHECK(tuning[SMR_UPGRADE_EXTRA_SLOT].price[FORGE_CREDITS] == 0 && tuning[SMR_UPGRADE_SUPPORT].cooldown_percent == -62.5);
     CHECK(DeleteFileW(tempPath.c_str()));
     CHECK(!ReadUpgradeConfig(tempPath, tuning, result, sizeof result) && result[0]);

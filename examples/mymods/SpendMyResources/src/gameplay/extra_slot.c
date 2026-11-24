@@ -121,7 +121,7 @@ static void RefreshExtraOptions(HfMod* mod)
     SmrExtraChoice options[sizeof extra_options / sizeof extra_options[0]];
     uint32_t picks[MAX_STRATAGEMS], count;
     size_t size = 0;
-    if (extra_native.grant && DestroyerSolo(mod) && ReadStratagems(api, ReadLocalLoadout(mod), picks, &count))
+    if (extra_native.grant && DestroyerSolo(mod) && ReadStratagems(api, ReadPickerLoadout(mod, game_base), picks, &count))
     {
         uintptr_t inventory = Inventory(api);
         for (size_t i = 0; i < sizeof extra_names / sizeof extra_names[0]; ++i)
