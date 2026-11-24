@@ -140,23 +140,36 @@ AGENTS: DO NOT MODIFY BELOW TEXT
 		- 25 Rare = "Elite"
 		- 5 Super = "Super"
     - Helldiver:
-        - Plus: +1 stim
+        - Plus: 1 of either
+            - No primary weapon, but +50% secondary max ammo
+            - No secondary, but +33% primary max ammo
+            - -50% throwables, -50% stims, +33% primary max ammo, +50% secondary max ammo
         - Elite: 1 of either:
-            - +25% armor rating
+            - +25% armor rating, -10% max ammo primary and secondary
             - +25% sprint speed, -10% stamina
             - +25% stamina, -10% sprint speed
         - Super: 1 of either:
-            - When reaching 10% HP, auto stim. Only once every 30 seconds.
+            - When reaching 10% HP, auto stim. Only once every 30 seconds, -2 stims.
+            - All injuries auto fix after 2 seconds, -10% movement speed
 	- Primaries & Secondaries
     	- Plus: +2 Mags
     	- Elite: 2 choices
         	- Direct hit AP +1, Direct hit Durable damage -25%
-        	- Direct hit AP -1, Direct hit Durable damage +25%
+        	- Direct hit AP -1, Direct hit Durable damage +50%
+      	- Super: 1 of either
+        	- Assault rifles:
+            	- Explosive shrapnel rounds, -1 AP
+            	- Explosive incindiary rounds, -10% damage, -1AP
 	- Strats
 		- Eagles
     		- Elite: +1 Use
-    		- Super:
-        		- 500KG: Airstrike drop pattern 0, meaning many 500Kgs at once
+    		- Super: 3 V formation eagles, +10s call-in time
+  		- Orbitals
+    		- Railcannon:
+        		- Super: Fire another shot after the first one, 1 second later.
+  		- Turrets:
+    		- Plus: +10% Ammo
+    		- Elite: +25% HP
 	- **Destroyer upgrades** 
     	- Spend 50 FC + 10 common + 5 rare + 1 super to upgrade destroyer (limit to one of either):
     		- Add one more strat slot
