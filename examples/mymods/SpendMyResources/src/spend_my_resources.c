@@ -50,7 +50,7 @@ int SmrInit(const HfApi* api, HfMod* mod)
     if (!helldiver_config_loaded)
         api->log(mod, "Cannot load helldiver-upgrades.json: %s Helldiver upgrades disabled.", detail);
     else
-        api->log(mod, "Loaded helldiver-upgrades.json.");
+        api->log(mod, "Loaded helldiver-upgrades.json.%s%s", detail[0] ? " " : "", detail);
     if (hf_on_state(mod, UpgradeStateChanged, NULL, 0) ||
         (helldiver_config_loaded &&
             (hf_on_damage_pre(mod, HelldiverDamagePre, NULL, 0) || hf_on_weapon(mod, HelldiverWeapon, NULL, 0))) ||

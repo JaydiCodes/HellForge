@@ -155,7 +155,8 @@ static int ReadHelldiverConfig(const std::wstring& path, SmrHelldiverTuning tuni
             (1u << SMR_PERK_LIGHT_KIT) | (1u << SMR_PERK_ARMORED),
             -100, 1000, &SmrHelldiverTuning::secondary_ammo_percent},
         {"throwables_percent", 1u << SMR_PERK_LIGHT_KIT, -100, 1000, &SmrHelldiverTuning::throwables_percent},
-        {"armor_percent", (1u << SMR_PERK_LIGHT_KIT) | (1u << SMR_PERK_ARMORED), -90, 1000,
+        {"armor_percent", (1u << SMR_PERK_LIGHT_KIT) | (1u << SMR_PERK_ARMORED) |
+            (1u << SMR_PERK_AUTO_STIM) | (1u << SMR_PERK_FIELD_MEDIC), -90, 1000,
             &SmrHelldiverTuning::armor_percent},
         {"sprint_percent", (1u << SMR_PERK_SPRINTER) | (1u << SMR_PERK_ENDURANCE), -90, 1000,
             &SmrHelldiverTuning::sprint_percent},
@@ -168,6 +169,7 @@ static int ReadHelldiverConfig(const std::wstring& path, SmrHelldiverTuning tuni
     };
     SmrHelldiverTuning loaded[SMR_PERK_COUNT] = {};
     unsigned seenTiers = 0;
+    bool usedDefaultSuperArmor = false;
     for (const auto& section : document.members)
     {
         unsigned tier = 0;
@@ -235,6 +237,13 @@ static int ReadHelldiverConfig(const std::wstring& path, SmrHelldiverTuning tuni
             for (size_t i = 0; i < sizeof fields / sizeof fields[0]; ++i)
                 if ((fields[i].perks & (1u << perk)) && !(seen & (1u << i)))
                 {
+                    if (fields[i].number == &SmrHelldiverTuning::armor_percent &&
+                        (perk == SMR_PERK_AUTO_STIM || perk == SMR_PERK_FIELD_MEDIC))
+                    {
+                        loaded[perk].armor_percent = -10;
+                        usedDefaultSuperArmor = true;
+                        continue;
+                    }
                     snprintf(result, size, "Missing setting: %s.%s.%s.", tiers[tier], perks[perk], fields[i].name);
                     return 0;
                 }
@@ -262,7 +271,8 @@ static int ReadHelldiverConfig(const std::wstring& path, SmrHelldiverTuning tuni
             return 0;
         }
     for (unsigned i = 0; i < SMR_PERK_COUNT; ++i) tuning[i] = loaded[i];
-    if (size) result[0] = '\0';
+        if (usedDefaultSuperArmor) snprintf(result, size, "Missing super armor settings use -10%%.");
+        else if (size) result[0] = '\0';
     return 1;
 }
 

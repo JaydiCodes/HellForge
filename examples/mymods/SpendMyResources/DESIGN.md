@@ -32,8 +32,9 @@ TODO:
             - +10% sprint speed, -25% stamina
             - +25% stamina, -10% sprint speed
         - Super: 1 of either:
-            - When reaching 20% HP, auto stim. Only once every 30 seconds.
-            - All injuries auto fix after 2 seconds, -10% movement speed
+            - When reaching 20% HP, auto stim. Only once every 30 seconds. -10% armor.
+            - All injuries auto fix after 0.5 seconds, -10% movement speed, -10% armor.
+            - Missing super armor settings default to -10% and are reported in the mod log.
 	- Primaries & Secondaries
     	- Plus: +2 Mags
     	- Elite: 2 choices

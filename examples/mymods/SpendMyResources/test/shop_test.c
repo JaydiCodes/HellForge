@@ -305,9 +305,11 @@ int SmrLoadHelldiverConfig(SmrHelldiverTuning tuning[SMR_PERK_COUNT], char* resu
     tuning[SMR_PERK_AUTO_STIM] = super;
     tuning[SMR_PERK_AUTO_STIM].health_percent = 20;
     tuning[SMR_PERK_AUTO_STIM].cooldown_seconds = 30;
+    tuning[SMR_PERK_AUTO_STIM].armor_percent = -10;
     tuning[SMR_PERK_FIELD_MEDIC] = super;
     tuning[SMR_PERK_FIELD_MEDIC].injury_seconds = 2;
     tuning[SMR_PERK_FIELD_MEDIC].movement_percent = -10;
+    tuning[SMR_PERK_FIELD_MEDIC].armor_percent = -10;
     return 1;
 }
 
@@ -1018,7 +1020,7 @@ static void TestHelldiver(void)
     hit.damage.target = avatar;
     hit.damage.amount = 100;
     HelldiverDamagePre(&mod, &hit, NULL);
-    CHECK(Near(hit.damage.amount, 80) && !hit.cancel);
+    CHECK(Near(hit.damage.amount, 89) && !hit.cancel);
     hit.damage.amount = -1;
     HelldiverDamagePre(&mod, &hit, NULL);
     CHECK(hit.damage.amount == -1);
@@ -1093,7 +1095,7 @@ static void TestHelldiver(void)
     hit.damage.target = avatar;
     hit.damage.amount = 100;
     HelldiverDamagePre(&mod, &hit, NULL);
-    CHECK(hit.damage.amount == 111);
+    CHECK(hit.damage.amount == 123);
     injured_limbs = 1u << HF_LIMB_LEFT_LEG;
     HelldiverTick(&mod, 1);
     CHECK(!heal_limb_calls && injured_limbs);

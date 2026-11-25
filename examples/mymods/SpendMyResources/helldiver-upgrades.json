@@ -1,6 +1,6 @@
 {
   "plus": {
-    "common_samples": 50,
+    "common_samples": 15,
     "primary_tradeoff": {
       "primary_ammo_percent": -50,
       "secondary_ammo_percent": 50
@@ -17,7 +17,7 @@
     }
   },
   "elite": {
-    "rare_samples": 25,
+    "rare_samples": 10,
     "armored": {
       "armor_percent": 25,
       "primary_ammo_percent": -10,
@@ -36,11 +36,13 @@
     "super_samples": 5,
     "auto_stim": {
       "health_percent": 20,
-      "cooldown_seconds": 30
+      "cooldown_seconds": 30,
+      "armor_percent": -10
     },
     "field_medic": {
-      "injury_seconds": 2,
-      "movement_percent": -10
+      "injury_seconds": 0.5,
+      "movement_percent": -10,
+      "armor_percent": -10
     }
   }
 }

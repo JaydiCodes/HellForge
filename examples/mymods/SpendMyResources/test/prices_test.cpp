@@ -90,8 +90,8 @@ static void TestHelldiverConfig(const std::wstring& shippedPath, const std::wstr
     char result[256] = {};
     SmrHelldiverTuning tuning[SMR_PERK_COUNT] = {};
     CHECK(ReadHelldiverConfig(shippedPath, tuning, result, sizeof result));
-    CHECK(tuning[SMR_PERK_PRIMARY_TRADEOFF].price[COMMON_SAMPLES] == 50 && tuning[SMR_PERK_LIGHT_KIT].price[COMMON_SAMPLES] == 50 &&
-        tuning[SMR_PERK_ARMORED].price[RARE_SAMPLES] == 25 && tuning[SMR_PERK_FIELD_MEDIC].price[SUPER_SAMPLES] == 5 &&
+    CHECK(tuning[SMR_PERK_PRIMARY_TRADEOFF].price[COMMON_SAMPLES] == 15 && tuning[SMR_PERK_LIGHT_KIT].price[COMMON_SAMPLES] == 15 &&
+        tuning[SMR_PERK_ARMORED].price[RARE_SAMPLES] == 10 && tuning[SMR_PERK_FIELD_MEDIC].price[SUPER_SAMPLES] == 5 &&
         !tuning[SMR_PERK_ARMORED].price[COMMON_SAMPLES] && !tuning[SMR_PERK_NONE].price[COMMON_SAMPLES]);
     CHECK(tuning[SMR_PERK_PRIMARY_TRADEOFF].primary_ammo_percent == -50 &&
         tuning[SMR_PERK_PRIMARY_TRADEOFF].secondary_ammo_percent == 50);
@@ -103,8 +103,10 @@ static void TestHelldiverConfig(const std::wstring& shippedPath, const std::wstr
         tuning[SMR_PERK_ARMORED].primary_ammo_percent == -10);
     CHECK(tuning[SMR_PERK_SPRINTER].sprint_percent == 10 && tuning[SMR_PERK_SPRINTER].stamina_percent == -25 &&
         tuning[SMR_PERK_ENDURANCE].stamina_percent == 25);
-    CHECK(tuning[SMR_PERK_AUTO_STIM].health_percent == 20 && tuning[SMR_PERK_AUTO_STIM].cooldown_seconds == 30);
-    CHECK(tuning[SMR_PERK_FIELD_MEDIC].injury_seconds == 2 && tuning[SMR_PERK_FIELD_MEDIC].movement_percent == -10);
+    CHECK(tuning[SMR_PERK_AUTO_STIM].health_percent == 20 && tuning[SMR_PERK_AUTO_STIM].cooldown_seconds == 30 &&
+        tuning[SMR_PERK_AUTO_STIM].armor_percent == -10);
+    CHECK(tuning[SMR_PERK_FIELD_MEDIC].injury_seconds == 0.5 && tuning[SMR_PERK_FIELD_MEDIC].movement_percent == -10 &&
+        tuning[SMR_PERK_FIELD_MEDIC].armor_percent == -10);
     std::string text, why;
     Value valid;
     CHECK(ReadFile(shippedPath, &text) && Parse(text, &valid, &why));
@@ -112,9 +114,25 @@ static void TestHelldiverConfig(const std::wstring& shippedPath, const std::wstr
     valid.At("super").At("auto_stim").At("health_percent") = Value::MakeNumber(12.5, false);
     CHECK(WriteAtomically(tempPath, Write(valid)));
     CHECK(ReadHelldiverConfig(tempPath, tuning, result, sizeof result));
-    CHECK(tuning[SMR_PERK_SPRINTER].price[REQUISITION_SLIPS] == 1500 && tuning[SMR_PERK_SPRINTER].price[RARE_SAMPLES] == 25 &&
+    CHECK(tuning[SMR_PERK_SPRINTER].price[REQUISITION_SLIPS] == 1500 && tuning[SMR_PERK_SPRINTER].price[RARE_SAMPLES] == 10 &&
         tuning[SMR_PERK_AUTO_STIM].health_percent == 12.5);
-    for (int i = 0; i < 16; ++i)
+    {
+        Value document = valid;
+        document.At("super").At("auto_stim").At("armor_percent") = Value::MakeNumber(-15.5, false);
+        document.At("super").At("field_medic").At("armor_percent") = Value::MakeNumber(0, true);
+        CHECK(WriteAtomically(tempPath, Write(document)));
+        CHECK(ReadHelldiverConfig(tempPath, tuning, result, sizeof result) && !result[0]);
+        CHECK(tuning[SMR_PERK_AUTO_STIM].armor_percent == -15.5 && tuning[SMR_PERK_FIELD_MEDIC].armor_percent == 0);
+    }
+    for (const char* perk : {"auto_stim", "field_medic"})
+    {
+        Value document = valid;
+        document.At("super").At(perk).Erase("armor_percent");
+        CHECK(WriteAtomically(tempPath, Write(document)));
+        CHECK(ReadHelldiverConfig(tempPath, tuning, result, sizeof result) && strstr(result, "-10%"));
+        CHECK(tuning[SMR_PERK_AUTO_STIM].armor_percent == -10 && tuning[SMR_PERK_FIELD_MEDIC].armor_percent == -10);
+    }
+    for (int i = 0; i < 18; ++i)
     {
         Value document = valid;
         if (i == 0) document.Erase("super");
@@ -133,6 +151,8 @@ static void TestHelldiverConfig(const std::wstring& shippedPath, const std::wstr
         if (i == 13) document.At("plus").At("secondary_tradeoff").Erase("secondary_ammo_percent");
         if (i == 14) document.At("elite").At("armored").At("damage_taken_percent") = Value::MakeNumber(-20, true);
         if (i == 15) document.At("super").At("auto_stim").At("stim_heal_percent") = Value::MakeNumber(-33, true);
+        if (i == 16) document.At("super").At("auto_stim").At("armor_percent") = Value::MakeNumber(-91, true);
+        if (i == 17) document.At("super").At("field_medic").At("armor_percent") = Value::MakeNumber(-91, true);
         CHECK(WriteAtomically(tempPath, Write(document)));
         CHECK(!ReadHelldiverConfig(tempPath, tuning, result, sizeof result) && result[0]);
         CHECK(tuning[SMR_PERK_AUTO_STIM].health_percent == 12.5 && tuning[SMR_PERK_SPRINTER].price[REQUISITION_SLIPS] == 1500);
