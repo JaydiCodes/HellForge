@@ -18,7 +18,7 @@ static HfTickCallback registered_tick;
 static HfPassives state;
 static int row_ready = 1, live_allowed = 1;
 static unsigned live_calls, releases;
-static double multiplier = 0.3;
+static double multiplier = 0.4;
 static HfRef swap_targets[19];
 static unsigned swap_calls, feed_calls;
 static int refuse_arbitrator;
@@ -55,6 +55,7 @@ static int OnGameThread(HfMod* mod, HfTickCallback callback, void* user)
 static int GetLive(HfMod* mod, HfRef target, const HfField* field, HfLiveValue* out)
 {
     assert(target == 640 && !strcmp(field->component, "PassiveModifier") && field->offset == 8);
+    if (row_ready && out) out->now = (HfValue)HF_F32(multiplier);
     return row_ready;
 }
 
@@ -66,7 +67,7 @@ static int SetLive(HfMod* mod, HfRef target, const HfField* field, const HfValue
     if (!live_allowed) return 0;
     if (value) assert(value->type == HF_TYPE_F32);
     else ++releases;
-    multiplier = value ? value->number : 0.3;
+    multiplier = value ? value->number : 0.4;
     return HF_APPLIES_NOW;
 }
 
@@ -155,7 +156,7 @@ int main(void)
     registered_tick(&mod, 2.0f, NULL);
     assert(strstr(last_log, "record unreadable") && strstr(last_log, "waiting for the game"));
 
-    assert(live_calls == 0 && multiplier == 0.3);
+    assert(live_calls == 0 && multiplier == 0.4);
     UnbalanceRequestMitigation(95);
     state.players = 1;
     registered_tick(&mod, 0.25f, NULL);
@@ -167,7 +168,7 @@ int main(void)
     row_ready = 1;
     live_allowed = 0;
     registered_tick(&mod, 0.25f, NULL);
-    assert(live_calls == 1 && multiplier == 0.3 && UnbalanceMitigationStatus() == UNBALANCE_REFUSED);
+    assert(live_calls == 1 && multiplier == 0.4 && UnbalanceMitigationStatus() == UNBALANCE_REFUSED);
     live_allowed = 1;
     registered_tick(&mod, 0.25f, NULL);
     assert(live_calls == 2 && multiplier == 0.05 && UnbalanceMitigationStatus() == UNBALANCE_SOLO);
@@ -180,7 +181,7 @@ int main(void)
     assert(releases == 0 && UnbalanceMitigationStatus() == UNBALANCE_RESTORE_REFUSED);
     live_allowed = 1;
     registered_tick(&mod, 0.25f, NULL);
-    assert(releases == 1 && multiplier == 0.3 && UnbalanceMitigationStatus() == UNBALANCE_COOP);
+    assert(releases == 1 && multiplier == 0.4 && UnbalanceMitigationStatus() == UNBALANCE_COOP);
     registered_tick(&mod, 0.25f, NULL);
     assert(live_calls == 5);
     state.players = 1;
@@ -191,12 +192,21 @@ int main(void)
     assert(multiplier == 1.0);
     UnbalanceRequestMitigation(70);
     registered_tick(&mod, 0.25f, NULL);
-    assert(releases == 2 && multiplier == 0.3);
+    assert(releases == 1 && multiplier == 0.3);
+    UnbalanceRequestMitigation(UNBALANCE_DEFAULT_MITIGATION);
+    registered_tick(&mod, 0.25f, NULL);
+    assert(releases == 1 && multiplier == 0.4);
+    multiplier = 0.7;
+    registered_tick(&mod, 0.25f, NULL);
+    assert(multiplier == 0.4 && UnbalanceMitigationStatus() == UNBALANCE_SOLO);
+    unsigned calls = live_calls;
+    registered_tick(&mod, 0.25f, NULL);
+    assert(live_calls == calls);
     UnbalanceRequestMitigation(50);
     registered_tick(&mod, 0.25f, NULL);
     readable = 0;
     registered_tick(&mod, 0.25f, NULL);
-    assert(releases == 3 && multiplier == 0.3 && UnbalanceMitigationStatus() == UNBALANCE_WAITING);
+    assert(releases == 2 && multiplier == 0.4 && UnbalanceMitigationStatus() == UNBALANCE_WAITING);
     puts("passive override and deferred projectile swap tests passed");
     return 0;
 }

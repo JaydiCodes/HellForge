@@ -38,16 +38,17 @@ void Init(const Host& context)
     double value = hfjson::Parse(text, &document, nullptr) ? document.GetNumber(settingKey, -1) : -1;
     if (!(value >= 0 && value <= 100) || value != static_cast<int>(value))
     {
-        host.api->log(host.mod, "UnBalance Pass: invalid mitigation setting; using the 70%% default.");
+        host.api->log(host.mod, "UnBalance Pass: invalid mitigation setting; using the %d%% default.", UNBALANCE_DEFAULT_MITIGATION);
         return;
     }
-    saved = static_cast<int>(value);
+    saved = draft = static_cast<int>(value);
     UnbalanceRequestMitigation(saved);
 }
 
 static void Save()
 {
     hfjson::Value document;
+    document.kind = hfjson::Value::Object;
     document.At(settingKey) = hfjson::Value::MakeNumber(draft, true);
     saveFailed = settingsPath.empty() || !hfjson::WriteAtomically(settingsPath, hfjson::Write(document));
     if (saveFailed)
@@ -81,8 +82,8 @@ void Frame(ImDrawList*, float, float, float)
         ImGui::TextUnformatted("Blunt-Force Mitigation");
         ImGui::BeginDisabled(!enabled);
         ImGui::SetNextItemWidth(350);
-        ImGui::SliderInt("##knockdown", &draft, 0, 100, "%d%% knockdown mitigation", ImGuiSliderFlags_AlwaysClamp);
-        if (enabled && open && ImGui::IsItemDeactivatedAfterEdit() && draft != saved) Save();
+        if (ImGui::SliderInt("##knockdown", &draft, 0, 100, "%d%% knockdown mitigation", ImGuiSliderFlags_AlwaysClamp) &&
+            enabled && draft != saved) Save();
         ImGui::EndDisabled();
         if (state == UNBALANCE_COOP) ImGui::TextUnformatted("Solo only. Co-op uses the balance pass default.");
         if (state == UNBALANCE_WAITING) ImGui::TextUnformatted("Waiting for solo loadout and perk data.");

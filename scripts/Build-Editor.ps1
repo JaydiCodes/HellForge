@@ -175,6 +175,34 @@ if($SpendMyResources){
         (Join-Path $editor 'editor.cpp') (Join-Path $editor 'icons.cpp') (Join-Path $src 'shop/shop_frontend.cpp') $gameplay @built `
         -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -lole32 -luser32 -o $dll
     if($LASTEXITCODE){throw 'Spend My Resources overlay did not compile.'}
+    $imageOut=Join-Path $out 'images'
+    New-Item -ItemType Directory $imageOut -Force|Out-Null
+    $svgNames=@('Requisition_Slip','Common_Sample_Icon','Rare_Sample_Icon','Super_Sample_Icon')
+    $imageSrc=Join-Path $src 'images'
+    $available=@($svgNames|Where-Object{Test-Path -LiteralPath (Join-Path $imageSrc ($_+'.svg')) -PathType Leaf})
+    $svgTool=Join-Path $objects 'smr_svg_to_png.exe'
+    if($available.Count -or $Test){
+        & $zig c++ -target x86_64-windows-gnu -O2 -std=c++17 -Wall -Werror -municode `
+            (Join-Path $src 'svg_to_png.cpp') -ld3d11 -ldxgi -ld2d1 -lwindowscodecs -lole32 -lshlwapi -luuid -o $svgTool
+        if($LASTEXITCODE){throw 'The currency SVG converter did not compile.'}
+    }
+    foreach($name in $svgNames){
+        $source=Join-Path $imageSrc ($name+'.svg')
+        $destination=Join-Path $imageOut ($name+'.png')
+        if(-not(Test-Path -LiteralPath $source -PathType Leaf)){
+            Write-Warning "Optional currency SVG not found: $source. Any existing PNG is retained."
+            continue
+        }
+        $temporary=Join-Path $objects ('smr-svg-'+[guid]::NewGuid()+'.png')
+        try {
+            & $svgTool $source $temporary
+            if($LASTEXITCODE){throw "The currency SVG could not be rendered: $source"}
+            Move-Item -LiteralPath $temporary -Destination $destination -Force
+        } finally {
+            if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary}
+        }
+    }
+    Copy-Item -LiteralPath (Join-Path $project 'data\forge-credits\currency-icon.png') -Destination (Join-Path $imageOut 'Forge_Credit.png') -Force
     Get-ChildItem -LiteralPath $out -Filter '*.lib' | Remove-Item
     Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'README.md'),(Join-Path $mod 'extra-stratagem-slot.md'),(Join-Path $mod 'currency-ledger.md'),(Join-Path $mod 'prices.json'),(Join-Path $mod 'destroyer-upgrades.json'),(Join-Path $mod 'helldiver-upgrades.json'),(Join-Path $project 'LICENSE') -Destination $out
     Copy-Item -LiteralPath (Join-Path $imgui 'LICENSE.txt') -Destination (Join-Path $out 'imgui-LICENSE.txt')
@@ -204,7 +232,41 @@ if($SpendMyResources){
             (Join-Path $mod 'test/checkout_frontend_test.cpp') (Join-Path $editor 'icons.cpp') @built `
             -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -lole32 -o $checkoutTest
         if($LASTEXITCODE){throw 'The checkout frontend fixture did not compile.'}
-        & $checkoutTest (Join-Path $testOut 'destroyer-upgrades.bmp')
+        $fixture=(New-Item -ItemType Directory -Path (Join-Path $testOut ('smr-icons-'+[guid]::NewGuid()))).FullName
+        try {
+            $valid=Join-Path $fixture 'valid\images'
+            $partial=Join-Path $fixture 'partial\images'
+            New-Item -ItemType Directory $valid,$partial -Force|Out-Null
+            $fixtureSvg=Join-Path $fixture 'icon.svg'
+            $fixturePng=Join-Path $fixture 'icon.png'
+            [IO.File]::WriteAllText($fixtureSvg, '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 128 128"><clipPath id="clip"><rect x="0" y="0" width="48" height="64"/></clipPath><g transform="translate(16 16)" clip-path="url(#clip)"><path d="M0 0 H64 V64 H0 Z" style="fill:rgb(255,0,0)"/><path d="M32 32 H64 V64 H32 Z" style="fill:rgb(0,0,255)"/></g></svg>')
+            & $svgTool $fixtureSvg $fixturePng
+            if($LASTEXITCODE){throw 'The synthetic currency SVG did not render.'}
+            foreach($file in @('Requisition_Slip.png','Common_Sample_Icon.png','Rare_Sample_Icon.png','Super_Sample_Icon.png','Forge_Credit.png')){
+                Copy-Item -LiteralPath $fixturePng -Destination (Join-Path $valid $file)
+                if($file -notin @('Common_Sample_Icon.png','Rare_Sample_Icon.png')){
+                    Copy-Item -LiteralPath $fixturePng -Destination (Join-Path $partial $file)
+                }
+            }
+            [IO.File]::WriteAllText((Join-Path $partial 'Rare_Sample_Icon.png'), 'not an image')
+            foreach($bad in @('<svg', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"></svg>')){
+                [IO.File]::WriteAllText($fixtureSvg, $bad)
+                $oldPreference=$ErrorActionPreference
+                try {
+                    $ErrorActionPreference='Continue'
+                    & $svgTool $fixtureSvg (Join-Path $fixture 'invalid.png') 2>$null
+                    $failed=$LASTEXITCODE
+                } finally { $ErrorActionPreference=$oldPreference }
+                if(-not $failed){throw 'The currency SVG converter accepted an invalid or empty image.'}
+            }
+            & $checkoutTest '--currency-icons' $fixture
+            if($LASTEXITCODE){throw 'The Direct3D 11 currency icon fixture failed.'}
+            & $checkoutTest '--currency-icons12' $fixture
+            if($LASTEXITCODE){throw 'The Direct3D 12 currency icon fixture failed.'}
+        } finally {
+            Remove-Item -LiteralPath $fixture -Recurse -Force
+        }
+        & $checkoutTest (Join-Path $testOut 'destroyer-upgrades.bmp') '-' $out
         if($LASTEXITCODE){throw 'The checkout frontend fixture failed.'}
         Build-OverlayTest
         $oldD3D11=$env:HELLFORGE_EDITOR_TEST_D3D11

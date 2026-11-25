@@ -1,9 +1,7 @@
 TODO:
-- UI:
-  - Mod menu tab for F2
-    - Allow toggle to place UI pannels, untoggle sets and saves position
+- Problems:
+  - Field medic is not removing limb injuries
 - Upgrades:
-  - Helldiver
   - Primaries
   - Secondaries
   - Stratagems
@@ -18,8 +16,8 @@ TODO:
 		- FC = 750 Points
 	- In each case spend either: (These can be stacked)
     	- Some items might not have all tiers or have all 3 tiers or just 1 tier
-		- 50 common = "Plus"
-		- 25 Rare = "Elite"
+		- 15 common = "Plus"
+		- 10 Rare = "Elite"
 		- 5 Super = "Super"
     - Helldiver:
         - (Regarding armor: apply this through incoming-damage scaling, so the UI labels it as a simulation.)
@@ -34,7 +32,6 @@ TODO:
         - Super: 1 of either:
             - When reaching 20% HP, auto stim. Only once every 30 seconds. -10% armor.
             - All injuries auto fix after 0.5 seconds, -10% movement speed, -10% armor.
-            - Missing super armor settings default to -10% and are reported in the mod log.
 	- Primaries & Secondaries
     	- Plus: +2 Mags
     	- Elite: 2 choices
@@ -84,6 +81,7 @@ TODO:
 			- LAS-5 Scythe
 			- AR-59 Suppressor
 			- LAS-17 Double-Edge Sickle
+			- R-4 HYENA
 		- Secondaries
 			- Ultimatum
 			- Bolt Pistol
@@ -121,3 +119,16 @@ TODO:
 			- GR-8 Recoilless Rifle
 			- MLS-4X Commando
 			- B-1 Supply Pack
+			- A/MLS-4x Rocket sentry
+			- A/AC-8 Autocannon Sentry
+			- A/M-12 Mortar Sentry
+			- E/AT-12 Anti-Tank emplacement
+			- B-100 Portable Hellbomb
+			- B/MD C4 Pack
+			- M-103 Supply FRV
+			- Bastion tank
+			- Maelstrom tank
+			- FAF-14 Spear
+			- MG-206 Heavy Machine gun
+			- 40-K Meltagun
+			- GL-21 Grenade Launcher

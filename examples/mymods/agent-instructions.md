@@ -10,7 +10,10 @@ We are not concerned with "loss" as the client application allows resyncing of a
 
 If the user gives instruction on things to change, assume that they know what they are doing and avoid micro planning for every possible eventuality that may occurr through code changes. We can always undo, change or add.
 
-Do not edit README.md files without explicit instruction to do so.
+Do not edit:
+- README.md files without explicit instruction to do so.
+- Changelog.md
+- Any main hellforge files causing a backend rebuild to be required to use the mod
 
 Reference the DESIGN.md files when ideas or choices from the developer are considered.
  - Ask questions if this seems outdated.

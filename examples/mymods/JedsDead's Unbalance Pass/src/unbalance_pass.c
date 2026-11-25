@@ -1,5 +1,6 @@
 #include "unbalance_pass.h"
 #include <stdatomic.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -29,7 +30,7 @@ static const struct { HfRef entity; uint32_t projectile; } primarySwaps[] = {
 
 static atomic_int requested = UNBALANCE_DEFAULT_MITIGATION;
 static atomic_int mitigationState = UNBALANCE_WAITING;
-static int applied = UNBALANCE_DEFAULT_MITIGATION;
+static int overrideActive;
 
 void UnbalanceRequestMitigation(int percent)
 {
@@ -48,18 +49,28 @@ static void UpdateMitigation(HfMod* mod, const HfPassives* passives, int readabl
     int wanted = solo ? atomic_load(&requested) : UNBALANCE_DEFAULT_MITIGATION;
     UnbalanceMitigationState state = solo ? UNBALANCE_SOLO :
         readable && passives->players > 1 ? UNBALANCE_COOP : UNBALANCE_WAITING;
-    if (wanted != applied)
+    const HfField field = HF_FIELD(PassiveModifier, value);
+    HfLiveValue current;
+    if (solo)
     {
-        const HfField field = HF_FIELD(PassiveModifier, value);
         const HfValue value = HF_F32((100 - wanted) / 100.0);
-        /* Release only this override, leaving the stats file and other mods in place. */
-        const HfValue* edit = wanted == UNBALANCE_DEFAULT_MITIGATION ? NULL : &value;
-        if (edit && !api->get_live(mod, KNOCKDOWN_ROW, &field, &(HfLiveValue){0}))
+        if (!api->get_live(mod, KNOCKDOWN_ROW, &field, &current))
             state = UNBALANCE_WAITING;
-        else if (api->set_live(mod, KNOCKDOWN_ROW, &field, edit, HF_LIVE_SHARED))
-            applied = wanted;
+        else if (!overrideActive || fabs(current.now.number - value.number) > 0.000001)
+        {
+            if (api->set_live(mod, KNOCKDOWN_ROW, &field, &value, HF_LIVE_SHARED))
+                overrideActive = 1;
+            else
+                state = UNBALANCE_REFUSED;
+        }
+    }
+    else if (overrideActive)
+    {
+        /* Release only this override, leaving the stats file and other mods in place. */
+        if (api->set_live(mod, KNOCKDOWN_ROW, &field, NULL, HF_LIVE_SHARED))
+            overrideActive = 0;
         else
-            state = solo ? UNBALANCE_REFUSED : UNBALANCE_RESTORE_REFUSED;
+            state = UNBALANCE_RESTORE_REFUSED;
     }
     atomic_store(&mitigationState, state);
 }

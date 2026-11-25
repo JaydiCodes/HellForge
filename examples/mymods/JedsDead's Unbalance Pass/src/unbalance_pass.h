@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-enum { UNBALANCE_DEFAULT_MITIGATION = 70 };
+enum { UNBALANCE_DEFAULT_MITIGATION = 60 };
 typedef enum UnbalanceMitigationState {
     UNBALANCE_WAITING, UNBALANCE_COOP, UNBALANCE_SOLO, UNBALANCE_REFUSED, UNBALANCE_RESTORE_REFUSED
 } UnbalanceMitigationState;

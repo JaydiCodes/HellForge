@@ -195,8 +195,8 @@
       "damage.ap_direct": 4,
       "damage.ap_extreme": 1,
       "damage.ap_large": 2,
-      "damage.durable_damage": 30,
-      "damage.standard_damage": 80,
+      "damage.durable_damage": 40,
+      "damage.standard_damage": 90,
       "presentation.traits.1": 658390125,
       "projectile.velocity": 990
     },
@@ -445,7 +445,8 @@
     "M-1000 Maxigun": {
       "damage.primary.ap_direct": 4,
       "damage.primary.ap_extreme": 1,
-      "damage.primary.durable_damage": 30,
+      "damage.primary.durable_damage": 40,
+      "damage.primary.standard_damage": 90,
       "weapon.stationary_while_firing": 0,
       "windup.wind_down_seconds": 2,
       "windup.wind_up_seconds": 0.25
@@ -736,23 +737,38 @@
       "damage.primary.durable_damage": 60,
       "damage.primary.standard_damage": 125
     },
+    "M90A Shotgun": {
+      "damage.ap_direct": 3,
+      "damage.ap_slight": 3,
+      "damage.durable_damage": 35,
+      "damage.standard_damage": 75,
+      "projectile.pellet_count": 10
+    },
     "DBS-2 Double Freedom": {
+      "damage.ap_large": 2,
       "damage.durable_damage": 100,
-      "damage.standard_damage": 100
+      "damage.standard_damage": 100,
+      "projectile.pellet_count": 8
     },
     "SG-20 Halt": {
       "damage.primary.status_1_strength": 0.5,
       "damage.primary.status_1_type": 4,
       "damage.primary.status_2_strength": 1,
-      "damage.primary.status_2_type": 37
+      "damage.primary.status_2_type": 37,
+      "projectile.primary.pellet_count": 12
     },
     "SG-225SP Breaker Spray&Pray": {
+      "damage.durable_damage": 15,
       "projectile.pellet_count": 30,
       "weapon.fire_rate": 430
     },
     "SG-225IE Breaker Incendiary": {
+      "damage.durable_damage": 15,
+      "damage.standard_damage": 15,
+      "damage.status_1_strength": 1,
       "damage.status_2_strength": 0.6,
-      "damage.status_2_type": 6
+      "damage.status_2_type": 6,
+      "projectile.pellet_count": 30
     },
     "SG-225 Breaker": {
       "damage.durable_damage": 15,
@@ -760,15 +776,24 @@
       "projectile.pellet_count": 12
     },
     "SG-451 Cookout": {
+      "damage.ap_direct": 3,
+      "damage.durable_damage": 30,
+      "damage.standard_damage": 30,
       "damage.status_2_strength": 0.6,
-      "damage.status_2_type": 6
+      "damage.status_2_type": 6,
+      "projectile.pellet_count": 12
     },
     "SG-8 Punisher": {
       "damage.durable_damage": 30,
       "damage.standard_damage": 90
     },
+    "SG-8P Punisher Plasma": {
+      "explosion.primary.impact.damage.status_1_type": 55,
+      "explosion.primary.impact.damage.status_1_strength": 10
+    },
     "SG-8S Slugger": {
-      "damage.durable_damage": 450,
+      "damage.ap_direct": 4,
+      "damage.durable_damage": 200,
       "damage.standard_damage": 450
     },
     "SG-97 Sweeper": {
@@ -1115,6 +1140,9 @@
       "orbital.shell_interval": 1,
       "orbital.shells_per_salvo": 5,
       "orbital.walking_speed": 5
+    },
+    "Resupply": {
+      "stratagem.cooldown": 210
     },
     "Eagle Airstrike": {
       "eagle.airstrike_pattern": 3,
