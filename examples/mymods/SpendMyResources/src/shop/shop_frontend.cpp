@@ -864,7 +864,10 @@ void SaveStatus(bool, const std::string&) {}
 }
 
 // The shop does not use the editor's fonts, sounds or stats saving.
-namespace ui { bool BuildFonts(float) { return false; } }
+namespace ui {
+bool BuildFonts(float) { return false; }
+const std::string& FontNote() { static const std::string none; return none; }
+}
 namespace localstats {
 void SetSandboxSaveFolder(const std::wstring&) {}
 bool Pending() { return false; }

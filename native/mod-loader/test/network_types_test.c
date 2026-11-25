@@ -103,16 +103,19 @@ static void NetworkTypesFixture(void)
     LONG savedAdded = g_networkTypesAdded;
     uint8_t* savedLoadout = g_loadoutTable;
     int savedWeaponCount = g_weaponCount, savedBefore = g_lcWeaponsBefore;
-    Weapon savedWeapons[3];
+    Weapon savedWeapons[5];
+    assert(WeaponRoom(5));
     memcpy(savedWeapons, g_weapons, sizeof savedWeapons);
     snprintf(g_networkModule, sizeof g_networkModule, "%s", name);
     g_networkRva = (uint32_t)((uintptr_t)&g_ntHolder - (uintptr_t)GetModuleHandleA(NULL));
     g_loadoutTable = config; /* only checked for NULL: the entity data is loaded */
     g_networkTypesAdded = 0;
     g_networkTypeCount = 0;
-    g_weaponCount = 2;
+    g_weaponCount = 3;
     g_weapons[0] = (Weapon){.entity = 0x100, .state = 1, .shortId = 31, .baseShortId = 20, .name = "fixture/copy-of-20"};
     g_weapons[1] = (Weapon){.entity = 0x200, .state = 1, .shortId = 32, .baseShortId = 10, .name = "fixture/copy-of-10"};
+    /* a copy of a type with no short id (#548), sorting between them: no type of its own, and theirs stay in step */
+    g_weapons[2] = (Weapon){.entity = 0x150, .state = 1, .shortId = REG_NO_SHORT_ID, .baseShortId = REG_NO_SHORT_ID, .name = "fixture/typeless"};
 
     RegisterNetworkTypes();
     assert(g_networkTypesAdded == 2 && g_networkTypeCount == 2 && g_networkVanillaTypes == 3);
@@ -132,9 +135,10 @@ static void NetworkTypesFixture(void)
     assert(NtU32(emptyCopy + 0x30) == 0 && NtU32(emptyCopy + 0x34) == 0 && NtPointer(emptyCopy + 0x38) == NULL);
     assert(NtPointer(emptyCopy + 0x20) != NtPointer(emptyBase + 0x20));
     /* a live change's weapon (live_registry.c LiveNetworkTypes): appended after them, its lists its own too */
-    g_lcWeaponsBefore = 2;
-    g_weaponCount = 3;
-    g_weapons[2] = (Weapon){.entity = 0x300, .state = 1, .shortId = 33, .baseShortId = 30, .name = "fixture/live-copy-of-30"};
+    g_lcWeaponsBefore = 3;
+    g_weaponCount = 5;
+    g_weapons[3] = (Weapon){.entity = 0x300, .state = 1, .shortId = 33, .baseShortId = 30, .name = "fixture/live-copy-of-30"};
+    g_weapons[4] = (Weapon){.entity = 0x250, .state = 1, .shortId = REG_NO_SHORT_ID, .baseShortId = REG_NO_SHORT_ID, .name = "fixture/live-typeless"};
     LiveNetworkTypes();
     uint8_t *live = added + 5 * 80, *liveBase = added + 2 * 80;
     assert(NtU32(config + 0x70) == 6 && NtPointer(config + 0x78) == added && g_networkTypeCount == 3 && NtU32(live) == 33);
@@ -277,7 +281,8 @@ static void NetworkWidthFixture(void)
     LONG savedAdded = g_networkTypesAdded;
     uint8_t* savedLoadout = g_loadoutTable;
     int savedWeaponCount = g_weaponCount;
-    static Weapon savedWeapons[REG_MAX_WEAPONS];
+    static Weapon savedWeapons[2241];
+    assert(WeaponRoom(2241));
     memcpy(savedWeapons, g_weapons, sizeof savedWeapons);
     snprintf(g_networkModule, sizeof g_networkModule, "%s", name);
     g_networkRva = (uint32_t)((uintptr_t)&g_ntHolder - (uintptr_t)GetModuleHandleA(NULL));
@@ -295,7 +300,11 @@ static void NetworkWidthFixture(void)
     /* + 194: 12 bits, every one, the boot session's copy too */
     assert(NtWideRun(&allocator, 1855, 194, 11, 11, NT_SESSION, &width, &bits, &copy) == 194 && width == 12 && bits == 12 && copy == 12);
     /* the research's target, 512 more (2,367 types), before any session is built */
-    assert(NtWideRun(&allocator, 1855, REG_MAX_WEAPONS, 11, 11, NT_NO_SESSION, &width, &bits, &copy) == REG_MAX_WEAPONS && width == 12 && bits == 12);
+    assert(NtWideRun(&allocator, 1855, 512, 11, 11, NT_NO_SESSION, &width, &bits, &copy) == 512 && width == 12 && bits == 12);
+    /* every type a 12-bit index names, 2,241 more (no number of HellForge's own stops them first), and one past it: the
+     * first 193 (what 11 bits hold) */
+    assert(NtWideRun(&allocator, 1855, 2241, 11, 11, NT_NO_SESSION, &width, &bits, &copy) == 2241 && width == 12 && bits == 12 && g_netCapacity == 4096);
+    assert(NtWideRun(&allocator, 1855, 2242, 11, 11, NT_NO_SESSION, &width, &bits, &copy) == 193 && width == 11 && bits == 11);
     /* a session with a connection, or one that is not the game's: 11 bits stay everywhere, the first 193 get types */
     assert(NtWideRun(&allocator, 1855, 300, 11, 11, NT_CONNECTED, &width, &bits, &copy) == 193 && width == 11 && bits == 11 && copy == 11);
     assert(NtWideRun(&allocator, 1855, 300, 11, 11, NT_FOREIGN, &width, &bits, &copy) == 193 && width == 11 && bits == 11 && copy == 11);
