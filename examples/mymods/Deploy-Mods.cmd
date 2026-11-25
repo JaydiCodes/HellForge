@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions DisableDelayedExpansion
 rem Run with the game closed. Optionally pass the path to the game's mods folder.
-set "destination=C:\Users\psige\Documents\HellForge\mods"
+set "destination=C:\Users\psige\Documents\HellForge_0_4_0\mods"
 if not "%~1"=="" set "destination=%~f1"
 
 rem Build prebuilt mods before copying anything, so a failed build cannot deploy an old DLL.
