@@ -17,7 +17,7 @@ namespace editorapp
 static const HfApi* api;
 static HfMod* mod;
 static void (*showCheckout)(bool);
-enum class CheckoutPanel { Destroyer, Purchase };
+enum class CheckoutPanel { Destroyer, Helldiver, Purchase };
 static CheckoutPanel checkoutPanel;
 static float tabIndicator;
 static bool shopOpen;
@@ -321,10 +321,10 @@ static void DrawUpgradeIcon(UpgradeIcon icon, ImVec2 center, float scale)
     }
 }
 
-static void DestroyerPicker()
+static void DestroyerPicker(const SmrDestroyerStatus& upgrade, bool pending)
 {
-    ImGui::TextUnformatted("Preview an upgrade");
-    constexpr int count = IM_ARRAYSIZE(kDestroyerUpgrades);
+    ImGui::TextUnformatted("Choose an upgrade");
+    constexpr int count = IM_ARRAYSIZE(kDestroyerUpgrades) + 1;
     const float preferred = ImGui::GetFrameHeight() * 2.75f;
     const float fit = (ImGui::GetContentRegionAvail().x - (count - 1) * ImGui::GetStyle().ItemSpacing.x) / count;
     const float side = preferred < fit ? preferred : fit;
@@ -333,22 +333,50 @@ static void DestroyerPicker()
         if (i) ImGui::SameLine();
         char label[48];
         snprintf(label, sizeof label, "##%s", kDestroyerUpgrades[i].name);
-        if (UpgradeTile(label, side, i == destroyerSelection)) destroyerSelection = i;
-        const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
         const auto& choice = kDestroyerUpgrades[i];
+        const bool enabled = upgrade.available && !upgrade.purchased && !pending && SmrGetUpgradeTuning(choice.upgrade);
+        ImGui::BeginDisabled(!enabled);
+        if (UpgradeTile(label, side, choice.upgrade == upgrade.selected) && enabled)
+        {
+            const SmrUpgrade selected = choice.upgrade == upgrade.selected ? SMR_UPGRADE_NONE : choice.upgrade;
+            const uint32_t extra = selected == SMR_UPGRADE_EXTRA_SLOT ? destroyerExtra : 0;
+            if (SmrSelectUpgrade(mod, selected == SMR_UPGRADE_EXTRA_SLOT && !extra ? SMR_UPGRADE_NONE : selected, extra))
+            {
+                destroyerSelection = i;
+                if (selected != SMR_UPGRADE_EXTRA_SLOT) destroyerExtra = 0;
+            }
+        }
+        ImGui::EndDisabled();
+        const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
         const ImVec2 center((min.x + max.x) / 2, (min.y + max.y) / 2);
         if (!DrawGameStratagemIcon(choice.sprite, choice.tint, center, side * 0.76f))
             DrawUpgradeIcon(choice.icon, center, side / 52);
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip) || ImGui::IsItemFocused())
             ImGui::SetTooltip("%s", choice.name);
     }
+    ImGui::SameLine();
+    const bool canRemove = !pending && !upgrade.purchased && (upgrade.selected || destroyerExtra || destroyerSelection);
+    ImGui::BeginDisabled(!canRemove);
+    if (UpgradeTile(" X ##Clear destroyer", side, false) && canRemove &&
+        SmrSelectUpgrade(mod, SMR_UPGRADE_NONE, 0))
+    {
+        destroyerSelection = 0;
+        destroyerExtra = 0;
+    }
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip) || ImGui::IsItemFocused())
+        ImGui::SetTooltip("Remove Destroyer upgrade");
     ImGui::Separator();
 }
 
-static void ExtraTile(const SmrExtraChoice& choice, ImU32 tint, float side)
+static void ExtraTile(const SmrExtraChoice& choice, ImU32 tint, float side, bool enabled)
 {
     ImGui::PushID(static_cast<int>(choice.type));
-    if (UpgradeTile("##Stratagem", side, choice.type == destroyerExtra)) destroyerExtra = choice.type;
+    ImGui::BeginDisabled(!enabled);
+    if (UpgradeTile("##Stratagem", side, choice.type == destroyerExtra) && enabled &&
+        SmrSelectUpgrade(mod, SMR_UPGRADE_EXTRA_SLOT, choice.type))
+        destroyerExtra = choice.type;
+    ImGui::EndDisabled();
     if (ImGui::IsItemVisible())
     {
         const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
@@ -373,7 +401,7 @@ static void ExtraTile(const SmrExtraChoice& choice, ImU32 tint, float side)
     ImGui::PopID();
 }
 
-static bool ExtraPicker(float height)
+static bool ExtraPicker(float height, bool enabled)
 {
     SmrExtraChoice choices[SMR_MAX_EXTRA_CHOICES];
     const size_t count = SmrExtraChoices(choices, IM_ARRAYSIZE(choices));
@@ -415,7 +443,7 @@ static bool ExtraPicker(float height)
                     ImGui::PopStyleColor();
                 }
                 if (column++ % columns) ImGui::SameLine();
-                ExtraTile(choice, group.tint, side);
+                ExtraTile(choice, group.tint, side, enabled);
             }
         }
     }
@@ -430,7 +458,7 @@ static bool ExtraPicker(float height)
     return false;
 }
 
-static bool DestroyerPanel(float height, const SmrDestroyerStatus& upgrade)
+static void DestroyerPanel(float height, SmrDestroyerStatus upgrade, bool pending)
 {
     if (upgrade.purchased)
     {
@@ -442,7 +470,8 @@ static bool DestroyerPanel(float height, const SmrDestroyerStatus& upgrade)
         ImGui::TextWrapped("Selected for purchase: %s", UpgradeName(upgrade.selected));
     else ImGui::TextDisabled("No upgrade selected");
     ImGui::Separator();
-    DestroyerPicker();
+    DestroyerPicker(upgrade, pending);
+    upgrade = SmrDestroyer(mod);
     const auto& choice = kDestroyerUpgrades[destroyerSelection];
     const SmrUpgradeTuning* tuning = SmrGetUpgradeTuning(choice.upgrade);
     const bool extraSlot = choice.upgrade == SMR_UPGRADE_EXTRA_SLOT;
@@ -453,7 +482,6 @@ static bool DestroyerPanel(float height, const SmrDestroyerStatus& upgrade)
     else ImGui::TextWrapped("Upgrades disabled: check destroyer-upgrades.json and the mod log.");
     ImGui::TextWrapped("One solo mission. Resupply and objective stratagems are unchanged.");
     ImGui::Separator();
-    bool extraPicked = false;
     if (tuning && !upgrade.purchased)
     {
         if (!upgrade.solo) ImGui::TextDisabled("Destroyer upgrades are available in solo play only.");
@@ -462,29 +490,111 @@ static bool DestroyerPanel(float height, const SmrDestroyerStatus& upgrade)
         {
             ImGui::TextUnformatted("Cost at checkout:");
             UpgradeCostLines(tuning->price, upgrade.balance);
-            if (extraSlot) extraPicked = ExtraPicker(height);
+            if (extraSlot)
+            {
+                ImGui::TextWrapped("Choose an extra stratagem to select this upgrade.");
+                ExtraPicker(height, !pending);
+            }
         }
     }
-    return tuning && upgrade.available && !upgrade.purchased && (!extraSlot || extraPicked);
 }
 
-static void DestroyerActions(const SmrDestroyerStatus& upgrade, bool canSelect, bool pending)
+static void DestroyerActions(bool pending)
 {
-    const SmrUpgrade choice = kDestroyerUpgrades[destroyerSelection].upgrade;
-    if (ShopButton("Select upgrade", canSelect && !pending, true) &&
-        SmrSelectUpgrade(mod, choice, choice == SMR_UPGRADE_EXTRA_SLOT ? destroyerExtra : 0))
+    const SmrDestroyerStatus upgrade = SmrDestroyer(mod);
+    if (ShopButton("Review purchase", upgrade.selected && !pending, true))
         checkoutPanel = CheckoutPanel::Purchase;
-    if (upgrade.selected)
+}
+
+static constexpr const char* kHelldiverTiers[SMR_TIER_COUNT] = {"Plus", "Elite", "Super"};
+static constexpr const char* kPerkNames[SMR_PERK_COUNT] = {
+    "None", "Primary Ammo Trade-off", "Secondary Ammo Trade-off", "Light Kit", "Armored", "Sprinter", "Endurance",
+    "Auto-Stim", "Field Medic",
+};
+static const char* PerkName(SmrHelldiverPerk perk)
+{
+    return perk > SMR_PERK_NONE && perk < SMR_PERK_COUNT ? kPerkNames[perk] : "Helldiver Upgrade";
+}
+
+static void DescribePerk(SmrHelldiverPerk perk, const SmrHelldiverTuning& tuning)
+{
+    if (perk == SMR_PERK_AUTO_STIM)
+        ImGui::BulletText("Auto-heal at %.6g%% health or lower, once every %.6g s.", tuning.health_percent,
+            tuning.cooldown_seconds);
+    if (perk == SMR_PERK_FIELD_MEDIC) ImGui::BulletText("Injured limbs heal after %.6g s.", tuning.injury_seconds);
+    const struct { const char* label; double value; } effects[] = {
+        {"Primary magazines", tuning.primary_ammo_percent}, {"Secondary magazines", tuning.secondary_ammo_percent},
+        {"Throwables", tuning.throwables_percent},
+        {"Armor rating (simulated via damage)", tuning.armor_percent}, {"Sprint speed", tuning.sprint_percent},
+        {"Stamina", tuning.stamina_percent}, {"Movement speed", tuning.movement_percent},
+    };
+    for (const auto& effect : effects)
+        if (effect.value) ImGui::BulletText("%s: %+.6g%%", effect.label, effect.value);
+}
+
+static void HelldiverPanel(const SmrHelldiverStatus& status, bool pending)
+{
+    ImGui::TextWrapped("Pick one upgrade from each tier. Tiers stack for one solo mission.");
+    if (!status.solo) ImGui::TextDisabled("Helldiver upgrades are available in solo play only.");
+    for (int tier = 0; tier < SMR_TIER_COUNT; ++tier)
+    {
+        ImGui::Separator();
+        ImGui::PushID(tier);
+        SmrHelldiverPerk first = SMR_PERK_NONE;
+        for (int perk = SMR_PERK_NONE + 1; perk < SMR_PERK_COUNT && !first; ++perk)
+            if (SmrPerkTier(static_cast<SmrHelldiverPerk>(perk)) == tier) first = static_cast<SmrHelldiverPerk>(perk);
+        const SmrHelldiverTuning* price = SmrGetHelldiverTuning(first);
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kAccentText), "%s", kHelldiverTiers[tier]);
+        if (status.purchased[tier])
+            ImGui::TextWrapped("%s already purchased for your next solo mission.", PerkName(status.purchased[tier]));
+        else if (!price)
+            ImGui::TextWrapped("Helldiver upgrades disabled: check helldiver-upgrades.json and the mod log.");
+        else if (status.available[tier]) UpgradeCostLines(price->price, status.balance);
+        for (int perk = SMR_PERK_NONE + 1; perk < SMR_PERK_COUNT; ++perk)
+        {
+            const auto choice = static_cast<SmrHelldiverPerk>(perk);
+            const SmrHelldiverTuning* tuning = SmrGetHelldiverTuning(choice);
+            if (SmrPerkTier(choice) != tier || !tuning) continue;
+            const bool selected = status.selected[tier] == choice || status.purchased[tier] == choice;
+            const bool enabled = status.available[tier] && !pending;
+            ImGui::PushID(perk);
+            ImGui::BeginDisabled(!enabled);
+            if (selected) ImGui::PushStyleColor(ImGuiCol_Header, kSelectedSurface);
+            if (ImGui::Selectable(kPerkNames[perk], selected) && enabled)
+                SmrSelectHelldiver(mod, static_cast<SmrHelldiverTier>(tier),
+                    status.selected[tier] == choice ? SMR_PERK_NONE : choice);
+            if (selected) ImGui::PopStyleColor();
+            HoverHighlight(kPerkNames[perk], enabled);
+            ImGui::EndDisabled();
+            ImGui::Indent();
+            DescribePerk(choice, *tuning);
+            ImGui::Unindent();
+            ImGui::PopID();
+        }
+        ImGui::PopID();
+    }
+}
+
+static void HelldiverActions(const SmrHelldiverStatus& status, bool pending)
+{
+    bool any = false;
+    for (SmrHelldiverPerk perk : status.selected) any = any || perk != SMR_PERK_NONE;
+    if (ShopButton("Review purchase", any && !pending, true)) checkoutPanel = CheckoutPanel::Purchase;
+    if (any)
     {
         ImGui::SameLine();
-        if (ShopButton("Remove upgrade", !pending)) SmrSelectUpgrade(mod, SMR_UPGRADE_NONE, 0);
+        if (ShopButton("Remove upgrades", !pending))
+            for (int tier = 0; tier < SMR_TIER_COUNT; ++tier)
+                if (status.selected[tier]) SmrSelectHelldiver(mod, static_cast<SmrHelldiverTier>(tier), SMR_PERK_NONE);
     }
 }
 
 static void PurchasePanel(uint64_t requisition, const unsigned price[CURRENCY_COUNT])
 {
-    /* Configured upgrades always cost Forge Credits. */
-    const bool upgradeDue = price[FORGE_CREDITS] != 0;
+    const SmrDestroyerStatus upgrade = SmrDestroyer(mod);
+    const SmrHelldiverStatus helldiver = SmrHelldiver(mod);
+    bool perks = false;
+    for (SmrHelldiverPerk perk : helldiver.selected) perks = perks || perk != SMR_PERK_NONE;
     unsigned balance = 0;
     if (SmrBalance(&balance))
     {
@@ -505,22 +615,26 @@ static void PurchasePanel(uint64_t requisition, const unsigned price[CURRENCY_CO
         if (item.access) ImGui::TextWrapped("%s - Access ready (0 Req due)", item.name);
         else ImGui::TextWrapped("%s - %u Req", item.name, item.price);
     }
-    if (upgradeDue)
+    if (upgrade.selected || perks)
     {
-        SmrDestroyerStatus upgrade = SmrDestroyer(mod);
         ImGui::Separator();
-        ImGui::TextUnformatted(UpgradeName(upgrade.selected));
+        if (upgrade.selected) ImGui::TextUnformatted(UpgradeName(upgrade.selected));
         if (upgrade.selected == SMR_UPGRADE_EXTRA_SLOT)
             if (const char* name = SmrExtraName(upgrade.extra)) ImGui::TextWrapped("Extra stratagem: %s", name);
+        for (int tier = 0; tier < SMR_TIER_COUNT; ++tier)
+            if (helldiver.selected[tier])
+                ImGui::TextWrapped("%s: %s", kHelldiverTiers[tier], PerkName(helldiver.selected[tier]));
         UpgradeCostLines(price, upgrade.balance);
-        if (!upgrade.solo) ImGui::TextDisabled("Switch to Destroyer to remove the solo-only upgrade.");
+        if (!upgrade.solo) ImGui::TextDisabled("Remove the solo-only upgrades from the Destroyer and Helldiver tabs.");
     }
 }
 
 static std::string PurchaseTotal(uint64_t requisition, const unsigned price[CURRENCY_COUNT])
 {
+    bool upgradeDue = false;
+    for (size_t i : kUpgradeCurrencies) upgradeDue = upgradeDue || (i != REQUISITION_SLIPS && price[i]);
     std::string totalDue;
-    if (requisition || !price[FORGE_CREDITS]) totalDue = std::to_string(requisition) + " Req";
+    if (requisition || !upgradeDue) totalDue = std::to_string(requisition) + " Req";
     for (size_t i : kUpgradeCurrencies)
         if (i != REQUISITION_SLIPS && price[i])
             totalDue += (totalDue.empty() ? "" : " + ") + Amount(price[i], kCurrencies[i].name);
@@ -540,9 +654,12 @@ static void PurchaseActions(const std::string& totalText, bool hasCharges, SmrCh
 static void CheckoutTabs(bool pending)
 {
     static constexpr struct { const char* label; CheckoutPanel panel; } tabs[] = {
-        {"Destroyer", CheckoutPanel::Destroyer}, {"Purchase##tab", CheckoutPanel::Purchase}
+        {"Destroyer", CheckoutPanel::Destroyer}, {"Helldiver", CheckoutPanel::Helldiver},
+        {"Purchase##tab", CheckoutPanel::Purchase}
     };
-    ImVec2 min[IM_ARRAYSIZE(tabs)], max[IM_ARRAYSIZE(tabs)];
+    constexpr size_t count = IM_ARRAYSIZE(tabs);
+    ImVec2 min[count], max[count];
+    size_t current = 0;
     ImGui::BeginDisabled(pending);
     ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
     for (size_t i = 0; i < IM_ARRAYSIZE(tabs); ++i)
@@ -563,10 +680,15 @@ static void CheckoutTabs(bool pending)
         HoverHighlight(tab.label, !pending);
     }
     ImGui::PopStyleVar();
-    tabIndicator = AnimateHighlight(tabIndicator, checkoutPanel == CheckoutPanel::Purchase, 0.16f);
-    const float slide = tabIndicator * tabIndicator * (3.0f - 2.0f * tabIndicator);
-    const float left = min[0].x + (min[1].x - min[0].x) * slide + 3.0f;
-    const float right = max[0].x + (max[1].x - max[0].x) * slide - 3.0f;
+    for (size_t i = 0; i < count; ++i)
+        if (checkoutPanel == tabs[i].panel) current = i;
+    /* tabIndicator is the underline position in tabs; a full sweep takes 0.16 s. */
+    const float step = ImGui::GetIO().DeltaTime / 0.16f * (count - 1), target = static_cast<float>(current);
+    tabIndicator = tabIndicator < target ? std::min(tabIndicator + step, target) : std::max(tabIndicator - step, target);
+    const size_t from = std::min(static_cast<size_t>(tabIndicator), count - 2);
+    const float t = tabIndicator - from, slide = t * t * (3.0f - 2.0f * t);
+    const float left = min[from].x + (min[from + 1].x - min[from].x) * slide + 3.0f;
+    const float right = max[from].x + (max[from + 1].x - max[from].x) * slide - 3.0f;
     const float bottom = max[0].y - 1.0f;
     ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(left, bottom - 2.0f), ImVec2(right, bottom),
         ImGui::GetColorU32(kAccent));
@@ -589,18 +711,22 @@ static void CheckoutFrame(float width, float height)
         CheckoutTabs(pending != 0);
         ImGui::Separator();
         const bool destroyer = checkoutPanel == CheckoutPanel::Destroyer;
+        const bool helldiverTab = checkoutPanel == CheckoutPanel::Helldiver, purchase = !destroyer && !helldiverTab;
         const uint64_t requisition = SmrRequisitionDue(gearCost, price);
-        const bool hasCharges = requisition || price[FORGE_CREDITS];
+        bool hasCharges = requisition != 0;
+        for (size_t i : kUpgradeCurrencies) hasCharges = hasCharges || price[i];
         const SmrDestroyerStatus upgrade = destroyer ? SmrDestroyer(mod) : SmrDestroyerStatus{};
-        const std::string totalText = destroyer ? std::string{} : PurchaseTotal(requisition, price);
+        const SmrHelldiverStatus helldiver = helldiverTab ? SmrHelldiver(mod) : SmrHelldiverStatus{};
+        const std::string totalText = purchase ? PurchaseTotal(requisition, price) : std::string{};
         const float spacing = ImGui::GetStyle().ItemSpacing.y;
         float footer = ImGui::GetFrameHeightWithSpacing() + spacing;
-        if (!destroyer)
+        if (purchase)
             footer += ImGui::CalcTextSize(totalText.c_str(), nullptr, false, ImGui::GetContentRegionAvail().x).y + spacing;
-        bool canSelect = false;
-        if (ImGui::BeginChild(destroyer ? "Destroyer panel" : "Purchase panel", ImVec2(0, -footer)))
+        if (ImGui::BeginChild(destroyer ? "Destroyer panel" : helldiverTab ? "Helldiver panel" : "Purchase panel",
+                ImVec2(0, -footer)))
         {
-            if (destroyer) canSelect = DestroyerPanel(height, upgrade);
+            if (destroyer) DestroyerPanel(height, upgrade, pending != 0);
+            else if (helldiverTab) HelldiverPanel(helldiver, pending != 0);
             else
             {
                 PurchasePanel(requisition, price);
@@ -613,7 +739,8 @@ static void CheckoutFrame(float width, float height)
         }
         ImGui::EndChild();
         ImGui::Separator();
-        if (destroyer) DestroyerActions(upgrade, canSelect, pending != 0);
+        if (destroyer) DestroyerActions(pending != 0);
+        else if (helldiverTab) HelldiverActions(helldiver, pending != 0);
         else PurchaseActions(totalText, hasCharges, action, pending);
     }
     ImGui::End();

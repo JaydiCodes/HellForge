@@ -141,6 +141,31 @@ if($SpendMyResources){
         '    {{{0}u, "{1}"}},' -f ([uint32]$entry.Value.id), $entry.Name.Replace('\','\\').Replace('"','\"')
     }
     [IO.File]::WriteAllLines((Join-Path $objects 'smr_extra_names.inc'), [string[]]$extraNames)
+    # Helldiver upgrades: each loadout weapon's default magazines and each throwable's counts, by loadout id.
+    $schema=Get-Content -LiteralPath (Join-Path $project 'src\HellForge.Core\stats-schema.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    $itemSlots=@{primary=0;secondary=1;throwable=2}
+    function Get-JsonValue($object,[string]$name){ if($null -eq $object){return $null}; $p=$object.PSObject.Properties[$name]; if($p){$p.Value} }
+    $helldiverItems=foreach($group in @(
+        @{targets=$schema.targets.weapons;fields=@('magazine.starting_magazines','magazine.spare_magazines')},
+        @{targets=$schema.targets.throwables;fields=@('throwable.starting_count','throwable.max_count','throwable.count_from_supply')})){
+        foreach($entry in ($group.targets.PSObject.Properties | Sort-Object Name)){
+            $slot=$itemSlots[[string](Get-JsonValue $entry.Value 'slot')]
+            $item=Get-JsonValue $catalogue.items $entry.Name
+            if($null -eq $slot -or -not $item -or -not (Get-JsonValue $item 'id')){continue}
+            $fields=@(foreach($name in $group.fields){Get-JsonValue (Get-JsonValue $entry.Value 'fields') $name})
+            if(@($fields|Where-Object{$_}).Count -ne $group.fields.Count){continue}
+            $first=$fields[0]
+            $delta=$first.kind -eq 'EntityDelta'
+            if(@($fields|Where-Object{$_.kind -ne $first.kind -or $_.resource -ne $first.resource -or (Get-JsonValue $_ 'record') -ne (Get-JsonValue $first 'record') -or $_.storage -ne 'u32'}).Count){continue}
+            if(-not $delta -and $first.kind -ne 'component'){continue}
+            $parts=foreach($field in $fields){'{{"{0}", {1}}}' -f $(if($delta){$field.component}else{''}), $field.offset}
+            $record=Get-JsonValue $first 'record'
+            '    {{{0}u, {1}, {2}, {3}, {4}, UINT64_C({5}), {6}, {{{7}}}}},' -f $item.id, $slot, [int]$delta, [int][bool](Get-JsonValue $first 'shared'),
+                $fields.Count, $first.resource, $(if($null -eq $record){0}else{$record}), ($parts -join ', ')
+        }
+    }
+    if(-not $helldiverItems){throw 'No Helldiver upgrade items were found in the stats schema.'}
+    [IO.File]::WriteAllLines((Join-Path $objects 'smr_helldiver_items.inc'), [string[]]$helldiverItems)
     $gameplay=Join-Path $objects 'spend_my_resources.o'
     & $zig cc -target x86_64-windows-gnu -O2 -Wall -Werror -Wno-unused-parameter -I (Join-Path $project 'native/mod-sdk') -I $objects `
         -c (Join-Path $src 'spend_my_resources.c') -o $gameplay
@@ -151,7 +176,7 @@ if($SpendMyResources){
         -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -lole32 -luser32 -o $dll
     if($LASTEXITCODE){throw 'Spend My Resources overlay did not compile.'}
     Get-ChildItem -LiteralPath $out -Filter '*.lib' | Remove-Item
-    Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'README.md'),(Join-Path $mod 'extra-stratagem-slot.md'),(Join-Path $mod 'currency-ledger.md'),(Join-Path $mod 'prices.json'),(Join-Path $mod 'destroyer-upgrades.json'),(Join-Path $project 'LICENSE') -Destination $out
+    Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'README.md'),(Join-Path $mod 'extra-stratagem-slot.md'),(Join-Path $mod 'currency-ledger.md'),(Join-Path $mod 'prices.json'),(Join-Path $mod 'destroyer-upgrades.json'),(Join-Path $mod 'helldiver-upgrades.json'),(Join-Path $project 'LICENSE') -Destination $out
     Copy-Item -LiteralPath (Join-Path $imgui 'LICENSE.txt') -Destination (Join-Path $out 'imgui-LICENSE.txt')
     Write-Output "Built standalone mod: $dll"
     if($Test){
@@ -172,7 +197,7 @@ if($SpendMyResources){
         & $zig c++ -target x86_64-windows-gnu -O1 -std=c++17 -Wall -Werror -I (Join-Path $project 'native/mod-sdk') -I $editor `
             (Join-Path $mod 'test/prices_test.cpp') -o $pricesTest
         if($LASTEXITCODE){throw 'The price list fixture did not compile.'}
-        & $pricesTest (Join-Path $out 'prices.json') (Join-Path $out 'destroyer-upgrades.json')
+        & $pricesTest (Join-Path $out 'prices.json') (Join-Path $out 'destroyer-upgrades.json') (Join-Path $out 'helldiver-upgrades.json')
         if($LASTEXITCODE){throw 'The price list fixture failed.'}
         $checkoutTest=Join-Path $testOut 'checkout_frontend_test.exe'
         & $zig c++ @common -Wall -Werror -Wno-unused-parameter -I $editor `

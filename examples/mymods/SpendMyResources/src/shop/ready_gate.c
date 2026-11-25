@@ -37,7 +37,8 @@ static int ResumeReady(HfMod* mod, uintptr_t card)
     if (!ReadReadyLoadout(mod, card, &selected)) return 0;
     AcquireSRWLockShared(&shop_lock);
     unsigned total;
-    int ready = selected == ready_selection && !UnpaidItems(selected, &total) && !upgrade_selected;
+    int ready = selected == ready_selection && !UnpaidItems(selected, &total) && !upgrade_selected &&
+        !helldiver_selected[SMR_TIER_PLUS] && !helldiver_selected[SMR_TIER_ELITE] && !helldiver_selected[SMR_TIER_SUPER];
     ReleaseSRWLockShared(&shop_lock);
     if (!ready) ShopMessage(mod, "Automatic Ready cancelled: review the current loadout costs.");
     return ready;

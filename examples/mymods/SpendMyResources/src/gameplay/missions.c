@@ -42,6 +42,7 @@ static int LogLoadout(HfMod* mod, uintptr_t loadout, const char* when)
     unsigned total = TrackSelectedAccess(mod, weapons, stratagems, count);
     api->log(mod, "  Total listed loadout price: %u Requisition slips (charged at purchase, not again at deployment)", total);
     ApplyUpgrade(mod, loadout, 0);
+    ApplyHelldiver(mod, loadout);
     return 1;
 }
 
@@ -115,9 +116,16 @@ static void UpgradeStateChanged(HfMod* mod, const HfStateEvent* event, void* use
 {
     /* The SDK marks uses as mission-timed; do not set them after deployment. */
     if (event->to == HF_STATE_PREPARE_MISSION && event->from != HF_STATE_MISSION)
-        ApplyUpgrade(mod, ReadLocalLoadout(mod), 1);
+    {
+        uintptr_t loadout = ReadLocalLoadout(mod);
+        ApplyUpgrade(mod, loadout, 1);
+        ApplyHelldiver(mod, loadout);
+    }
     else if (event->from == HF_STATE_PREPARE_MISSION && event->to != HF_STATE_MISSION)
+    {
         ResetUpgrade(mod);
+        FinishHelldiver(mod);
+    }
 }
 
 static void MissionStart(HfMod* mod, const HfStateEvent* event, void* user)
@@ -128,6 +136,7 @@ static void MissionStart(HfMod* mod, const HfStateEvent* event, void* user)
     memset(&extra_deployment, 0, sizeof extra_deployment);
     SmrFinishCheckout(0);
     if (upgraded_count && !DestroyerSolo(mod)) ResetUpgrade(mod);
+    if (helldiver_applied && !DestroyerSolo(mod)) FinishHelldiver(mod);
     if (!game || !LayoutMatches(api, game))
     {
         api->log(mod, "Mission start: loadout not read; game layout does not match the reviewed build");
@@ -164,12 +173,14 @@ static void MissionEnd(HfMod* mod, const HfStateEvent* event, void* user)
     memset(&extra_deployment, 0, sizeof extra_deployment);
     int consumed_upgrade = upgraded_count != 0;
     ResetUpgrade(mod);
+    int consumed_helldiver = FinishHelldiver(mod);
     AcquireSRWLockExclusive(&shop_lock);
     if (consumed_upgrade)
     {
         upgrade_purchased = SMR_UPGRADE_NONE;
         extra_pick = 0;
     }
+    if (consumed_helldiver) memset(helldiver_purchased, 0, sizeof helldiver_purchased);
     for (size_t i = 0; i < PRICE_COUNT; ++i)
         if (deployed_access[i])
         {

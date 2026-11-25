@@ -8,6 +8,7 @@
 #include "gameplay/extra_slot.c"
 #include "shop/ready_gate.c"
 #include "gameplay/destroyer.c"
+#include "gameplay/helldiver.c"
 #include "gameplay/missions.c"
 #include "currency/exchange.c"
 #include "shop/purchases.c"
@@ -44,7 +45,15 @@ int SmrInit(const HfApi* api, HfMod* mod)
         api->log(mod, "Cannot load destroyer-upgrades.json: %s Destroyer upgrades disabled.", detail);
     else
         api->log(mod, "Loaded destroyer-upgrades.json.%s%s", detail[0] ? " " : "", detail);
+    detail[0] = '\0';
+    helldiver_config_loaded = SmrLoadHelldiverConfig(helldiver_tuning, detail, sizeof detail);
+    if (!helldiver_config_loaded)
+        api->log(mod, "Cannot load helldiver-upgrades.json: %s Helldiver upgrades disabled.", detail);
+    else
+        api->log(mod, "Loaded helldiver-upgrades.json.");
     if (hf_on_state(mod, UpgradeStateChanged, NULL, 0) ||
+        (helldiver_config_loaded &&
+            (hf_on_damage_pre(mod, HelldiverDamagePre, NULL, 0) || hf_on_weapon(mod, HelldiverWeapon, NULL, 0))) ||
         hf_on_mission_start(mod, MissionStart, NULL, 0) ||
         hf_on_mission_end(mod, MissionEnd, NULL, 0) ||
         hf_on_player_spawn(mod, PlayerSpawn, NULL, 0) ||

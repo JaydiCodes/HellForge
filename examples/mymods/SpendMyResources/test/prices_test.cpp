@@ -12,7 +12,7 @@ static void TestUpgradeConfig(const std::wstring& shippedPath, const std::wstrin
     char result[256] = {};
     SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT] = {};
     CHECK(ReadUpgradeConfig(shippedPath, tuning, result, sizeof result));
-    const unsigned shippedPrice[CURRENCY_COUNT] = {2000, 10, 5, 1, 50};
+    const unsigned shippedPrice[CURRENCY_COUNT] = {2000, 15, 10, 5, 50};
     for (int upgrade = SMR_UPGRADE_ORBITAL; upgrade < SMR_UPGRADE_COUNT; ++upgrade)
         CHECK(!memcmp(tuning[upgrade].price, shippedPrice, sizeof shippedPrice));
     CHECK(tuning[SMR_UPGRADE_ORBITAL].cooldown_percent == -66);
@@ -33,7 +33,7 @@ static void TestUpgradeConfig(const std::wstring& shippedPath, const std::wstrin
     valid.At("support").At("requisition") = Value::MakeNumber(0, true);
     CHECK(WriteAtomically(tempPath, Write(valid)));
     CHECK(ReadUpgradeConfig(tempPath, tuning, result, sizeof result));
-    const unsigned eaglePrice[CURRENCY_COUNT] = {1375, 0, 5, 3, 7};
+    const unsigned eaglePrice[CURRENCY_COUNT] = {1375, 0, 10, 3, 7};
     CHECK(tuning[SMR_UPGRADE_ORBITAL].cooldown_percent == -72.5 &&
         !memcmp(tuning[SMR_UPGRADE_EAGLE].price, eaglePrice, sizeof eaglePrice));
     CHECK(tuning[SMR_UPGRADE_SUPPORT].cooldown_percent == -62.5 && tuning[SMR_UPGRADE_DEFENSIVE].cooldown_percent == -66);
@@ -84,10 +84,68 @@ static void TestUpgradeConfig(const std::wstring& shippedPath, const std::wstrin
     puts("PASS destroyer config: shipped defaults, custom values, strict validation, and atomic failure.");
 }
 
+static void TestHelldiverConfig(const std::wstring& shippedPath, const std::wstring& tempPath)
+{
+    using namespace hfjson;
+    char result[256] = {};
+    SmrHelldiverTuning tuning[SMR_PERK_COUNT] = {};
+    CHECK(ReadHelldiverConfig(shippedPath, tuning, result, sizeof result));
+    CHECK(tuning[SMR_PERK_PRIMARY_TRADEOFF].price[COMMON_SAMPLES] == 50 && tuning[SMR_PERK_LIGHT_KIT].price[COMMON_SAMPLES] == 50 &&
+        tuning[SMR_PERK_ARMORED].price[RARE_SAMPLES] == 25 && tuning[SMR_PERK_FIELD_MEDIC].price[SUPER_SAMPLES] == 5 &&
+        !tuning[SMR_PERK_ARMORED].price[COMMON_SAMPLES] && !tuning[SMR_PERK_NONE].price[COMMON_SAMPLES]);
+    CHECK(tuning[SMR_PERK_PRIMARY_TRADEOFF].primary_ammo_percent == -50 &&
+        tuning[SMR_PERK_PRIMARY_TRADEOFF].secondary_ammo_percent == 50);
+    CHECK(tuning[SMR_PERK_SECONDARY_TRADEOFF].primary_ammo_percent == 50 &&
+        tuning[SMR_PERK_SECONDARY_TRADEOFF].secondary_ammo_percent == -50);
+    CHECK(tuning[SMR_PERK_LIGHT_KIT].throwables_percent == -50 && tuning[SMR_PERK_LIGHT_KIT].primary_ammo_percent == 33 &&
+        tuning[SMR_PERK_LIGHT_KIT].secondary_ammo_percent == 33);
+    CHECK(tuning[SMR_PERK_LIGHT_KIT].armor_percent == -10 && tuning[SMR_PERK_ARMORED].armor_percent == 25 &&
+        tuning[SMR_PERK_ARMORED].primary_ammo_percent == -10);
+    CHECK(tuning[SMR_PERK_SPRINTER].sprint_percent == 10 && tuning[SMR_PERK_SPRINTER].stamina_percent == -25 &&
+        tuning[SMR_PERK_ENDURANCE].stamina_percent == 25);
+    CHECK(tuning[SMR_PERK_AUTO_STIM].health_percent == 20 && tuning[SMR_PERK_AUTO_STIM].cooldown_seconds == 30);
+    CHECK(tuning[SMR_PERK_FIELD_MEDIC].injury_seconds == 2 && tuning[SMR_PERK_FIELD_MEDIC].movement_percent == -10);
+    std::string text, why;
+    Value valid;
+    CHECK(ReadFile(shippedPath, &text) && Parse(text, &valid, &why));
+    valid.At("elite").At("requisition") = Value::MakeNumber(1500, true);
+    valid.At("super").At("auto_stim").At("health_percent") = Value::MakeNumber(12.5, false);
+    CHECK(WriteAtomically(tempPath, Write(valid)));
+    CHECK(ReadHelldiverConfig(tempPath, tuning, result, sizeof result));
+    CHECK(tuning[SMR_PERK_SPRINTER].price[REQUISITION_SLIPS] == 1500 && tuning[SMR_PERK_SPRINTER].price[RARE_SAMPLES] == 25 &&
+        tuning[SMR_PERK_AUTO_STIM].health_percent == 12.5);
+    for (int i = 0; i < 16; ++i)
+    {
+        Value document = valid;
+        if (i == 0) document.Erase("super");
+        if (i == 1) document.At("plus").Erase("light_kit");
+        if (i == 2) document.At("elite").At("armored").Erase("armor_percent");
+        if (i == 3) document.At("elite").At("armored").At("sprint_percent") = Value::MakeNumber(5, true);
+        if (i == 4) document.At("plus").At("armored") = document.At("elite").At("armored");
+        if (i == 5) document.At("plus").Erase("common_samples");
+        if (i == 6) document.At("super").At("super_samples") = Value::MakeNumber(1.5, false);
+        if (i == 7) document.At("super").At("auto_stim").At("health_percent") = Value::MakeNumber(100, true);
+        if (i == 8) document.At("elite").At("sprinter").At("sprint_percent") = Value::MakeNumber(-95, true);
+        if (i == 9) document.At("typo") = document.At("plus");
+        if (i == 10) document.At("elite").members.emplace_back("rare_samples", Value::MakeNumber(1, true));
+        if (i == 11) document.At("super").At("field_medic") = Value::MakeNumber(2, true);
+        if (i == 12) document.At("plus").At("primary_tradeoff").Erase("primary_ammo_percent");
+        if (i == 13) document.At("plus").At("secondary_tradeoff").Erase("secondary_ammo_percent");
+        if (i == 14) document.At("elite").At("armored").At("damage_taken_percent") = Value::MakeNumber(-20, true);
+        if (i == 15) document.At("super").At("auto_stim").At("stim_heal_percent") = Value::MakeNumber(-33, true);
+        CHECK(WriteAtomically(tempPath, Write(document)));
+        CHECK(!ReadHelldiverConfig(tempPath, tuning, result, sizeof result) && result[0]);
+        CHECK(tuning[SMR_PERK_AUTO_STIM].health_percent == 12.5 && tuning[SMR_PERK_SPRINTER].price[REQUISITION_SLIPS] == 1500);
+    }
+    CHECK(DeleteFileW(tempPath.c_str()));
+    CHECK(!ReadHelldiverConfig(tempPath, tuning, result, sizeof result) && result[0]);
+    puts("PASS helldiver config: shipped tiers and perks, custom values, strict validation, and atomic failure.");
+}
+
 int main(int argc, char** argv)
 {
     using namespace hfjson;
-    CHECK(argc == 3);
+    CHECK(argc == 4);
     const char* names[PRICE_COUNT];
     unsigned prices[PRICE_COUNT] = {};
     for (size_t i = 0; i < PRICE_COUNT; ++i) names[i] = kLoadoutPrices[i].name;
@@ -142,4 +200,5 @@ int main(int argc, char** argv)
     CHECK(!ReadPrices(path, names, prices, PRICE_COUNT, result, sizeof result) && result[0]);
     puts("PASS price list: shipped roster, custom and reordered prices, overflow limits, atomic validation, missing/invalid files and entries.");
     TestUpgradeConfig(Wide(argv[2]), path);
+    TestHelldiverConfig(Wide(argv[3]), path);
 }

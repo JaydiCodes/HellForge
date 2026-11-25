@@ -61,8 +61,71 @@ static double* Cooldown(uint32_t type)
         default: return NULL;
     }
 }
+/* Helldiver upgrade targets, by target and field or stat offset. */
+typedef struct HelldiverValue { int stat; uint64_t target; const HfField* field; int64_t record; uint32_t offset; double now; } HelldiverValue;
+static HelldiverValue helldiver_values[64];
+static size_t helldiver_value_count;
+static int helldiver_stat_sets_before_refusal = -1;
+static const HfField fixture_stim_duration = HF_FIELD(StatusEffectSettings, duration);
+static int HelldiverFixtureField(const HfField* field)
+{
+    if (field == &kStartingMagazines || field == &kMaxMagazines || field == &kThrowableStart || field == &kThrowableMax ||
+        field == &kThrowableSupply || field == &kSprint || field == &kStamina) return 1;
+    for (size_t i = 0; i < sizeof kMovement / sizeof kMovement[0]; ++i)
+        if (field == &kMovement[i]) return 1;
+    return 0;
+}
+static double HelldiverBase(const HelldiverValue* key)
+{
+    if (key->stat || key->field == &kStartingMagazines || key->field == &kMaxMagazines) return 6;
+    if (key->field == &kThrowableStart || key->field == &kThrowableMax || key->field == &kThrowableSupply) return 4;
+    return 10;
+}
+static HelldiverValue* HelldiverFixtureValue(int stat, uint64_t target, const HfField* field, int64_t record, uint32_t offset)
+{
+    for (size_t i = 0; i < helldiver_value_count; ++i)
+    {
+        HelldiverValue* v = &helldiver_values[i];
+        if (v->stat == stat && v->target == target && v->field == field && v->record == record && v->offset == offset) return v;
+    }
+    CHECK(helldiver_value_count < sizeof helldiver_values / sizeof helldiver_values[0]);
+    HelldiverValue* v = &helldiver_values[helldiver_value_count++];
+    *v = (HelldiverValue){stat, target, field, record, offset};
+    v->now = HelldiverBase(v);
+    return v;
+}
+static double HelldiverNow(uint64_t target, const HfField* field) { return HelldiverFixtureValue(0, target, field, 0, 0)->now; }
+static double HelldiverStatNow(const HelldiverItem* item, int f)
+{
+    return HelldiverFixtureValue(1, item->resource, NULL, item->record, item->fields[f].offset)->now;
+}
+static int GetStat(HfMod* unused, const HfStat* stat, HfLiveValue* out)
+{
+    CHECK(!strcmp(stat->kind, "EntityDelta") && stat->type == HF_TYPE_U32);
+    out->now.number = HelldiverFixtureValue(1, stat->resource, NULL, stat->record, stat->offset)->now;
+    return HF_APPLIES_RESPAWN;
+}
+static int SetStat(HfMod* unused, const HfStat* stat, const HfValue* value, uint32_t flags)
+{
+    if (value && helldiver_stat_sets_before_refusal >= 0)
+    {
+        if (!helldiver_stat_sets_before_refusal) return 0;
+        --helldiver_stat_sets_before_refusal;
+    }
+    HelldiverValue* v = HelldiverFixtureValue(1, stat->resource, NULL, stat->record, stat->offset);
+    if (value) CHECK(value->type == HF_TYPE_U32);
+    v->now = value ? value->number : HelldiverBase(v);
+    live_sets += value != NULL;
+    return HF_APPLIES_RESPAWN;
+}
 static int GetLive(HfMod* mod, HfRef type, const HfField* field, HfLiveValue* out)
 {
+    CHECK(type != 27 || strcmp(field->component, fixture_stim_duration.component) || field->offset != fixture_stim_duration.offset);
+    if (HelldiverFixtureField(field))
+    {
+        out->now.number = HelldiverNow(type, field);
+        return HF_APPLIES_RESPAWN;
+    }
     double* cooldown = Cooldown((uint32_t)type);
     if (!cooldown) return 0;
     if (field == &kCooldown) out->now.number = *cooldown;
@@ -81,6 +144,17 @@ static int GetLive(HfMod* mod, HfRef type, const HfField* field, HfLiveValue* ou
 }
 static int SetLive(HfMod* mod, HfRef type, const HfField* field, const HfValue* value, uint32_t flags)
 {
+    CHECK(type != 27 || strcmp(field->component, fixture_stim_duration.component) || field->offset != fixture_stim_duration.offset);
+    if (HelldiverFixtureField(field))
+    {
+        HelldiverValue* v = HelldiverFixtureValue(0, type, field, 0, 0);
+        CHECK(type != HELLDIVER_RESOURCE || flags == HF_LIVE_SHARED);
+        if (value && type == refused_type) return 0;
+        if (value) CHECK(value->type == field->type);
+        v->now = value ? value->number : HelldiverBase(v);
+        live_sets += value != NULL;
+        return HF_APPLIES_RESPAWN;
+    }
     double* cooldown = Cooldown((uint32_t)type);
     CHECK(cooldown && !flags && type != HF_STRATAGEM_RESUPPLY);
     if (value && type == refused_type && (!refused_field || field == refused_field)) return 0;
@@ -98,10 +172,12 @@ static int SetLive(HfMod* mod, HfRef type, const HfField* field, const HfValue* 
     return field == &kUses ? HF_APPLIES_MISSION : HF_APPLIES_NOW;
 }
 static int Matches(uintptr_t at, const char* pin) { return pins_match; }
+static unsigned char health_manager[0x1100], *health_manager_pointer = health_manager;
 static uintptr_t Global(HfMod* unused, const char* name)
 {
     if (!strcmp(name, "PlayerManager")) return (uintptr_t)&slot_players;
     if (!strcmp(name, "GameMode")) return (uintptr_t)&slot_mode;
+    if (!strcmp(name, "HealthManager")) return (uintptr_t)&health_manager_pointer;
     return local_ready ? (uintptr_t)&local_pointer : 0;
 }
 static int Subscribe(HfMod* unused, uint32_t kind, HfListener listener, void* data, int32_t priority) { subscription_calls++; return 1; }
@@ -199,6 +275,39 @@ int SmrLoadUpgradeConfig(SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT], char* resul
     tuning[SMR_UPGRADE_SUPPORT] = (SmrUpgradeTuning){.price = {2000, 10, 5, 1, 13}, .cooldown_percent = -50, .other_cooldown_percent = 50};
     tuning[SMR_UPGRADE_EXTRA_SLOT] = (SmrUpgradeTuning){.price = {[REQUISITION_SLIPS] = 2000, [FORGE_CREDITS] = 50},
         .other_cooldown_percent = 10};
+    return 1;
+}
+int SmrLoadHelldiverConfig(SmrHelldiverTuning tuning[SMR_PERK_COUNT], char* result, size_t size)
+{
+    const SmrHelldiverTuning plus = {.price = {[COMMON_SAMPLES] = 50}}, elite = {.price = {[RARE_SAMPLES] = 25}},
+        super = {.price = {[SUPER_SAMPLES] = 5}};
+    tuning[SMR_PERK_PRIMARY_TRADEOFF] = plus;
+    tuning[SMR_PERK_PRIMARY_TRADEOFF].primary_ammo_percent = -50;
+    tuning[SMR_PERK_PRIMARY_TRADEOFF].secondary_ammo_percent = 50;
+    tuning[SMR_PERK_SECONDARY_TRADEOFF] = plus;
+    tuning[SMR_PERK_SECONDARY_TRADEOFF].secondary_ammo_percent = -50;
+    tuning[SMR_PERK_SECONDARY_TRADEOFF].primary_ammo_percent = 50;
+    tuning[SMR_PERK_LIGHT_KIT] = plus;
+    tuning[SMR_PERK_LIGHT_KIT].throwables_percent = -50;
+    tuning[SMR_PERK_LIGHT_KIT].armor_percent = -10;
+    tuning[SMR_PERK_LIGHT_KIT].primary_ammo_percent = 33;
+    tuning[SMR_PERK_LIGHT_KIT].secondary_ammo_percent = 33;
+    tuning[SMR_PERK_ARMORED] = elite;
+    tuning[SMR_PERK_ARMORED].armor_percent = 25;
+    tuning[SMR_PERK_ARMORED].primary_ammo_percent = -10;
+    tuning[SMR_PERK_ARMORED].secondary_ammo_percent = -10;
+    tuning[SMR_PERK_SPRINTER] = elite;
+    tuning[SMR_PERK_SPRINTER].sprint_percent = 10;
+    tuning[SMR_PERK_SPRINTER].stamina_percent = -25;
+    tuning[SMR_PERK_ENDURANCE] = elite;
+    tuning[SMR_PERK_ENDURANCE].stamina_percent = 25;
+    tuning[SMR_PERK_ENDURANCE].sprint_percent = -10;
+    tuning[SMR_PERK_AUTO_STIM] = super;
+    tuning[SMR_PERK_AUTO_STIM].health_percent = 20;
+    tuning[SMR_PERK_AUTO_STIM].cooldown_seconds = 30;
+    tuning[SMR_PERK_FIELD_MEDIC] = super;
+    tuning[SMR_PERK_FIELD_MEDIC].injury_seconds = 2;
+    tuning[SMR_PERK_FIELD_MEDIC].movement_percent = -10;
     return 1;
 }
 
@@ -769,6 +878,239 @@ static void TestUpgradeEffects(void)
     puts("PASS destroyer effects: percentage cooldowns, unlimited uses, shared rearm, failed or aborted prep, and mission cleanup");
 }
 
+static unsigned char health_buckets[32], health_descriptor[24], health_record[0x1B8], health_ext[0x1C];
+static void* health_descriptors[1];
+static uint32_t injured_limbs;
+static int heal_calls, heal_limb_calls;
+static int Heal(HfMod* unused, float amount)
+{
+    heal_calls++;
+    int32_t max;
+    memcpy(&max, health_ext + 0x14, sizeof max);
+    Put32(health_record + 0x14, (uint32_t)max);
+    return HF_ACT_DONE;
+}
+static int HealLimb(HfMod* unused, uint32_t limb)
+{
+    heal_limb_calls++;
+    injured_limbs &= ~(1u << limb);
+    return HF_ACT_DONE;
+}
+static int LimbState(HfMod* unused, uint32_t entity, uint32_t limb, HfLimbState* out)
+{
+    *out = (HfLimbState){45, 45, (injured_limbs >> limb) & 1};
+    return 1;
+}
+static double ItemCount(uint32_t id, uint8_t slot, int f)
+{
+    const HelldiverItem* item = HelldiverItemFor(id, slot);
+    CHECK(item && f < item->count);
+    return item->delta ? HelldiverStatNow(item, f) :
+        HelldiverNow(item->resource, HelldiverComponentField(slot, item->fields[f].offset));
+}
+static int Near(double a, double b) { return a > b - 1e-6 && a < b + 1e-6; }
+static uint32_t Weapon(int slot) { return *(uint32_t*)(history + LOADOUT + slot * WEAPON_STRIDE); }
+
+static void TestHelldiver(void)
+{
+    const uint32_t avatar = 77;
+    uintptr_t buckets = (uintptr_t)health_buckets, records = (uintptr_t)health_record, ext = (uintptr_t)health_ext;
+    void* descriptors = health_descriptors;
+    memset(health_buckets, 0xFF, sizeof health_buckets);
+    Put32(health_buckets + (avatar % 4) * 8, avatar);
+    Put32(health_buckets + (avatar % 4) * 8 + 4, 0);
+    memcpy(health_manager + 0x1030, &buckets, sizeof buckets);
+    Put32(health_manager + 0x1038, 4);
+    Put32(health_manager + 0x103C, 0xFFFFFFFFu);
+    Put32(health_manager + 0x1040, 1);
+    Put32(health_manager + 0x1020, 1);
+    health_descriptors[0] = health_descriptor;
+    Put32(health_descriptor + 8, avatar);
+    memcpy(health_manager + 0x1048, &descriptors, sizeof descriptors);
+    memcpy(health_manager + 0x1058, &records, sizeof records);
+    memcpy(health_manager + 0x1060, &ext, sizeof ext);
+    Put32(health_ext + 0x14, 500);
+    Put32(health_record + 0x14, 500);
+    CHECK(HelldiverItemFor(HF_ITEM_AR23_LIBERATOR, 0) && HelldiverItemFor(HF_ITEM_P2_PEACEMAKER, 1) &&
+        HelldiverItemFor(HF_ITEM_G12_HIGH_EXPLOSIVE, 2));
+
+    ResetExchange();
+    const uint32_t common_id = kCurrencies[COMMON_SAMPLES].id, rare_id = kCurrencies[RARE_SAMPLES].id,
+        super_id = kCurrencies[SUPER_SAMPLES].id, credit_id = kCurrencies[FORGE_CREDITS].id;
+    SetAmount(REQUISITION, 5000);
+    SetAmount(common_id, 100);
+    SetAmount(rare_id, 100);
+    SetAmount(super_id, 50);
+    Pick(HF_ITEM_AR23_LIBERATOR, 0);
+    Tick();
+    unsigned credits = Amount(credit_id), total, price[CURRENCY_COUNT];
+    int pending;
+    CHECK(!SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_PRIMARY_TRADEOFF));
+    OpenCheckout();
+    session_role = HF_SESSION_HOST;
+    CHECK(!SmrHelldiver(&mod).solo && !SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_PRIMARY_TRADEOFF));
+    session_role = HF_SESSION_SOLO;
+    CHECK(!SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_ARMORED));
+    CHECK(SmrHelldiver(&mod).available[SMR_TIER_SUPER]);
+    CHECK(SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_LIGHT_KIT) &&
+        SmrSelectHelldiver(&mod, SMR_TIER_ELITE, SMR_PERK_ARMORED) &&
+        SmrSelectHelldiver(&mod, SMR_TIER_SUPER, SMR_PERK_AUTO_STIM));
+    CHECK(SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_PRIMARY_TRADEOFF));
+    SmrHelldiverStatus status = SmrHelldiver(&mod);
+    CHECK(status.selected[SMR_TIER_PLUS] == SMR_PERK_PRIMARY_TRADEOFF && status.selected[SMR_TIER_ELITE] == SMR_PERK_ARMORED &&
+        status.selected[SMR_TIER_SUPER] == SMR_PERK_AUTO_STIM);
+    CHECK(SmrCheckout(&total, price, &pending) == SMR_CHECKOUT_PURCHASE && !total && !pending &&
+        price[COMMON_SAMPLES] == 50 && price[RARE_SAMPLES] == 25 && price[SUPER_SAMPLES] == 5 &&
+        !price[REQUISITION_SLIPS] && !price[FORGE_CREDITS]);
+    CHECK(SmrSelectUpgrade(&mod, SMR_UPGRADE_ORBITAL, 0));
+    CHECK(SmrCheckout(&total, price, &pending) == SMR_CHECKOUT_PURCHASE && price[REQUISITION_SLIPS] == 2000 &&
+        price[COMMON_SAMPLES] == 60 && price[RARE_SAMPLES] == 30 && price[SUPER_SAMPLES] == 6 && price[FORGE_CREDITS] == 10);
+    CHECK(SmrSelectUpgrade(&mod, SMR_UPGRADE_NONE, 0));
+    SetAmount(super_id, 4);
+    Tick();
+    CHECK(SmrCheckout(&total, price, &pending) == SMR_CHECKOUT_BLOCKED && !BuyCheckout());
+    SetAmount(super_id, 50);
+    Tick();
+    CHECK(BuyCheckout());
+    Tick();
+    status = SmrHelldiver(&mod);
+    CHECK(SmrCheckoutComplete() && status.purchased[SMR_TIER_PLUS] == SMR_PERK_PRIMARY_TRADEOFF &&
+        status.purchased[SMR_TIER_ELITE] == SMR_PERK_ARMORED && status.purchased[SMR_TIER_SUPER] == SMR_PERK_AUTO_STIM &&
+        !status.selected[SMR_TIER_PLUS] && !status.selected[SMR_TIER_ELITE] && !status.selected[SMR_TIER_SUPER]);
+    CHECK(Amount(common_id) == 50 && Amount(rare_id) == 75 && Amount(super_id) == 45 && Amount(credit_id) == credits &&
+        Amount(REQUISITION) == 5000);
+    CHECK(saved_currency[COMMON_SAMPLES] == 50 && saved_currency[RARE_SAMPLES] == 75 && saved_currency[SUPER_SAMPLES] == 45);
+    SmrFinishCheckout(0);
+    OpenCheckout();
+    status = SmrHelldiver(&mod);
+    CHECK(!status.available[SMR_TIER_PLUS] && !SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_LIGHT_KIT));
+    SmrFinishCheckout(0);
+
+    const HfStateEvent prepare = {{0}, HF_STATE_SHIP, HF_STATE_PREPARE_MISSION};
+    const HfStateEvent abort = {{0}, HF_STATE_PREPARE_MISSION, HF_STATE_SHIP};
+    helldiver_stat_sets_before_refusal = 1;
+    UpgradeStateChanged(&mod, &prepare, NULL);
+    CHECK(!helldiver_applied && !helldiver_edit_count && Weapon(0) == HF_ITEM_AR23_LIBERATOR &&
+        Weapon(1) == HF_ITEM_P2_PEACEMAKER && ItemCount(HF_ITEM_AR23_LIBERATOR, 0, 0) == 6 &&
+        ItemCount(HF_ITEM_P2_PEACEMAKER, 1, 0) == 6);
+    helldiver_stat_sets_before_refusal = -1;
+    UpgradeStateChanged(&mod, &abort, NULL);
+    CHECK(helldiver_purchased[SMR_TIER_SUPER] == SMR_PERK_AUTO_STIM);
+
+    UpgradeStateChanged(&mod, &prepare, NULL);
+    CHECK(helldiver_applied && Weapon(0) == HF_ITEM_AR23_LIBERATOR && Weapon(1) == HF_ITEM_P2_PEACEMAKER);
+    CHECK(ItemCount(HF_ITEM_P2_PEACEMAKER, 1, 0) == 8 && ItemCount(HF_ITEM_P2_PEACEMAKER, 1, 1) == 8 &&
+        ItemCount(HF_ITEM_AR23_LIBERATOR, 0, 0) == 3 && ItemCount(HF_ITEM_AR23_LIBERATOR, 0, 1) == 3);
+    CHECK(Near(HelldiverNow(HELLDIVER_RESOURCE, &kSprint), 10));
+    UpgradeStateChanged(&mod, &abort, NULL);
+    CHECK(!helldiver_applied && Weapon(0) == HF_ITEM_AR23_LIBERATOR && Weapon(1) == HF_ITEM_P2_PEACEMAKER &&
+        ItemCount(HF_ITEM_AR23_LIBERATOR, 0, 0) == 6 && ItemCount(HF_ITEM_P2_PEACEMAKER, 1, 0) == 6);
+
+    UpgradeStateChanged(&mod, &prepare, NULL);
+    MissionStart(&mod, NULL, NULL);
+    CHECK(helldiver_applied && !waiting_for_spawn && Weapon(0) == HF_ITEM_AR23_LIBERATOR &&
+        Weapon(1) == HF_ITEM_P2_PEACEMAKER);
+    game_state = HF_STATE_MISSION;
+    HfWeaponEvent weapon = {0};
+    weapon.avatar = avatar;
+    HelldiverWeapon(&mod, &weapon, NULL);
+    HfDamagePreEvent hit = {0};
+    hit.damage.target = avatar;
+    hit.damage.amount = 100;
+    HelldiverDamagePre(&mod, &hit, NULL);
+    CHECK(Near(hit.damage.amount, 80) && !hit.cancel);
+    hit.damage.amount = -1;
+    HelldiverDamagePre(&mod, &hit, NULL);
+    CHECK(hit.damage.amount == -1);
+    hit.damage.target = avatar + 1;
+    hit.damage.amount = 100;
+    HelldiverDamagePre(&mod, &hit, NULL);
+    CHECK(hit.damage.amount == 100);
+    Put32(health_record + 0x14, 120);
+    HelldiverTick(&mod, 0.1f);
+    CHECK(!heal_calls);
+    Put32(health_record + 0x14, 90);
+    HelldiverTick(&mod, 0.1f);
+    CHECK(heal_calls == 1 && *(int32_t*)(health_record + 0x14) == 500);
+    Put32(health_record + 0x14, 90);
+    HelldiverTick(&mod, 10);
+    CHECK(heal_calls == 1);
+    Put32(health_record + 0x19C, 1);
+    HelldiverTick(&mod, 25);
+    CHECK(heal_calls == 1);
+    Put32(health_record + 0x19C, 0);
+    HelldiverTick(&mod, 0.1f);
+    CHECK(heal_calls == 2);
+    MissionEnd(&mod, NULL, NULL);
+    CHECK(!helldiver_applied && !helldiver_purchased[SMR_TIER_PLUS] && !helldiver_purchased[SMR_TIER_ELITE] &&
+        !helldiver_purchased[SMR_TIER_SUPER] && Weapon(0) == HF_ITEM_AR23_LIBERATOR &&
+        Weapon(1) == HF_ITEM_P2_PEACEMAKER && ItemCount(HF_ITEM_AR23_LIBERATOR, 0, 0) == 6 &&
+        ItemCount(HF_ITEM_P2_PEACEMAKER, 1, 0) == 6);
+    hit.damage.target = avatar;
+    HelldiverDamagePre(&mod, &hit, NULL);
+    CHECK(hit.damage.amount == 100);
+
+    game_state = HF_STATE_SHIP;
+    helldiver_purchased[SMR_TIER_PLUS] = SMR_PERK_SECONDARY_TRADEOFF;
+    MissionStart(&mod, NULL, NULL);
+    CHECK(helldiver_applied && Weapon(0) == HF_ITEM_AR23_LIBERATOR && Weapon(1) == HF_ITEM_P2_PEACEMAKER);
+    CHECK(ItemCount(HF_ITEM_AR23_LIBERATOR, 0, 0) == 9 && ItemCount(HF_ITEM_AR23_LIBERATOR, 0, 1) == 9 &&
+        ItemCount(HF_ITEM_P2_PEACEMAKER, 1, 0) == 3 && ItemCount(HF_ITEM_P2_PEACEMAKER, 1, 1) == 3);
+    MissionEnd(&mod, NULL, NULL);
+    CHECK(!helldiver_purchased[SMR_TIER_PLUS] && ItemCount(HF_ITEM_AR23_LIBERATOR, 0, 0) == 6 &&
+        ItemCount(HF_ITEM_P2_PEACEMAKER, 1, 0) == 6);
+
+    helldiver_purchased[SMR_TIER_PLUS] = SMR_PERK_LIGHT_KIT;
+    helldiver_purchased[SMR_TIER_ELITE] = SMR_PERK_ARMORED;
+    UpgradeStateChanged(&mod, &prepare, NULL);
+    CHECK(helldiver_applied && ItemCount(HF_ITEM_AR23_LIBERATOR, 0, 0) == 7 &&
+        ItemCount(HF_ITEM_P2_PEACEMAKER, 1, 0) == 7);
+    MissionStart(&mod, NULL, NULL);
+    game_state = HF_STATE_MISSION;
+    HelldiverWeapon(&mod, &weapon, NULL);
+    hit.damage.amount = 100;
+    HelldiverDamagePre(&mod, &hit, NULL);
+    CHECK(hit.damage.amount == 89);
+    MissionEnd(&mod, NULL, NULL);
+    game_state = HF_STATE_SHIP;
+    CHECK(!helldiver_applied && !helldiver_purchased[SMR_TIER_PLUS] &&
+        ItemCount(HF_ITEM_AR23_LIBERATOR, 0, 0) == 6 && ItemCount(HF_ITEM_P2_PEACEMAKER, 1, 0) == 6);
+
+    helldiver_purchased[SMR_TIER_PLUS] = SMR_PERK_LIGHT_KIT;
+    helldiver_purchased[SMR_TIER_ELITE] = SMR_PERK_SPRINTER;
+    helldiver_purchased[SMR_TIER_SUPER] = SMR_PERK_FIELD_MEDIC;
+    UpgradeStateChanged(&mod, &prepare, NULL);
+    CHECK(helldiver_applied && Weapon(0) == HF_ITEM_AR23_LIBERATOR && Weapon(1) == HF_ITEM_P2_PEACEMAKER);
+    CHECK(ItemCount(HF_ITEM_AR23_LIBERATOR, 0, 0) == 8 && ItemCount(HF_ITEM_AR23_LIBERATOR, 0, 1) == 8 &&
+        ItemCount(HF_ITEM_P2_PEACEMAKER, 1, 0) == 8 && ItemCount(HF_ITEM_P2_PEACEMAKER, 1, 1) == 8 &&
+        ItemCount(HF_ITEM_G12_HIGH_EXPLOSIVE, 2, 0) == 2 &&
+        ItemCount(HF_ITEM_G12_HIGH_EXPLOSIVE, 2, 1) == 2 && ItemCount(HF_ITEM_G12_HIGH_EXPLOSIVE, 2, 2) == 2);
+    CHECK(Near(HelldiverNow(HELLDIVER_RESOURCE, &kSprint), 9.9) &&
+        Near(HelldiverNow(HELLDIVER_RESOURCE, &kStamina), 7.5) && Near(HelldiverNow(HELLDIVER_RESOURCE, &kMovement[0]), 9));
+    MissionStart(&mod, NULL, NULL);
+    game_state = HF_STATE_MISSION;
+    HelldiverWeapon(&mod, &weapon, NULL);
+    hit.damage.target = avatar;
+    hit.damage.amount = 100;
+    HelldiverDamagePre(&mod, &hit, NULL);
+    CHECK(hit.damage.amount == 111);
+    injured_limbs = 1u << HF_LIMB_LEFT_LEG;
+    HelldiverTick(&mod, 1);
+    CHECK(!heal_limb_calls && injured_limbs);
+    HelldiverTick(&mod, 1);
+    CHECK(heal_limb_calls == 1 && !injured_limbs && heal_calls == 2);
+    MissionEnd(&mod, NULL, NULL);
+    game_state = HF_STATE_SHIP;
+    CHECK(!helldiver_purchased[SMR_TIER_SUPER] && ItemCount(HF_ITEM_G12_HIGH_EXPLOSIVE, 2, 0) == 4 &&
+        Near(HelldiverNow(HELLDIVER_RESOURCE, &kSprint), 10) && Near(HelldiverNow(HELLDIVER_RESOURCE, &kMovement[0]), 10));
+    hit.damage.amount = 100;
+    HelldiverDamagePre(&mod, &hit, NULL);
+    CHECK(Near(hit.damage.amount, 100));
+    ResetExchange();
+    puts("PASS helldiver: one stacked perk per tier, combined sample prices, solo apply, ammo trade-offs, "
+        "damage scaling, auto-stim, field medic and one-mission use");
+}
+
 static bool SlotOwned(uintptr_t inventory, uint32_t type)
 {
     CHECK(inventory == (uintptr_t)manager);
@@ -1232,6 +1574,8 @@ int main(void)
     api.hook = Hook;
     api.logs_folder = Logs;
     api.session = Session; api.get_live = GetLive; api.set_live = SetLive;
+    api.get_stat = GetStat; api.set_stat = SetStat;
+    api.heal = Heal; api.heal_limb = HealLimb; api.limb_state = LimbState;
     prices_refused = 1;
     CHECK(SmrInit(&api, &mod) != 0 && !subscription_calls);
     prices_refused = 0;
@@ -1270,6 +1614,7 @@ int main(void)
     TestExpandedCatalog();
     TestDestroyer();
     TestUpgradeEffects();
+    TestHelldiver();
     TestExtraSlot();
     TestExchanges();
     TestLoadoutRefresh();

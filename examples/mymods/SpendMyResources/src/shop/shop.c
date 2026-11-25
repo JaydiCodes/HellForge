@@ -81,6 +81,7 @@ static void ShopTick(HfMod* mod, float dt, void* user)
 {
     const HfApi* api = HF_API(mod);
     ExtraSlotTick(mod, dt);
+    HelldiverTick(mod, dt);
     if (shop_failed) return;
     if (!game_base)
     {

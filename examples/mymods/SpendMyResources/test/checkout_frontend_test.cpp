@@ -51,6 +51,20 @@ extern "C" void SmrFinishCheckout(int ready)
 }
 extern "C" int SmrTakeCheckoutRequest() { bool value = requested; requested = false; return value; }
 extern "C" SmrDestroyerStatus SmrDestroyer(HfMod*) { return upgrade; }
+static SmrHelldiverStatus helldiver = {{5000, 40, 20, 3, 50}, {1, 1, 1}, 1};
+static const SmrHelldiverTuning helldiverTuning = {{0, 50, 0, 0, 0}, 0, 50};
+static const SmrHelldiverTuning primaryTradeoffTuning = {{0, 50, 0, 0, 0}, -50, 50};
+extern "C" SmrHelldiverStatus SmrHelldiver(HfMod*) { return helldiver; }
+extern "C" int SmrSelectHelldiver(HfMod*, SmrHelldiverTier tier, SmrHelldiverPerk perk)
+{
+    helldiver.selected[tier] = perk;
+    return 1;
+}
+extern "C" const SmrHelldiverTuning* SmrGetHelldiverTuning(SmrHelldiverPerk perk)
+{
+    if (perk == SMR_PERK_PRIMARY_TRADEOFF) return &primaryTradeoffTuning;
+    return perk > SMR_PERK_NONE && perk < SMR_PERK_COUNT ? &helldiverTuning : nullptr;
+}
 extern "C" const SmrUpgradeTuning* SmrGetUpgradeTuning(SmrUpgrade choice)
 {
     return choice > SMR_UPGRADE_NONE && choice < SMR_UPGRADE_COUNT ? &tuning[choice] : nullptr;
@@ -337,6 +351,47 @@ static ImRect PressExtraTile(uint32_t type)
     return grid->NavRectRel[ImGuiNavLayer_Main];
 }
 
+static void PressHelldiverPerk(SmrHelldiverTier tier, SmrHelldiverPerk perk)
+{
+    ImGuiWindow* panel = PanelWindow();
+    const ImGuiID tierId = ImHashData(&tier, sizeof(int), panel->ID);
+    const int perkIndex = perk;
+    const ImGuiID id = ImHashStr(editorapp::kPerkNames[perk], 0, ImHashData(&perkIndex, sizeof perkIndex, tierId));
+    ImGui::NewFrame();
+    GImGui->NavWindow = panel;
+    GImGui->NavId = GImGui->NavActivateId = GImGui->NavActivateDownId = id;
+    GImGui->NavInputSource = ImGuiInputSource_Keyboard;
+    editorapp::Modal(nullptr, 1280, 720, 1.0f / 60);
+    ImGui::Render();
+}
+
+static void CheckHelldiverTab()
+{
+    PressModalButton("Helldiver");
+    CHECK(editorapp::checkoutPanel == editorapp::CheckoutPanel::Helldiver);
+    Draw(0.20f);
+    ImGui::NewFrame();
+    ImGui::LogToBuffer();
+    editorapp::Modal(nullptr, 1280, 720, 1.0f / 60);
+    const char* text = GImGui->LogBuffer.c_str();
+    CHECK(strstr(text, "Primary Ammo Trade-off") && strstr(text, "Primary magazines: -50%") &&
+        strstr(text, "Secondary magazines: +50%") && !strstr(text, "Deploy without") && !strstr(text, "Stim heal duration"));
+    ImGui::LogFinish();
+    ImGui::Render();
+    PressHelldiverPerk(SMR_TIER_PLUS, SMR_PERK_LIGHT_KIT);
+    PressHelldiverPerk(SMR_TIER_SUPER, SMR_PERK_FIELD_MEDIC);
+    CHECK(helldiver.selected[SMR_TIER_PLUS] == SMR_PERK_LIGHT_KIT && helldiver.selected[SMR_TIER_SUPER] == SMR_PERK_FIELD_MEDIC &&
+        !helldiver.selected[SMR_TIER_ELITE]);
+    PressHelldiverPerk(SMR_TIER_PLUS, SMR_PERK_PRIMARY_TRADEOFF);
+    CHECK(helldiver.selected[SMR_TIER_PLUS] == SMR_PERK_PRIMARY_TRADEOFF);
+    PressHelldiverPerk(SMR_TIER_PLUS, SMR_PERK_PRIMARY_TRADEOFF);
+    CHECK(!helldiver.selected[SMR_TIER_PLUS]);
+    PressModalButton("Remove upgrades");
+    CHECK(!helldiver.selected[SMR_TIER_SUPER] && editorapp::checkoutPanel == editorapp::CheckoutPanel::Helldiver);
+    PressModalButton("Destroyer");
+    Draw(0.20f);
+}
+
 static void CheckModalText(const char* text, const char* second = nullptr, const char* third = nullptr)
 {
     Draw();
@@ -390,6 +445,7 @@ int main(int argc, char** argv)
     Draw();
     Draw();
     CheckAnimatedTabs();
+    CheckHelldiverTab();
     ImGuiWindow* checkoutWindow = CheckoutWindow();
     const ImVec2 checkoutPos = checkoutWindow->Pos;
     const int opened = modalChanges;
@@ -398,21 +454,32 @@ int main(int argc, char** argv)
     {
         PressModalButton(choices[i], true);
         CHECK(editorapp::destroyerSelection == i + 1);
-        CHECK(!upgrade.selected && !purchaseCalls && modalShown);
+        CHECK(upgrade.selected == (i == 3 ? SMR_UPGRADE_NONE : editorapp::kDestroyerUpgrades[i + 1].upgrade));
+        CHECK(editorapp::checkoutPanel == editorapp::CheckoutPanel::Destroyer && !purchaseCalls && modalShown);
     }
-    PressModalButton("Select upgrade");
+    PressModalButton("Review purchase");
     CHECK(!upgrade.selected && !purchaseCalls && modalShown);
+    PressModalButton(" X ##Clear destroyer", true);
+    CHECK(!editorapp::destroyerSelection && !editorapp::destroyerExtra && !upgrade.selected);
+    PressModalButton("##Extra Stratagem Slot", true);
     CheckModalText("Choose an extra stratagem", "Cost at checkout:", "Selected: None");
     CheckModalText("50 Forge Credits (50 available)", "10 Common samples (40 available)",
         "1 Super sample (3 available)");
     CheckModalText("5 Rare samples (20 available)", "2000 Requisition slips (5000 available)");
     CheckModalText("Offensive", "Support", "Defensive");
     const ImRect first = PressExtraTile(HF_STRATAGEM_EAGLE_500KG_BOMB);
+    CHECK(upgrade.selected == SMR_UPGRADE_EXTRA_SLOT && upgrade.extra == HF_STRATAGEM_EAGLE_500KG_BOMB);
     const ImRect second = PressExtraTile(HF_STRATAGEM_EAGLE_AIRSTRIKE);
+    CHECK(upgrade.selected == SMR_UPGRADE_EXTRA_SLOT && upgrade.extra == HF_STRATAGEM_EAGLE_AIRSTRIKE);
     CHECK(first.Min.y == second.Min.y && first.Max.x < second.Min.x);
     CheckModalText("Selected: Eagle Airstrike");
+    PressModalButton(" X ##Clear destroyer", true);
+    CHECK(!upgrade.selected && !upgrade.extra && !editorapp::destroyerExtra);
+    PressModalButton("##Extra Stratagem Slot", true);
+    CHECK(!upgrade.selected && !editorapp::destroyerExtra);
+    PressExtraTile(HF_STRATAGEM_EAGLE_AIRSTRIKE);
     if (argc >= 2) SaveUpgradeScreenshot(argv[1], argc == 3);
-    const ImRect select = PressModalButton("Select upgrade");
+    const ImRect select = PressModalButton("Review purchase");
     CHECK(select.Max.y > select.Min.y && select.Max.y + checkoutPos.y <= checkoutWindow->InnerClipRect.Max.y);
     CHECK(upgrade.selected == SMR_UPGRADE_EXTRA_SLOT && upgrade.extra == HF_STRATAGEM_EAGLE_AIRSTRIKE && !purchaseCalls);
     CheckModalText("Extra stratagem: Eagle Airstrike", "Extra Stratagem Slot",
@@ -420,7 +487,8 @@ int main(int argc, char** argv)
     PressModalButton("Destroyer");
     CheckModalText("Selected for purchase: Extra Stratagem Slot", "Selected: Eagle Airstrike");
     PressExtraTile(HF_STRATAGEM_EAGLE_500KG_BOMB);
-    PressModalButton("Select upgrade");
+    CHECK(upgrade.extra == HF_STRATAGEM_EAGLE_500KG_BOMB);
+    PressModalButton("Review purchase");
     CheckModalText("Extra stratagem: Eagle 500kg Bomb");
     PressModalButton("Destroyer");
     PressModalButton("##Defensive Upgrade", true);
@@ -429,8 +497,12 @@ int main(int argc, char** argv)
     PressModalButton("##Support Upgrade", true);
     CheckModalText("Equipped support stratagems: -62.5% to cooldowns and unlimited uses.", "and Eagle rearm: -25%",
         "7 Forge Credits (50 available)");
-    PressModalButton("Select upgrade");
     CHECK(upgrade.selected == SMR_UPGRADE_SUPPORT && !upgrade.extra && !purchaseCalls);
+    PressModalButton("##Support Upgrade", true);
+    CHECK(!upgrade.selected);
+    PressModalButton("##Support Upgrade", true);
+    CHECK(upgrade.selected == SMR_UPGRADE_SUPPORT);
+    PressModalButton("Review purchase");
     CheckModalText("Total due: 4750 Req + 7 Forge Credits + 2 Common samples + 1 Super sample",
         "2 Common samples (40 available)", "1 Super sample (3 available)");
     upgrade.balance[REQUISITION_SLIPS] = 4749;
@@ -444,14 +516,14 @@ int main(int argc, char** argv)
     CHECK(!purchaseCalls);
     upgrade.balance[SUPER_SAMPLES] = 3;
     PressModalButton("Destroyer");
-    PressModalButton("Remove upgrade");
-    CHECK(!upgrade.selected);
+    PressModalButton(" X ##Clear destroyer", true);
+    CHECK(!upgrade.selected && !upgrade.extra && !editorapp::destroyerExtra);
     PressModalButton("Purchase##tab");
     CheckModalText("Total due: 2750 Req");
     CHECK(modalShown && modalChanges == opened && !purchaseCalls && !automaticReady);
     CHECK(CheckoutWindow() == checkoutWindow && checkoutWindow->Pos.x == checkoutPos.x && checkoutWindow->Pos.y == checkoutPos.y);
     PressModalButton("Destroyer");
-    PressModalButton("Select upgrade");
+    PressModalButton("##Support Upgrade", true);
     CHECK(upgrade.selected == SMR_UPGRADE_SUPPORT);
     io.AddKeyEvent(ImGuiKey_Escape, true);
     Draw();
@@ -463,6 +535,8 @@ int main(int argc, char** argv)
     requested = true;
     editorapp::Tick();
     CheckModalText("Destroyer upgrades are available in solo play only.");
+    PressModalButton("##Support Upgrade", true);
+    CHECK(!upgrade.selected);
     PressModalButton("Purchase##tab");
     CheckModalText("Nothing to purchase.");
     PressModalButton("Continue to Ready");
@@ -477,13 +551,20 @@ int main(int argc, char** argv)
     CHECK(editorapp::destroyerSelection == 0 && !editorapp::destroyerExtra);
     Draw();
     PressModalButton("##Support Upgrade", true);
-    PressModalButton("Select upgrade");
+    PressModalButton("Review purchase");
     due = 0;
     CheckModalText("Total due: 2000 Req + 7 Forge Credits + 2 Common samples + 1 Super sample");
     PressModalButton("Purchase");
     CHECK(purchaseCalls == 1 && transactionPending && !upgrade.purchased);
     PressModalButton("Destroyer");
     CHECK(editorapp::checkoutPanel == editorapp::CheckoutPanel::Purchase);
+    editorapp::checkoutPanel = editorapp::CheckoutPanel::Destroyer;
+    Draw();
+    PressModalButton("##Orbital Upgrade", true);
+    PressModalButton(" X ##Clear destroyer", true);
+    CHECK(upgrade.selected == SMR_UPGRADE_SUPPORT && !upgrade.extra);
+    editorapp::checkoutPanel = editorapp::CheckoutPanel::Purchase;
+    Draw();
     io.AddKeyEvent(ImGuiKey_Escape, true);
     Draw();
     CHECK(modalShown && purchaseCalls == 1);
@@ -518,6 +599,10 @@ int main(int argc, char** argv)
     windowClosed = false;
     editorapp::Tick();
     CHECK(windowClosed && !editorapp::exchangeOpen && editorapp::shopOpen && modalShown);
+    Draw();
+    PressModalButton("##Orbital Upgrade", true);
+    PressModalButton(" X ##Clear destroyer", true);
+    CHECK(upgrade.purchased == SMR_UPGRADE_SUPPORT && !upgrade.selected);
     windowClosed = false;
     editorapp::Opened(); /* F2 must not cover an active checkout. */
     CHECK(windowClosed && !editorapp::exchangeOpen && editorapp::shopOpen && modalShown);

@@ -1,0 +1,46 @@
+{
+  "plus": {
+    "common_samples": 50,
+    "primary_tradeoff": {
+      "primary_ammo_percent": -50,
+      "secondary_ammo_percent": 50
+    },
+    "secondary_tradeoff": {
+      "secondary_ammo_percent": -50,
+      "primary_ammo_percent": 50
+    },
+    "light_kit": {
+      "throwables_percent": -50,
+      "armor_percent": -10,
+      "primary_ammo_percent": 33,
+      "secondary_ammo_percent": 33
+    }
+  },
+  "elite": {
+    "rare_samples": 25,
+    "armored": {
+      "armor_percent": 25,
+      "primary_ammo_percent": -10,
+      "secondary_ammo_percent": -10
+    },
+    "sprinter": {
+      "sprint_percent": 10,
+      "stamina_percent": -25
+    },
+    "endurance": {
+      "stamina_percent": 25,
+      "sprint_percent": -10
+    }
+  },
+  "super": {
+    "super_samples": 5,
+    "auto_stim": {
+      "health_percent": 20,
+      "cooldown_seconds": 30
+    },
+    "field_medic": {
+      "injury_seconds": 2,
+      "movement_percent": -10
+    }
+  }
+}

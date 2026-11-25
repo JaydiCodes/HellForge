@@ -24,6 +24,7 @@ static volatile LONG checkout_gate;
 static LONG CheckoutGate(void) { return InterlockedCompareExchange(&checkout_gate, 0, 0); }
 static SmrUpgrade upgrade_selected, upgrade_purchased;
 static uint32_t extra_pick;
+static SmrHelldiverPerk helldiver_selected[SMR_TIER_COUNT], helldiver_purchased[SMR_TIER_COUNT];
 static unsigned currency_amount[CURRENCY_COUNT], currency_cap[CURRENCY_COUNT];
 static int exchange_ready, upgrade_funds_ready;
 static struct {
@@ -39,6 +40,7 @@ static struct {
     unsigned gear_cost, upgrade_price[CURRENCY_COUNT];
     SmrUpgrade upgrade;
     uint32_t extra;
+    SmrHelldiverPerk helldiver[SMR_TIER_COUNT];
 } charge;
 
 static void ShopMessage(HfMod* mod, const char* text);
