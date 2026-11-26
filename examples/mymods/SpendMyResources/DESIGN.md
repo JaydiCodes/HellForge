@@ -33,10 +33,18 @@ TODO:
             - When reaching 20% HP, auto stim. Only once every 30 seconds. -10% armor.
             - All injuries auto fix after 0.5 seconds, -10% movement speed, -10% armor.
 	- Primaries & Secondaries
-    	- Plus: +2 Mags
-    	- Elite: 2 choices
-        	- Direct hit AP +1, Direct hit Durable damage -50%
-        	- Direct hit AP -1, Direct hit Durable damage +50%
+    	- Elite: +2 mags
+      	- Super:
+        	- Liberator series: 1 of either:
+                - Direct hit AP +1, Durable damage -50%
+            	- Direct hit AP -1, Durable damage +50%
+        	- Hyena: 1 of either (ammo change)
+            	- FDI:
+                	- "damage.durable_damage": 450, "damage.standard_damage": 225, "damage.ap_direct": 2, "damage.ap_slight": 2,
+              	- API:
+                	- "damage.durable_damage": 225, "damage.standard_damage": 450, "damage.ap_direct": 4, "damage.ap_slight": 4,
+              	- HEI:
+                	- "damage.durable_damage": 225, "damage.standard_damage": 225, "damage.ap_direct": 2, "damage.ap_slight": 2, "terminal.primary.impact.explosion": 72
 	- Strats
 		- Eagles
     		- Elite: +1 Use

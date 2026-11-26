@@ -1429,7 +1429,21 @@ static void TestExpandedCatalog(void)
         {HF_STRATAGEM_AXAR23_GUARD_DOG, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "AX/AR-23 Guard Dog / gun"},
         {HF_STRATAGEM_GR8_RECOILLESS_RIFLE, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "GR-8 Recoilless Rifle"},
         {HF_STRATAGEM_MLS4X_COMMANDO, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "MLS-4X Commando"},
-        {HF_STRATAGEM_B1_SUPPLY_PACK, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "B-1 Supply Pack"}
+        {HF_STRATAGEM_B1_SUPPLY_PACK, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "B-1 Supply Pack"},
+        {HF_ITEM_R4_HYENA, PRICE_WEAPON, 0, 500, "R-4 Hyena"},
+        {HF_STRATAGEM_AMLS4X_ROCKET_SENTRY, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "A/MLS-4X Rocket Sentry"},
+        {HF_STRATAGEM_AAC8_AUTOCANNON_SENTRY, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "A/AC-8 Autocannon Sentry"},
+        {HF_STRATAGEM_AM12_MORTAR_SENTRY, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "A/M-12 Mortar Sentry"},
+        {HF_STRATAGEM_EAT12_ANTITANK_EMPLACEMENT, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "E/AT-12 Anti-Tank Emplacement"},
+        {HF_STRATAGEM_B100_PORTABLE_HELLBOMB, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "B-100 Portable Hellbomb"},
+        {HF_STRATAGEM_BMD_C4_PACK, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "B/MD C4 Pack"},
+        {HF_STRATAGEM_M103_SUPPLY_FRV, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "M-103 Supply FRV"},
+        {HF_STRATAGEM_TD220_BASTION_MK_XVI, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "TD-220 Bastion MK XVI"},
+        {HF_STRATAGEM_TD110_MAELSTROM, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "TD-110 Maelstrom"},
+        {HF_STRATAGEM_FAF14_SPEAR, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "FAF-14 Spear"},
+        {HF_STRATAGEM_MG206_HEAVY_MACHINE_GUN, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "MG-206 Heavy Machine Gun"},
+        {HF_STRATAGEM_40K_MELTAGUN, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "40-K Meltagun"},
+        {HF_STRATAGEM_GL21_GRENADE_LAUNCHER, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "GL-21 Grenade Launcher"}
     };
     CHECK(PRICE_COUNT == 2 + sizeof expected / sizeof expected[0]);
     for (size_t i = 0; i < sizeof expected / sizeof expected[0]; ++i)
@@ -1505,7 +1519,8 @@ static void TestExpandedCatalog(void)
     SetAmount(REQUISITION, 5000);
     Tick();
     wallet_writes = 0;
-    puts("PASS expanded catalogue: all 47 restrictions gate Ready, deduct once, grant access and expire; seven-item checkout costs 3500");
+    printf("PASS expanded catalogue: all %u restrictions gate Ready, deduct once, grant access and expire; seven-item checkout costs 3500\n",
+        (unsigned)PRICE_COUNT);
 }
 
 static void TestWalletPersistence(void)

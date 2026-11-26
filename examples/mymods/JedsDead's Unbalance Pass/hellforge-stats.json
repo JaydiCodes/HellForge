@@ -609,9 +609,26 @@
       "projectile.mass": 125
     },
     "R-4 Hyena": {
-      "damage.ap_large": 1,
-      "damage.ap_slight": 2,
-      "damage.durable_damage": 20
+      "damage.durable_damage": 225,
+      "damage.status_2_strength": 1,
+      "damage.status_2_type": 6,
+      "magazine.spare_magazines": 4,
+      "damage.standard_damage": 225,
+      "magazine.capacity": 10,
+      "magazine.magazines_from_supply": 2,
+      "attachment.magazine.rifle_drake_short.magazine_capacity": 5,
+      "attachment.magazine.rifle_drake_short.magazines_from_supply": 4,
+      "attachment.magazine.rifle_drake_short.spare_magazines": 8,
+      "attachment.magazine.rifle_drake_short.starting_magazines": 4,
+      "magazine.starting_magazines": 2,
+      "weapon.fire_rate": 125,
+      "damage.ap_slight": 3,
+      "weapon.ergonomics": 15,
+      "weapon.recoil_climb_horizontal": 100,
+      "weapon.recoil_climb_vertical": 450,
+      "weapon.recoil_drift_horizontal": 60,
+      "weapon.recoil_drift_vertical": 60,
+      "weapon.sway": 2
     },
     "R-6 Deadeye": {
       "damage.ap_extreme": 1,
