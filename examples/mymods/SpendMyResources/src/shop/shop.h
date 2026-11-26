@@ -44,7 +44,7 @@ typedef struct SmrUpgradeTuning {
 } SmrUpgradeTuning;
 typedef struct SmrDestroyerStatus {
     unsigned balance[CURRENCY_COUNT];
-    int available, solo;
+    int available;
     SmrUpgrade selected, purchased;
     uint32_t extra;
 } SmrDestroyerStatus;
@@ -77,7 +77,7 @@ typedef struct SmrHelldiverTuning {
 } SmrHelldiverTuning;
 typedef struct SmrHelldiverStatus {
     unsigned balance[CURRENCY_COUNT];
-    int available[SMR_TIER_COUNT], solo;
+    int available[SMR_TIER_COUNT];
     SmrHelldiverPerk selected[SMR_TIER_COUNT], purchased[SMR_TIER_COUNT];
 } SmrHelldiverStatus;
 

@@ -48,7 +48,7 @@ static SmrCheckoutAction CheckoutAction(unsigned gear_cost, int upgrade, const u
     uint64_t requisition = SmrRequisitionDue(gear_cost, price);
     if (!requisition && !upgrade) return SMR_CHECKOUT_CONTINUE;
     if (shop_failed || (requisition && (!inventory_ready || wallet < requisition)) ||
-        (upgrade && (!checkout_solo || !upgrade_funds_ready || !UpgradeAffordable(price, currency_amount))))
+        (upgrade && (!upgrade_funds_ready || !UpgradeAffordable(price, currency_amount))))
         return SMR_CHECKOUT_BLOCKED;
     return SMR_CHECKOUT_PURCHASE;
 }
@@ -56,7 +56,7 @@ static SmrCheckoutAction CheckoutAction(unsigned gear_cost, int upgrade, const u
 SmrCheckoutAction SmrCheckout(unsigned* gear_cost, unsigned upgrade_price[CURRENCY_COUNT], int* pending)
 {
     AcquireSRWLockShared(&shop_lock);
-    UnpaidItems(WithExtraAccess(checkout_equipped, checkout_solo), gear_cost);
+    UnpaidItems(WithExtraAccess(checkout_equipped), gear_cost);
     int upgrade = CheckoutUpgradePrice(upgrade_selected, helldiver_selected, upgrade_price);
     *pending = CheckoutPending();
     SmrCheckoutAction action = CheckoutAction(*gear_cost, upgrade, upgrade_price, *pending);
@@ -73,7 +73,7 @@ int SmrConfirmCheckout(HfMod* mod, SmrCheckoutAction action)
     }
     AcquireSRWLockExclusive(&shop_lock);
     unsigned gear_cost, upgrade_price[CURRENCY_COUNT];
-    uint64_t selected = WithExtraAccess(checkout_equipped, checkout_solo);
+    uint64_t selected = WithExtraAccess(checkout_equipped);
     uint64_t unpaid = UnpaidItems(selected, &gear_cost);
     int upgrade = CheckoutUpgradePrice(upgrade_selected, helldiver_selected, upgrade_price);
     if (CheckoutGate() != CHECKOUT_OPEN || action == SMR_CHECKOUT_BLOCKED ||
@@ -118,14 +118,14 @@ static int UpgradeFunded(const HfApi* api, uintptr_t manager, const unsigned pri
     return 1;
 }
 
-static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, unsigned balance, int state, int solo)
+static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, unsigned balance, int state)
 {
     if (state != CHARGE_QUEUED) return;
     uint64_t equipped = 0;
     unsigned gear_cost, upgrade_price[CURRENCY_COUNT], expected[CURRENCY_COUNT];
     int readable = ReadEquippedItems(mod, &equipped);
     AcquireSRWLockShared(&shop_lock);
-    uint64_t selected = WithExtraAccess(equipped, solo);
+    uint64_t selected = WithExtraAccess(equipped);
     uint64_t unpaid = UnpaidItems(selected, &gear_cost), mask = charge.mask;
     int active = CheckoutGate() == CHECKOUT_OPEN;
     unsigned quoted_gear_cost = charge.gear_cost;

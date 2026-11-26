@@ -59,12 +59,12 @@ static void ExtraSlotTick(HfMod* mod, float dt)
     AcquireSRWLockShared(&shop_lock);
     uint32_t type = upgrade_purchased == SMR_UPGRADE_EXTRA_SLOT ? extra_pick : 0;
     ReleaseSRWLockShared(&shop_lock);
-    if (!type || api->game_state(mod) != HF_STATE_MISSION || !DestroyerSolo(mod)) return;
+    if (!type || api->game_state(mod) != HF_STATE_MISSION) return;
     if (dt > 0) extra_deployment.seconds += dt;
     if (extra_deployment.seconds < extra_deployment.next_check) return;
     if (extra_deployment.seconds >= 90)
     {
-        RetainExtra(mod, "Extra stratagem deployment or assets timed out; purchase retained for a later solo mission.");
+        RetainExtra(mod, "Extra stratagem deployment or assets timed out; purchase retained for a later mission.");
         return;
     }
     extra_deployment.next_check = extra_deployment.seconds + 0.25f;
@@ -85,14 +85,14 @@ static void ExtraSlotTick(HfMod* mod, float dt)
     uintptr_t at = EligibleExtra(api, Inventory(api), context.picks, context.count, type, &row);
     if (!at)
     {
-        RetainExtra(mod, "Extra stratagem no longer eligible or mission list full; purchase retained for a later solo mission.");
+        RetainExtra(mod, "Extra stratagem no longer eligible or mission list full; purchase retained for a later mission.");
         return;
     }
     int assets = ExtraPackages(mod, at, &row);
     if (assets == HF_PACKAGE_LOADING) return;
     if (assets != HF_PACKAGE_RESIDENT)
     {
-        RetainExtra(mod, "Extra stratagem assets unavailable; purchase retained for a later solo mission.");
+        RetainExtra(mod, "Extra stratagem assets unavailable; purchase retained for a later mission.");
         return;
     }
     UpgradeEdit edits[MAX_UPGRADE_EDITS];
@@ -135,8 +135,6 @@ static void MissionStart(HfMod* mod, const HfStateEvent* event, void* user)
     waiting_for_spawn = 0;
     memset(&extra_deployment, 0, sizeof extra_deployment);
     SmrFinishCheckout(0);
-    if (upgraded_count && !DestroyerSolo(mod)) ResetUpgrade(mod);
-    if (helldiver_applied && !DestroyerSolo(mod)) FinishHelldiver(mod);
     if (!game || !LayoutMatches(api, game))
     {
         api->log(mod, "Mission start: loadout not read; game layout does not match the reviewed build");

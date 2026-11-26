@@ -121,7 +121,7 @@ static void RefreshExtraOptions(HfMod* mod)
     SmrExtraChoice options[sizeof extra_options / sizeof extra_options[0]];
     uint32_t picks[MAX_STRATAGEMS], count;
     size_t size = 0;
-    if (extra_native.grant && DestroyerSolo(mod) && ReadStratagems(api, ReadPickerLoadout(mod, game_base), picks, &count))
+    if (extra_native.grant && ReadStratagems(api, ReadPickerLoadout(mod, game_base), picks, &count))
     {
         uintptr_t inventory = Inventory(api);
         for (size_t i = 0; i < sizeof extra_names / sizeof extra_names[0]; ++i)
@@ -193,7 +193,7 @@ typedef struct ExtraContext {
 static int ReadExtraContext(HfMod* mod, ExtraContext* context)
 {
     const HfApi* api = HF_API(mod);
-    if (api->game_state(mod) != HF_STATE_MISSION || !DestroyerSolo(mod) ||
+    if (api->game_state(mod) != HF_STATE_MISSION ||
         !extra_deployment.peer || extra_deployment.peer != LocalPeer(mod)) return 0;
     uintptr_t mode = (uintptr_t)hf_global_GameMode(mod);
     uintptr_t players = (uintptr_t)hf_global_PlayerManager(mod);
@@ -201,22 +201,30 @@ static int ReadExtraContext(HfMod* mod, ExtraContext* context)
     uintptr_t owner = Pointer(api, game_base + EXTRA_OWNER);
     if (!mode || !players || !hud || !owner) return 0;
     uintptr_t mission = Pointer(api, mode + offsetof(HfGameMode, mission));
-    uintptr_t descriptor = Pointer(api, players + 0xE8);
-    uint32_t mode_id, host, count, local_count, life, network, id, map_count;
+    uint32_t mode_id, count, life, network, id, map_count;
     uint8_t hud_ready;
     uint64_t peer;
-    if (!mission || !descriptor ||
+    if (!mission ||
         api->read(mode + offsetof(HfGameMode, mode), &mode_id, 4) || mode_id != 1 ||
-        api->read(mission + 0x14, &host, 4) || !(host & 1) ||
         api->read(hud + EXTRA_HUD_READY, &hud_ready, 1) || hud_ready != 1 ||
-        api->read(players + offsetof(HfPlayerManager, count), &count, 4) || count != 1 ||
-        api->read(players + 0x88, &local_count, 4) || local_count != 1 ||
-        api->read(players + 0x2C8, &peer, 8) || peer != extra_deployment.peer ||
-        api->read(players + 0x2E0, &life, 4) || life != 3 ||
-        api->read(players + 0x3A8, &network, 4) || network >= 0x7FFF ||
-        api->read(descriptor + 8, &id, 4) || !id ||
+        api->read(players + offsetof(HfPlayerManager, count), &count, 4) || !count || count > 4 ||
         api->read(players + 0xD8, &map_count, 4) || !map_count || map_count > 4096)
         return 0;
+    int found = 0;
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        uintptr_t player_descriptor;
+        if (api->read(players + 0x2C8 + (uintptr_t)i * 0x38, &peer, 8)) return 0;
+        if (peer != extra_deployment.peer) continue;
+        if (api->read(players + 0x2E0 + (uintptr_t)i * 0x38, &life, 4) || life != 3 ||
+            api->read(players + 0x3A8 + (uintptr_t)i * 0x20, &network, 4) || network >= 0x7FFF ||
+            api->read(players + 0xE8 + (uintptr_t)i * 8, &player_descriptor, sizeof player_descriptor) ||
+            !player_descriptor || api->read(player_descriptor + 8, &id, 4) || !id)
+            return 0;
+        found = 1;
+        break;
+    }
+    if (!found) return 0;
     uintptr_t map = Pointer(api, players + 0xD0);
     if (!map) return 0;
     for (uint32_t i = 0; i < map_count; ++i)
@@ -224,7 +232,6 @@ static int ReadExtraContext(HfMod* mod, ExtraContext* context)
         uint32_t entry[2];
         if (api->read(map + i * sizeof entry, entry, sizeof entry)) return 0;
         if (entry[0] != id) continue;
-        if (entry[1] != 0) return 0;
         context->owner = owner;
         context->player = id;
         context->loadout = LocalLoadout(api, game_base, peer);

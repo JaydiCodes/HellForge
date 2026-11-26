@@ -91,9 +91,8 @@ static int HelldiverSelectionOpen(void)
 SmrHelldiverStatus SmrHelldiver(HfMod* mod)
 {
     SmrHelldiverStatus status = {{0}};
-    status.solo = DestroyerSolo(mod);
     AcquireSRWLockShared(&shop_lock);
-    int open = status.solo && upgrade_funds_ready && !shop_failed && HelldiverSelectionOpen();
+    int open = upgrade_funds_ready && !shop_failed && HelldiverSelectionOpen();
     for (int tier = 0; tier < SMR_TIER_COUNT; ++tier)
     {
         status.available[tier] = open && !helldiver_purchased[tier];
@@ -108,16 +107,14 @@ SmrHelldiverStatus SmrHelldiver(HfMod* mod)
 int SmrSelectHelldiver(HfMod* mod, SmrHelldiverTier tier, SmrHelldiverPerk perk)
 {
     int on_ship = HF_API(mod)->game_state(mod) == HF_STATE_SHIP;
-    int solo = on_ship && DestroyerSolo(mod);
     AcquireSRWLockExclusive(&shop_lock);
     int allowed = on_ship && tier >= SMR_TIER_PLUS && tier < SMR_TIER_COUNT && HelldiverSelectionOpen() &&
         !helldiver_purchased[tier] &&
         (perk == SMR_PERK_NONE ||
-            (solo && upgrade_funds_ready && !shop_failed && SmrGetHelldiverTuning(perk) && SmrPerkTier(perk) == tier));
+            (upgrade_funds_ready && !shop_failed && SmrGetHelldiverTuning(perk) && SmrPerkTier(perk) == tier));
     if (allowed)
     {
         helldiver_selected[tier] = perk;
-        if (perk) checkout_solo = solo;
     }
     ReleaseSRWLockExclusive(&shop_lock);
     if (!allowed) ShopMessage(mod, "Helldiver upgrade selection unavailable.");
@@ -263,10 +260,9 @@ static int HelldiverAny(const SmrHelldiverPerk perks[SMR_TIER_COUNT])
     return perks[SMR_TIER_PLUS] || perks[SMR_TIER_ELITE] || perks[SMR_TIER_SUPER];
 }
 
-/* Checkout check: solo and every perk configured for its tier. */
+/* Checkout check: every selected perk is configured for its tier. */
 static int CanApplyHelldiver(HfMod* mod, const SmrHelldiverPerk perks[SMR_TIER_COUNT])
 {
-    if (!DestroyerSolo(mod)) return 0;
     for (int tier = 0; tier < SMR_TIER_COUNT; ++tier)
         if (perks[tier] && (!SmrGetHelldiverTuning(perks[tier]) || SmrPerkTier(perks[tier]) != tier)) return 0;
     return 1;
@@ -292,7 +288,7 @@ static void ApplyHelldiver(HfMod* mod, uintptr_t loadout)
     AcquireSRWLockShared(&shop_lock);
     memcpy(perks, helldiver_purchased, sizeof perks);
     ReleaseSRWLockShared(&shop_lock);
-    if (!HelldiverAny(perks) || helldiver_applied || helldiver_refused || !DestroyerSolo(mod)) return;
+    if (!HelldiverAny(perks) || helldiver_applied || helldiver_refused) return;
     const HfApi* api = HF_API(mod);
     HelldiverEffects fx = HelldiverPlanEffects(perks);
     uint32_t weapons[3];
@@ -321,7 +317,7 @@ static void ApplyHelldiver(HfMod* mod, uintptr_t loadout)
     }
     ResetHelldiver(mod);
     helldiver_refused = 1;
-    ShopMessage(mod, "Helldiver upgrade could not be applied; purchase retained for a later solo mission.");
+    ShopMessage(mod, "Helldiver upgrade could not be applied; purchase retained for a later mission.");
 }
 
 /* Ends this mission's Helldiver upgrade; returns whether it was active (and so is consumed). */

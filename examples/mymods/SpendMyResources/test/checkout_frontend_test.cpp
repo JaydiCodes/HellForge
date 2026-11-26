@@ -24,7 +24,7 @@ static bool exchangeReady = true, exchangePending;
 static bool checkoutComplete;
 static int purchaseCalls, continueCalls;
 static std::string fixtureLog;
-static SmrDestroyerStatus upgrade = {{5000, 40, 20, 3, 50}, 1, 1, SMR_UPGRADE_NONE, SMR_UPGRADE_NONE, 0};
+static SmrDestroyerStatus upgrade = {{5000, 40, 20, 3, 50}, 1, SMR_UPGRADE_NONE, SMR_UPGRADE_NONE, 0};
 static const SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT] = {
     {}, {{2000, 10, 5, 1, 10}, -66, 50, 0, 0, 0}, {{2000, 10, 5, 1, 10}, 0, 50, 20, 2, 30},
     {{2000, 10, 5, 1, 10}, -66, 50, 0, 0, 0}, {{2000, 2, 0, 1, 7}, -62.5, -25, 0, 0, 0},
@@ -68,7 +68,7 @@ extern "C" void SmrFinishCheckout(int ready)
 }
 extern "C" int SmrTakeCheckoutRequest() { bool value = requested; requested = false; return value; }
 extern "C" SmrDestroyerStatus SmrDestroyer(HfMod*) { return upgrade; }
-static SmrHelldiverStatus helldiver = {{5000, 40, 20, 3, 50}, {1, 1, 1}, 1};
+static SmrHelldiverStatus helldiver = {{5000, 40, 20, 3, 50}, {1, 1, 1}};
 static const SmrHelldiverTuning helldiverTuning[SMR_PERK_COUNT] = {
     {},
     {{0, 15}, -50, 50},
@@ -121,8 +121,7 @@ extern "C" SmrCheckoutAction SmrCheckout(unsigned* total, unsigned upgrade_price
     *total = due;
     memcpy(upgrade_price, tuning[upgrade.selected].price, sizeof tuning[0].price);
     *pending = transactionPending || checkoutComplete;
-    if (*pending || (upgrade.selected && !upgrade.solo) ||
-        SmrRequisitionDue(due, upgrade_price) > upgrade.balance[REQUISITION_SLIPS])
+    if (*pending || SmrRequisitionDue(due, upgrade_price) > upgrade.balance[REQUISITION_SLIPS])
         return SMR_CHECKOUT_BLOCKED;
     for (size_t i = COMMON_SAMPLES; i < CURRENCY_COUNT; ++i)
         if (upgrade_price[i] > upgrade.balance[i]) return SMR_CHECKOUT_BLOCKED;
@@ -832,7 +831,7 @@ static void CheckHelldiverTab(const char* screenshot, bool expectGameIcons)
     CHECK(helldiver.selected[SMR_TIER_SUPER] == SMR_PERK_FIELD_MEDIC &&
         helldiver.purchased[SMR_TIER_SUPER] == SMR_PERK_FIELD_MEDIC);
     io.AddMousePosEvent(medic.GetCenter().x, medic.GetCenter().y);
-    CheckModalText("Field Medic already purchased for your next solo mission.");
+    CheckModalText("Field Medic already purchased for your next mission.");
     io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
     helldiver.purchased[SMR_TIER_SUPER] = SMR_PERK_NONE;
     helldiverConfigAvailable = false;
@@ -1008,11 +1007,11 @@ int main(int argc, char** argv)
     CHECK(!modalShown && !editorapp::shopOpen && !upgrade.selected && !upgrade.extra && !automaticReady);
     io.AddKeyEvent(ImGuiKey_Escape, false);
 
-    upgrade.solo = upgrade.available = 0;
+    upgrade.available = 0;
     due = 0;
     requested = true;
     editorapp::Tick();
-    CheckModalText("Destroyer upgrades are available in solo play only.");
+    CheckModalText("Upgrade selection unavailable.");
     PressModalButton("##Support Upgrade", true);
     CHECK(!upgrade.selected);
     PressModalButton("Purchase##tab");
@@ -1023,7 +1022,7 @@ int main(int argc, char** argv)
     CHECK(!modalShown && automaticReady);
     automaticReady = false;
 
-    upgrade.solo = upgrade.available = 1;
+    upgrade.available = 1;
     requested = true;
     editorapp::Tick();
     CHECK(editorapp::destroyerSelection == 0 && !editorapp::destroyerExtra);

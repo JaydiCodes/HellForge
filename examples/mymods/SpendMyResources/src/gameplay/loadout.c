@@ -123,9 +123,9 @@ static int ReadEquippedItems(HfMod* mod, uint64_t* selected)
 }
 
 /* Merge the extra under shop_lock so a new or removed upgrade changes the quote immediately. */
-static uint64_t WithExtraAccess(uint64_t equipped, int solo)
+static uint64_t WithExtraAccess(uint64_t equipped)
 {
-    if (solo && extra_pick &&
+    if (extra_pick &&
         (upgrade_selected == SMR_UPGRADE_EXTRA_SLOT || upgrade_purchased == SMR_UPGRADE_EXTRA_SLOT))
         for (size_t i = 0; i < PRICE_COUNT; ++i)
             if (kLoadoutPrices[i].kind == PRICE_STRATAGEM && kLoadoutPrices[i].id == extra_pick)

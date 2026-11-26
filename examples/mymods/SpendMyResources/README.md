@@ -52,8 +52,8 @@ the file edit.
 ## Destroyer upgrades
 
 Select a square icon above the description to preview an upgrade. Orbital, Eagle, Defensive, Support, and
-[Extra Stratagem Slot](./extra-stratagem-slot.md) are available in solo play. The extra stratagem is granted after
-deployment, without adding a fifth slot to the main loadout.
+[Extra Stratagem Slot](./extra-stratagem-slot.md) are available in solo and co-op play. The extra stratagem is granted
+after deployment, without adding a fifth slot to the main loadout.
 
 **Known issue: Orbital Laser in the Extra Stratagem Slot.** HellForge's asset catalogue is missing the Orbital Laser
 package, so checkout is cancelled without deducting any resources. Until HellForge fixes this, equip Orbital Laser in
@@ -71,9 +71,10 @@ a drawn fallback. Extra Stratagem Slot always uses a plus icon. No game art is s
 | Support | Equipped support stratagems have 66% shorter cooldowns and unlimited uses. | Other equipped cooldowns and Eagle rearm are doubled. |
 
 Resupply and objective-granted stratagems such as the objective Hellbomb are unchanged. Nothing on the destroyer
-itself changes. Co-op players can skip the upgrade screen and continue to Ready or checkout normally.
+itself changes. In co-op, each player chooses and pays for upgrades in their own game. The mod does not synchronize
+upgrade choices between players, and replication of the extra stratagem has not been verified.
 
-Each upgrade costs **50 Forge Credits by default**, deducted at checkout, not on the upgrade screen. The effects last one solo mission.
+Each upgrade costs **50 Forge Credits by default**, deducted at checkout, not on the upgrade screen. The effects last one mission.
 You can buy the upgrade only once before a mission. If you change your loadout before deployment, it applies to the
 stratagems you actually take. A paid upgrade stays available in the current game session until it applies to a mission;
 it is not saved or refunded when you quit. Escape or X closes the upgrade screen without continuing to Ready.

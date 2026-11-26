@@ -26,7 +26,7 @@ TODO:
             - -50% equiped secondary max ammo, but +50% equiped primary max ammo
             - -50% throwables, -10% armor, +33% equiped primary max ammo, +33% equiped secondary max ammo
         - Elite: 1 of either:
-            - +25% armor rating, -10% max ammo equiped primary and equiped secondary
+            - +33% armor rating, -10% sprint speed, -10% stamina
             - +10% sprint speed, -25% stamina
             - +25% stamina, -10% sprint speed
         - Super: 1 of either:
@@ -37,8 +37,6 @@ TODO:
     	- Elite: 2 choices
         	- Direct hit AP +1, Direct hit Durable damage -50%
         	- Direct hit AP -1, Direct hit Durable damage +50%
-      	- Super:
-        	- 
 	- Strats
 		- Eagles
     		- Elite: +1 Use
@@ -46,8 +44,13 @@ TODO:
   		- Orbitals
     		- Railcannon:
         		- Super: Fire another shot after the first one, 1 second later.
+      		- Orbital Laser:
+        		- Super: 1 of either
+            		- +33% damage, -15% track speed, -15% duration
+            		- +33% duration, -15% track speed, -15% damage
+            		- +33% tracking speed, -15% duration, -15% damage
   		- Turrets:
-    		- Plus: +10% Ammo
+    		- Plus: +50% Ammo
     		- Elite: +25% HP
 	- **Destroyer upgrades** 
     	- Spend 50 FC + 10 common + 5 rare + 1 super to upgrade destroyer (limit to one of either):

@@ -38,7 +38,7 @@ int SmrShopItem(size_t i, SmrItem* out)
 {
     if (i >= PRICE_COUNT) return 0;
     AcquireSRWLockShared(&shop_lock);
-    int selected = (WithExtraAccess(checkout_equipped, checkout_solo) & (UINT64_C(1) << i)) != 0;
+    int selected = (WithExtraAccess(checkout_equipped) & (UINT64_C(1) << i)) != 0;
     *out = (SmrItem){kLoadoutPrices[i].name, kLoadoutPrices[i].requisition, access[i] != 0,
         charge.state != CHARGE_IDLE, selected};
     ReleaseSRWLockShared(&shop_lock);
@@ -56,12 +56,11 @@ int SmrQuoteLoadout(HfMod* mod, SmrLoadoutQuote* out)
     uint64_t equipped;
     if (!game || !ReadRestrictedItems(HF_API(mod), ReadPickerLoadout(mod, game), &equipped))
         return 0;
-    int solo = DestroyerSolo(mod);
     AcquireSRWLockShared(&shop_lock);
     int valid = !shop_failed;
     if (valid)
     {
-        uint64_t selected = WithExtraAccess(equipped, solo);
+        uint64_t selected = WithExtraAccess(equipped);
         uint64_t unpaid = UnpaidItems(selected, &out->total);
         out->balance_ready = inventory_ready;
         out->balance = wallet;
@@ -115,7 +114,6 @@ static void ShopTick(HfMod* mod, float dt, void* user)
     if (shop_failed) return;
     uint64_t equipped = 0;
     int selection_read = ReadEquippedItems(mod, &equipped);
-    int solo = api->game_state(mod) == HF_STATE_SHIP && DestroyerSolo(mod);
     unsigned balance = 0;
     int ready = manager && ItemRecord(api, manager, REQUISITION, &balance);
     AcquireSRWLockExclusive(&shop_lock);
@@ -125,10 +123,9 @@ static void ShopTick(HfMod* mod, float dt, void* user)
     int state = charge.state;
     checkout_equipped = equipped;
     checkout_valid = selection_read;
-    checkout_solo = solo;
     ReleaseSRWLockExclusive(&shop_lock);
     if (became_ready && state == CHARGE_IDLE)
         ShopMessage(mod, "Purchases charge your saved Spend My Resources wallet.");
 
-    ProcessPurchase(mod, manager, ready, balance, state, solo);
+    ProcessPurchase(mod, manager, ready, balance, state);
 }

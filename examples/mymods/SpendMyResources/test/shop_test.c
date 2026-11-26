@@ -691,9 +691,8 @@ static void TestDestroyer(void)
     CHECK(!SmrSelectUpgrade(&mod, SMR_UPGRADE_ORBITAL, 0));
     OpenCheckout();
     session_role = HF_SESSION_HOST;
-    CHECK(!SmrDestroyer(&mod).solo && !SmrSelectUpgrade(&mod, SMR_UPGRADE_ORBITAL, 0));
-    session_role = HF_SESSION_SOLO;
     CHECK(SmrDestroyer(&mod).available && SmrSelectUpgrade(&mod, SMR_UPGRADE_ORBITAL, 0));
+    CHECK(SmrSelectUpgrade(&mod, SMR_UPGRADE_NONE, 0));
     Tick();
     unsigned total, price[CURRENCY_COUNT];
     const unsigned orbital_price[CURRENCY_COUNT] = {2000, 10, 5, 1, 10};
@@ -819,6 +818,7 @@ static void TestDestroyer(void)
     CHECK(!upgrade_purchased);
     SmrFinishCheckout(0);
     ResetExchange();
+    session_role = HF_SESSION_SOLO;
     puts("PASS destroyer: free selection, combined Req costs, funds recheck, rollback, and one-mission cooldowns");
 }
 
@@ -950,8 +950,8 @@ static void TestHelldiver(void)
     CHECK(!SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_PRIMARY_TRADEOFF));
     OpenCheckout();
     session_role = HF_SESSION_HOST;
-    CHECK(!SmrHelldiver(&mod).solo && !SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_PRIMARY_TRADEOFF));
-    session_role = HF_SESSION_SOLO;
+    CHECK(SmrHelldiver(&mod).available[SMR_TIER_PLUS] &&
+        SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_PRIMARY_TRADEOFF));
     CHECK(!SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_ARMORED));
     CHECK(SmrHelldiver(&mod).available[SMR_TIER_SUPER]);
     CHECK(SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_LIGHT_KIT) &&
@@ -1109,7 +1109,8 @@ static void TestHelldiver(void)
     HelldiverDamagePre(&mod, &hit, NULL);
     CHECK(Near(hit.damage.amount, 100));
     ResetExchange();
-    puts("PASS helldiver: one stacked perk per tier, combined sample prices, solo apply, ammo trade-offs, "
+    session_role = HF_SESSION_SOLO;
+    puts("PASS helldiver: one stacked perk per tier, combined sample prices, mission apply, ammo trade-offs, "
         "damage scaling, auto-stim, field medic and one-mission use");
 }
 
@@ -1230,19 +1231,24 @@ static void TestExtraSlot(void)
     unsigned char* hud = calloc(EXTRA_HUD_READY + 1, 1);
     CHECK(hud);
     HfGameMode mode = {.mode = 1, .mission = mission};
-    uint32_t map[] = {193, 0};
+    uint32_t map[] = {193, 1};
     Put32(mission + 0x14, 1);
-    Put32(players + 0x84, 1);
+    Put32(players + 0x84, 2);
     Put32(players + 0x88, 1);
-    Put32(players + 0x2E0, 3);
-    Put32(players + 0x3A8, 14);
+    Put32(players + 0x2E0, 2);
+    Put32(players + 0x3A8, 13);
+    uint64_t other_peer = local.peer + 1;
+    memcpy(players + 0x2C8, &other_peer, sizeof other_peer);
+    memcpy(players + 0x2C8 + 0x38, &local.peer, sizeof local.peer);
+    Put32(players + 0x2E0 + 0x38, 3);
+    Put32(players + 0x3A8 + 0x20, 14);
     Put32(players + 0xD8, 1);
     Put32(descriptor + 8, 193);
     void* ptr = map;
     memcpy(players + 0xD0, &ptr, sizeof ptr);
     ptr = descriptor;
     memcpy(players + 0xE8, &ptr, sizeof ptr);
-    memcpy(players + 0x2C8, &local.peer, sizeof local.peer);
+    memcpy(players + 0xE8 + 8, &ptr, sizeof ptr);
     slot_players = (uintptr_t)players;
     slot_mode = (uintptr_t)&mode;
     PutPointer(EXTRA_HUD, hud);
@@ -1278,8 +1284,8 @@ static void TestExtraSlot(void)
     CHECK(!SmrSelectUpgrade(&mod, SMR_UPGRADE_EXTRA_SLOT, 0));
     CHECK(!SmrSelectUpgrade(&mod, SMR_UPGRADE_EXTRA_SLOT, HF_STRATAGEM_EAGLE_REARM));
     session_role = HF_SESSION_HOST;
-    CHECK(!SmrSelectUpgrade(&mod, SMR_UPGRADE_EXTRA_SLOT, type));
-    session_role = HF_SESSION_SOLO;
+    CHECK(SmrSelectUpgrade(&mod, SMR_UPGRADE_EXTRA_SLOT, type));
+    CHECK(SmrSelectUpgrade(&mod, SMR_UPGRADE_NONE, 0));
     unsigned total, price[CURRENCY_COUNT];
     int pending;
     const size_t bomb = PriceIndex("Eagle 500kg Bomb");
@@ -1334,10 +1340,8 @@ static void TestExtraSlot(void)
     ExtraSlotTick(&mod, 1);
     CHECK(!grant_calls && !upgraded_count); /* Only the variant package is still loading. */
     package_state = HF_PACKAGE_RESIDENT;
-    session_role = HF_SESSION_HOST;
-    ExtraSlotTick(&mod, 1);
-    CHECK(!grant_calls);
-    session_role = HF_SESSION_SOLO;
+    session_role = HF_SESSION_JOINER;
+    Put32(mission + 0x14, 0);
     ExtraSlotTick(&mod, 1);
     CHECK(grant_calls == 1 && deployed_access[silo] && upgraded_count == 6);
     ExtraGrantEntry deployed;

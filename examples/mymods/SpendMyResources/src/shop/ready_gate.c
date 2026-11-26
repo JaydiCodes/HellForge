@@ -12,12 +12,11 @@ static int (*ready_input_original)(uintptr_t button, uintptr_t input);
 static int ReadReadyLoadout(HfMod* mod, uintptr_t card, uint64_t* selected)
 {
     uint64_t equipped = 0;
-    int valid = ReadRestrictedItems(HF_API(mod), ReadCardLoadout(mod, card), &equipped), solo = DestroyerSolo(mod);
+    int valid = ReadRestrictedItems(HF_API(mod), ReadCardLoadout(mod, card), &equipped);
     AcquireSRWLockExclusive(&shop_lock);
     checkout_equipped = equipped;
     checkout_valid = valid;
-    checkout_solo = solo;
-    if (selected) *selected = WithExtraAccess(equipped, solo);
+    if (selected) *selected = WithExtraAccess(equipped);
     ReleaseSRWLockExclusive(&shop_lock);
     if (!valid) ShopMessage(mod, "Ready blocked: could not read the current local loadout.");
     return valid;

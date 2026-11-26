@@ -18,7 +18,7 @@ static char shop_message[192] = "Waiting for the player's inventory.";
 static SRWLOCK shop_lock = SRWLOCK_INIT;
 static const char* logs_folder;
 static uint64_t checkout_equipped, ready_selection;
-static int checkout_valid, checkout_solo;
+static int checkout_valid;
 enum { CHECKOUT_IDLE, CHECKOUT_REQUESTED, CHECKOUT_OPEN, CHECKOUT_CONFIRMED, CHECKOUT_RESUME };
 static volatile LONG checkout_gate;
 static LONG CheckoutGate(void) { return InterlockedCompareExchange(&checkout_gate, 0, 0); }
@@ -45,4 +45,3 @@ static struct {
 
 static void ShopMessage(HfMod* mod, const char* text);
 static void StopShop(HfMod* mod, const char* text);
-static int DestroyerSolo(HfMod* mod);

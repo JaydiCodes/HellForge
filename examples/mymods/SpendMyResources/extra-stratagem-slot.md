@@ -1,6 +1,6 @@
 # Extra Stratagem Slot
 
-In solo play, press **Ready**, choose the plus icon in the **Destroyer** panel, and pick an owned stratagem
+Press **Ready**, choose the plus icon in the **Destroyer** panel, and pick an owned stratagem
 not already in your loadout from the icon grid. The grid uses the local HellForge Editor game icon cache when
 available and shows named tiles otherwise. **Select upgrade** shows its costs in **Purchase**. You can switch back
 to **Destroyer** to change or remove it. Only clicking the **Purchase** button charges you.
@@ -8,6 +8,9 @@ to **Destroyer** to change or remove it. Only clicking the **Purchase** button c
 The four native loadout slots stay unchanged. The extra appears in the mission's stratagem menu after deployment,
 with its normal uses. It isn't saved to the game's loadout. Restricted extras also need requisition access, just like
 restricted items in the native slots.
+
+In co-op, each player chooses and pays for this upgrade in their own game. The mod does not synchronize upgrade
+choices, and replication of the extra stratagem has not been verified.
 
 The yellow underline marks the active panel, and yellow borders mark the previewed upgrade and chosen extra.
 Hover highlights fade in and out without moving the controls.
@@ -34,4 +37,4 @@ the upgrade's Req price to any unpaid gear access, including access for a restri
 
 An extra Eagle shares **Eagle Rearm** with any Eagles already equipped. If the mission doesn't already have Rearm,
 the extra Eagle needs room for both entries. The extra's packages must also be available. If deployment cannot be
-verified, the paid upgrade is retained for a later eligible solo mission in the same game session.
+verified, the paid upgrade is retained for a later eligible mission in the same game session.

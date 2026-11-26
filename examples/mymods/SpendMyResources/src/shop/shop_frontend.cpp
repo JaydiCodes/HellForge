@@ -697,7 +697,7 @@ static void DestroyerPanel(SmrDestroyerStatus upgrade, bool pending)
 {
     if (upgrade.purchased)
     {
-        ImGui::TextWrapped("%s already purchased for your next solo mission.", UpgradeName(upgrade.purchased));
+        ImGui::TextWrapped("%s already purchased for your next mission.", UpgradeName(upgrade.purchased));
         if (upgrade.purchased == SMR_UPGRADE_EXTRA_SLOT)
             if (const char* name = SmrExtraName(upgrade.extra)) ImGui::TextWrapped("Extra stratagem: %s", name);
     }
@@ -723,8 +723,7 @@ static void DestroyerPanel(SmrDestroyerStatus upgrade, bool pending)
     ImGui::Separator();
     if (tuning && !upgrade.purchased)
     {
-        if (!upgrade.solo) ImGui::TextDisabled("Destroyer upgrades are available in solo play only.");
-        else if (!upgrade.available) ImGui::TextDisabled("Upgrade selection unavailable.");
+        if (!upgrade.available) ImGui::TextDisabled("Upgrade selection unavailable.");
         else
         {
             ImGui::TextUnformatted("Cost:");
@@ -869,7 +868,7 @@ static SmrHelldiverPerk HelldiverPicker(const SmrHelldiverStatus& status, bool p
 
 static void HelldiverPanel(const SmrHelldiverStatus& status, bool pending)
 {
-    ImGui::TextWrapped("Pick one upgrade from each tier. Tiers stack for one solo mission.");
+    ImGui::TextWrapped("Pick one upgrade from each tier. Tiers stack for one mission.");
     const SmrHelldiverPerk preview = HelldiverPicker(status, pending);
     const SmrHelldiverStatus current = SmrHelldiver(mod);
     const SmrHelldiverTier tier = SmrPerkTier(preview);
@@ -881,12 +880,11 @@ static void HelldiverPanel(const SmrHelldiverStatus& status, bool pending)
         if (tuning) DescribePerk(preview, *tuning);
         else ImGui::TextWrapped("Helldiver upgrades disabled: check helldiver-upgrades.json and the mod log.");
         if (current.purchased[tier])
-            ImGui::TextWrapped("%s already purchased for your next solo mission.", PerkName(current.purchased[tier]));
+            ImGui::TextWrapped("%s already purchased for your next mission.", PerkName(current.purchased[tier]));
         else if (current.selected[tier]) ImGui::TextWrapped("Selected for purchase: %s", PerkName(current.selected[tier]));
         else ImGui::TextDisabled("No %s upgrade selected", kHelldiverTiers[tier]);
         ImGui::Separator();
-        if (!current.solo) ImGui::TextDisabled("Helldiver upgrades are available in solo play only.");
-        else if (!current.available[tier] && !current.purchased[tier]) ImGui::TextDisabled("Upgrade selection unavailable.");
+        if (!current.available[tier] && !current.purchased[tier]) ImGui::TextDisabled("Upgrade selection unavailable.");
         else if (tuning && !current.purchased[tier])
         {
             ImGui::TextUnformatted("Cost:");
@@ -949,7 +947,6 @@ static void PurchasePanel(uint64_t requisition, const unsigned price[CURRENCY_CO
         ImGui::TextUnformatted("Cost:");
         ImGui::SameLine();
         UpgradeCostValues(price, upgrade.balance);
-        if (!upgrade.solo) ImGui::TextDisabled("Remove the solo-only upgrades from the Destroyer and Helldiver tabs.");
     }
 }
 
