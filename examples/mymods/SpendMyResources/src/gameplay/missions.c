@@ -134,6 +134,7 @@ static void MissionStart(HfMod* mod, const HfStateEvent* event, void* user)
     uintptr_t game = api->module_base("game.dll", NULL);
     waiting_for_spawn = 0;
     memset(&extra_deployment, 0, sizeof extra_deployment);
+    FinishKills(mod);
     ResetKills();
     SmrFinishCheckout(0);
     if (!game || !LayoutMatches(api, game))

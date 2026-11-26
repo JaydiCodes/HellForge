@@ -28,6 +28,14 @@ static size_t kill_mine_count;
 static SmrKillNotice kill_notice; /* read by the overlay under shop_lock */
 static SmrKillSummary kill_summary;
 
+/* The mission's outcome comes from its telemetry, which may be sent after the mission state ends. A settled
+ * mission's reward therefore waits for the ship, or the next mission, before it is due. */
+static SmrKillSummary kill_settled;
+static int kill_settled_waiting;
+static volatile LONG mission_abandoned;
+static HfMod* telemetry_mod;
+static HfFn_SendMissionEndTelemetry send_mission_end;
+
 typedef struct SmrKillPayout { uint64_t team, mine, share, bonus; unsigned players; } SmrKillPayout;
 
 static SmrKillPayout KillPayout(uint64_t team, uint64_t mine, unsigned players)
@@ -76,6 +84,28 @@ void SmrLastKillSummary(SmrKillSummary* out)
     ReleaseSRWLockShared(&shop_lock);
 }
 
+/* The player chose to leave ("abandoned"), or the host did ("host_abandoned"). */
+static int AbandonedOutcome(const char* outcome)
+{
+    return !strcmp(outcome, "abandoned") || !strcmp(outcome, "host_abandoned");
+}
+
+static void MissionEndTelemetry(uint64_t player, const uint8_t* outcome, uint8_t r8, uint8_t r9)
+{
+    const HfApi* api = HF_API(telemetry_mod);
+    char name[32] = "";
+    /* Read a byte at a time: a short name can end just before memory that cannot be read. */
+    for (size_t i = 0; outcome && i + 1 < sizeof name; ++i)
+        if (api->read((uintptr_t)(outcome + i), &name[i], 1) || !name[i])
+        {
+            name[i] = '\0';
+            break;
+        }
+    InterlockedExchange(&mission_abandoned, AbandonedOutcome(name));
+    api->log(telemetry_mod, "Mission outcome: %s.", name[0] ? name : "(unreadable)");
+    if (send_mission_end) send_mission_end(player, outcome, r8, r9);
+}
+
 static int InitKillRewards(HfMod* mod)
 {
     const HfApi* api = HF_API(mod);
@@ -89,6 +119,10 @@ static int InitKillRewards(HfMod* mod)
     }
     if (hf_has_functions_(mod) && api->function) entity_descriptor = hf_fn_EntityDescriptor(mod);
     if (!entity_descriptor) api->log(mod, "EntityDescriptor unavailable; kill rewards identify enemies from spawns only.");
+    telemetry_mod = mod;
+    if (!hf_has_functions_(mod) || !api->hook_function ||
+        hf_hook_SendMissionEndTelemetry(mod, MissionEndTelemetry, &send_mission_end, 0))
+        api->log(mod, "SendMissionEndTelemetry hook refused; abandoned missions pay their full kill reward.");
     api->log(mod, "Loaded kill-rewards.json (%u enemies).", (unsigned)ENEMY_COUNT);
     return 1;
 }
@@ -179,42 +213,58 @@ static void EnemyKilled(HfMod* mod, const HfKillEvent* event, void* user)
     PublishKill(mod, event->creditor, enemy_value[enemy]);
 }
 
-static void KillsTick(HfMod* mod)
-{
-    if (!kill_rewards_ready || HF_API(mod)->game_state(mod) != HF_STATE_MISSION) return;
-    unsigned players = SessionPlayers(mod);
-    if (players) mission_players = players;
-}
-
 /* Mission end: the players still in the session split the team's total; the leaving state may have emptied the list. */
 static void SettleKills(HfMod* mod)
 {
     if (!kill_rewards_ready) return;
-    const HfApi* api = HF_API(mod);
     unsigned players = SessionPlayers(mod);
     if (!players) players = mission_players;
-    uint64_t team = kill_team, mine = kill_mine;
-    size_t kills = kill_count, my_kills = kill_mine_count;
+    if (!players && kill_count) HF_API(mod)->log(mod, "Kill rewards: player count unknown; paying the whole team total.");
+    SmrKillPayout payout = KillPayout(kill_team, kill_mine, players);
+    kill_settled = (SmrKillSummary){0, (unsigned)kill_count, (unsigned)kill_mine_count, payout.players,
+        payout.team, payout.mine, payout.share, payout.bonus, payout.share + payout.bonus, 0};
+    kill_settled_waiting = 1;
     ResetKills();
-    SmrKillPayout payout = KillPayout(team, mine, players);
+}
+
+/* An abandoned mission pays SMR_KILL_ABANDON_PERCENT of its reward; any other outcome pays it all. */
+static void FinishKills(HfMod* mod)
+{
+    const int abandoned = InterlockedExchange(&mission_abandoned, 0) != 0;
+    if (!kill_settled_waiting) return;
+    kill_settled_waiting = 0;
+    SmrKillSummary summary = kill_settled;
+    summary.abandoned = abandoned;
+    if (abandoned) summary.earned = summary.earned * SMR_KILL_ABANDON_PERCENT / 100;
+    kill_reward_due += summary.earned;
     AcquireSRWLockExclusive(&shop_lock);
-    uint32_t sequence = kill_summary.sequence + 1;
-    if (!sequence) sequence = 1;
-    kill_summary = (SmrKillSummary){sequence, (unsigned)kills, (unsigned)my_kills, payout.players,
-        team, mine, payout.share, payout.bonus};
+    summary.sequence = kill_summary.sequence + 1;
+    if (!summary.sequence) summary.sequence = 1;
+    kill_summary = summary;
     ReleaseSRWLockExclusive(&shop_lock);
-    if (!kills) return;
-    if (!players) api->log(mod, "Kill rewards: player count unknown; paying the whole team total.");
-    uint64_t earned = payout.share + payout.bonus;
-    kill_reward_due += earned;
-    api->log(mod, "Kill rewards: team %u kills worth %llu Req, split %u ways = %llu; your %u kills worth %llu "
-        "earn a %llu Req team bonus. %llu Req is paid on the ship.", (unsigned)kills, (unsigned long long)team,
-        payout.players, (unsigned long long)payout.share, (unsigned)my_kills, (unsigned long long)mine,
-        (unsigned long long)payout.bonus, (unsigned long long)earned);
+    if (!summary.team_kills) return;
+    char penalty[64] = "";
+    if (abandoned)
+        snprintf(penalty, sizeof penalty, "; mission abandoned, %u%% paid", (unsigned)SMR_KILL_ABANDON_PERCENT);
+    HF_API(mod)->log(mod, "Kill rewards: team %u kills worth %llu Req, split %u ways = %llu; your %u kills worth %llu "
+        "earn a %llu Req team bonus%s. %llu Req is paid on the ship.", summary.team_kills,
+        (unsigned long long)summary.team, summary.players, (unsigned long long)summary.share, summary.own_kills,
+        (unsigned long long)summary.mine, (unsigned long long)summary.bonus, penalty,
+        (unsigned long long)summary.earned);
     char message[192];
-    snprintf(message, sizeof message, "Mission kills: %u team kills, %llu Req share + %llu Req bonus.",
-        (unsigned)kills, (unsigned long long)payout.share, (unsigned long long)payout.bonus);
+    snprintf(message, sizeof message, "Mission kills: %u team kills, %llu Req share + %llu Req bonus%s.",
+        summary.team_kills, (unsigned long long)summary.share, (unsigned long long)summary.bonus, penalty);
     ShopMessage(mod, message);
+}
+
+static void KillsTick(HfMod* mod)
+{
+    if (!kill_rewards_ready) return;
+    const uint32_t state = HF_API(mod)->game_state(mod);
+    if (state == HF_STATE_SHIP && kill_settled_waiting) FinishKills(mod);
+    if (state != HF_STATE_MISSION) return;
+    unsigned players = SessionPlayers(mod);
+    if (players) mission_players = players;
 }
 
 /* Paid like an exchange's credit: added to the live inventory, verified, then saved to the wallet. */

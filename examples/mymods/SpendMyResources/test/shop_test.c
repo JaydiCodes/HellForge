@@ -195,6 +195,17 @@ static int Hook(HfMod* unused, uintptr_t target, void* detour, void** original)
     *original = (void*)OriginalInput;
     return 0;
 }
+static HfFn_SendMissionEndTelemetry telemetry_detour;
+static int telemetry_sent;
+static void SendTelemetry(uint64_t player, const uint8_t* outcome, uint8_t r8, uint8_t r9) { ++telemetry_sent; }
+static int HookFunction(HfMod* unused, const char* name, void* detour, void** original, int32_t priority)
+{
+    if (strcmp(name, "SendMissionEndTelemetry")) return 1;
+    telemetry_detour = (HfFn_SendMissionEndTelemetry)detour;
+    *original = (void*)SendTelemetry;
+    return 0;
+}
+static void MissionOutcome(const char* outcome) { telemetry_detour(0, (const uint8_t*)outcome, 0, 0); }
 static const char* Logs(HfMod* unused) { return "fixture"; }
 static void Log(HfMod* unused, const char* format, ...)
 {
@@ -1615,11 +1626,11 @@ static void TestKillRewards(void)
     while (enemy_value[plain] != SMR_KILL_DEFAULT_VALUE) ++plain;
     CHECK(kill_rewards_ready && EnemyIndex(0x1234) < 0);
     SmrKillSummary summary;
-    SmrLastKillSummary(&summary);
-    uint32_t previous_summary = summary.sequence;
 
     game_state = HF_STATE_MISSION;
     MissionStart(&mod, NULL, NULL);
+    SmrLastKillSummary(&summary);
+    uint32_t previous_summary = summary.sequence;
     Put32(players + offsetof(HfPlayerManager, count), 2);
     Tick();
     Put32(players + offsetof(HfPlayerManager, count), 0); /* gone by mission end: the sampled count is used */
@@ -1641,45 +1652,65 @@ static void TestKillRewards(void)
     /* The card's last kill was my unlisted one: 1 more for the team and for my bonus. */
     CHECK(notice.sequence == 3 && notice.base == 10000 && notice.before == 10325 && notice.after == 10327);
     MissionEnd(&mod, NULL, NULL);
-    /* Team 601 split 2 ways is 301 (rounded up), plus 5% of my 501 = 26 (rounded up). */
-    CHECK(kill_reward_due == 327 && !kill_count && Amount(REQUISITION) == 10000);
+    /* Team 601 split 2 ways is 301 (rounded up), plus 5% of my 501 = 26 (rounded up); due once on the ship. */
+    CHECK(!kill_reward_due && kill_settled_waiting && !kill_count && Amount(REQUISITION) == 10000);
     SmrLastKillSummary(&summary);
-    CHECK(summary.sequence && summary.sequence != previous_summary && summary.team_kills == 3 &&
-        summary.own_kills == 2 && summary.players == 2 && summary.team == 601 && summary.mine == 501 &&
-        summary.share == 301 && summary.bonus == 26);
-    previous_summary = summary.sequence;
+    CHECK(summary.sequence == previous_summary);
     Kill(15, local.peer);  /* not in a mission */
     CHECK(!kill_count);
     game_state = HF_STATE_SHIP;
     Tick();
     CHECK(!kill_reward_due && Amount(REQUISITION) == 10327 && saved_wallet == 10327 && wallet_writes == 1);
     SmrLastKillSummary(&summary);
-    CHECK(summary.sequence == previous_summary && summary.share + summary.bonus == 327);
+    CHECK(summary.sequence && summary.sequence != previous_summary && summary.team_kills == 3 &&
+        summary.own_kills == 2 && summary.players == 2 && summary.team == 601 && summary.mine == 501 &&
+        summary.share == 301 && summary.bonus == 26 && summary.earned == 327 && !summary.abandoned);
+    previous_summary = summary.sequence;
 
+    /* An outcome sent after the mission state ends still applies: abandoning pays 20% of 500. */
     game_state = HF_STATE_MISSION;
     MissionStart(&mod, NULL, NULL);
     Put32(players + offsetof(HfPlayerManager, count), 1);
     EnemySpawned(&mod, &(HfSpawnEvent){.entity = 10, .resource = titan}, NULL);
     Kill(10, local.peer);
     MissionEnd(&mod, NULL, NULL);
-    CHECK(kill_reward_due == 500); /* solo: no bonus */
-    SmrLastKillSummary(&summary);
-    CHECK(summary.sequence != previous_summary && summary.team_kills == 1 && summary.own_kills == 1 &&
-        summary.players == 1 && summary.share == 500 && summary.bonus == 0);
-    previous_summary = summary.sequence;
+    game_state = HF_STATE_PREPARE_SHIP;
+    MissionOutcome("abandoned");
+    CHECK(telemetry_sent == 1);
     SetAmount(REQUISITION, 49990);
     game_state = HF_STATE_SHIP;
     Tick();
     CHECK(!kill_reward_due && Amount(REQUISITION) == 50000 && saved_wallet == 50000 && !shop_failed);
     SmrLastKillSummary(&summary);
-    CHECK(summary.sequence == previous_summary && summary.share == 500);
+    CHECK(summary.sequence != previous_summary && summary.team_kills == 1 && summary.own_kills == 1 &&
+        summary.players == 1 && summary.share == 500 && summary.bonus == 0 && summary.earned == 100 &&
+        summary.abandoned);
+    previous_summary = summary.sequence;
 
+    /* An outcome during the mission counts too; a mission that skips the ship settles when the next one starts. */
     game_state = HF_STATE_MISSION;
     MissionStart(&mod, NULL, NULL);
+    EnemySpawned(&mod, &(HfSpawnEvent){.entity = 10, .resource = titan}, NULL);
+    Kill(10, local.peer);
+    MissionOutcome("host_abandoned");
     MissionEnd(&mod, NULL, NULL);
+    game_state = HF_STATE_TITLE;
+    Tick();
+    CHECK(kill_settled_waiting && !kill_reward_due);
+    game_state = HF_STATE_MISSION;
+    MissionStart(&mod, NULL, NULL);
+    SmrLastKillSummary(&summary);
+    CHECK(kill_reward_due == 100 && !mission_abandoned && summary.sequence != previous_summary &&
+        summary.earned == 100 && summary.abandoned);
+    previous_summary = summary.sequence;
+    MissionOutcome("disconnected");
+    MissionEnd(&mod, NULL, NULL);
+    game_state = HF_STATE_SHIP;
+    Tick();
     SmrLastKillSummary(&summary);
     CHECK(summary.sequence != previous_summary && !summary.team_kills && !summary.own_kills &&
-        !summary.team && !summary.mine && !summary.share && !summary.bonus && !kill_reward_due);
+        !summary.team && !summary.mine && !summary.share && !summary.bonus && !summary.earned &&
+        !summary.abandoned && !kill_reward_due);
 
     entity_descriptor = NULL;
     slot_players = old_players;
@@ -1687,7 +1718,8 @@ static void TestKillRewards(void)
     SetAmount(REQUISITION, 5000);
     Tick();
     wallet_writes = 0;
-    puts("PASS kill rewards: unique enemy kills split across the team with a 5% contribution bonus, paid on the ship");
+    puts("PASS kill rewards: unique enemy kills split across the team with a 5% contribution bonus, 20% when "
+        "abandoned, paid on the ship");
 }
 
 int main(void)
@@ -1710,6 +1742,7 @@ int main(void)
     api.module_base = Base; api.build_id = Build; api.game_state = State; api.code_matches = Matches;
     api.global = Global; api.subscribe = Subscribe; api.on_game_thread = OnTick;
     api.hook = Hook;
+    api.hook_function = HookFunction;
     api.logs_folder = Logs;
     api.session = Session; api.get_live = GetLive; api.set_live = SetLive;
     api.get_stat = GetStat; api.set_stat = SetStat;

@@ -98,8 +98,8 @@ void FollowKillSummary()
     }
     if (!onShip || !summaryPending || now - shipAt < kSummaryDelayMs) return;
     summaryPending = false;
-    killCard.from = static_cast<double>(missionSummary.share + missionSummary.bonus);
-    killCard.reward = missionSummary.share + missionSummary.bonus;
+    killCard.from = static_cast<double>(missionSummary.earned);
+    killCard.reward = missionSummary.earned;
     killCard.shownAt = killCard.killAt = now;
     killCard.visible = killCard.summary = true;
 }
@@ -143,6 +143,9 @@ void KillRewardFrame(float width, float height)
                 missionSummary.players == 1 ? "" : "s",
                 static_cast<unsigned long long>(missionSummary.share));
             ImGui::Text("Contribution bonus: %llu Req", static_cast<unsigned long long>(missionSummary.bonus));
+            if (missionSummary.abandoned)
+                ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kWarning), "Mission abandoned: %u%% paid",
+                    static_cast<unsigned>(SMR_KILL_ABANDON_PERCENT));
             ImGui::TextDisabled("Earned reward before the wallet cap.");
         }
     }

@@ -313,7 +313,7 @@ static void CheckKillSummary()
     killNotice = {4, 10000, 10000, 10327};
     editorapp::Tick();
     CHECK(editorapp::NoticeShown());
-    killSummary = {1, 3, 2, 2, 601, 501, 301, 26};
+    killSummary = {1, 3, 2, 2, 601, 501, 301, 26, 327, 0};
     editorapp::Tick();
     fixtureState = HF_STATE_PREPARE_MISSION;
     editorapp::Tick();
@@ -344,6 +344,7 @@ static void CheckKillSummary()
         text.find("Your share (2 players): 301 Req") != std::string::npos &&
         text.find("Contribution bonus: 26 Req") != std::string::npos &&
         text.find("Earned reward before the wallet cap.") != std::string::npos &&
+        text.find("abandoned") == std::string::npos &&
         text.find("Loadout cost") == std::string::npos);
     pickerOpen = false;
     editorapp::Tick();
@@ -381,12 +382,14 @@ static void CheckKillSummary()
     CHECK(!editorapp::NoticeShown());
 
     /* Settlement can arrive after the ship transition; its delay still starts on returning to the ship. */
-    killSummary = {3, 1, 1, 1, 500, 500, 500, 0};
+    killSummary = {3, 1, 1, 1, 500, 500, 500, 0, 100, 1};
     editorapp::Tick();
-    CHECK(editorapp::KillSummaryShowing(fixtureNow) && editorapp::KillCardAmount(fixtureNow) == 500);
+    CHECK(editorapp::KillSummaryShowing(fixtureNow) && editorapp::KillCardAmount(fixtureNow) == 100);
+    fixtureNow += 250;
+    CHECK(DrawKillCard().find("Mission abandoned: 20% paid") != std::string::npos);
     fixtureState = HF_STATE_MISSION;
     editorapp::Tick();
-    killSummary = {4, 1, 1, 1, 100, 100, 100, 0};
+    killSummary = {4, 1, 1, 1, 100, 100, 100, 0, 100, 0};
     editorapp::Tick();
     fixtureState = HF_STATE_SHIP;
     editorapp::Tick();
