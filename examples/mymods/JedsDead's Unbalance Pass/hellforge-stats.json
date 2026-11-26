@@ -609,26 +609,26 @@
       "projectile.mass": 125
     },
     "R-4 Hyena": {
-      "damage.durable_damage": 225,
+      "damage.durable_damage": 350,
       "damage.status_2_strength": 1,
       "damage.status_2_type": 6,
       "magazine.spare_magazines": 4,
-      "damage.standard_damage": 225,
+      "damage.standard_damage": 350,
       "magazine.capacity": 10,
-      "magazine.magazines_from_supply": 2,
+      "magazine.magazines_from_supply": 4,
       "attachment.magazine.rifle_drake_short.magazine_capacity": 5,
       "attachment.magazine.rifle_drake_short.magazines_from_supply": 4,
       "attachment.magazine.rifle_drake_short.spare_magazines": 8,
       "attachment.magazine.rifle_drake_short.starting_magazines": 4,
       "magazine.starting_magazines": 2,
-      "weapon.fire_rate": 125,
+      "weapon.fire_rate": 150,
       "damage.ap_slight": 3,
-      "weapon.ergonomics": 15,
+      "weapon.ergonomics": 30,
       "weapon.recoil_climb_horizontal": 100,
       "weapon.recoil_climb_vertical": 450,
       "weapon.recoil_drift_horizontal": 60,
       "weapon.recoil_drift_vertical": 60,
-      "weapon.sway": 2
+      "weapon.sway": 1.5
     },
     "R-6 Deadeye": {
       "damage.ap_extreme": 1,
@@ -1178,11 +1178,65 @@
       "damage.status_1_type": 2
     },
     "G-3 Smoke": {
-      "explosion.inner_radius": 10,
-      "explosion.outer_radius": 10,
+      "explosion.inner_radius": 12,
+      "explosion.outer_radius": 12,
       "throwable.count_from_supply": 6,
       "throwable.max_count": 6,
+      "throwable.starting_count": 6
+    },
+    "G-6 Frag": {
+      "explosion.damage.status_1_strength": 20,
+      "explosion.damage.status_1_type": 37,
+      "explosion.damage.durable_damage": 1000,
+      "explosion.damage.stagger": 50,
+      "explosion.damage.standard_damage": 1000,
+      "throwable.count_from_supply": 6,
+      "throwable.starting_count": 6,
+      "explosion.inner_radius": 5,
+      "explosion.outer_radius": 8,
+      "explosion.shockwave_radius": 10
+    },
+    "G-12 High Explosive": {
+      "explosion.damage.durable_damage": 1000,
+      "explosion.damage.standard_damage": 1000,
+      "explosion.inner_radius": 8,
+      "throwable.count_from_supply": 4,
+      "throwable.max_count": 4,
+      "explosion.damage.status_1_strength": 20,
+      "explosion.damage.status_1_type": 37,
+      "explosion.outer_radius": 10,
+      "explosion.shockwave_radius": 12
+    },
+    "G-7 Pineapple": {
+      "explosion.shrapnel_count": 25,
+      "throwable.count_from_supply": 5,
       "throwable.starting_count": 5
+    },
+    "TED-63 Dynamite": {
+      "explosion.inner_radius": 12,
+      "explosion.damage.durable_damage": 2000,
+      "explosion.damage.standard_damage": 2000,
+      "throwable.max_count": 2,
+      "throwable.starting_count": 2,
+      "explosion.damage.demolition": 50,
+      "explosion.damage.push_force": 80,
+      "explosion.damage.stagger": 60,
+      "throwable.count_from_supply": 1
+    },
+    "G-89 Smokescreen": {
+      "throwable.count_from_supply": 8,
+      "throwable.max_count": 8,
+      "throwable.starting_count": 8,
+      "explosion.inner_radius": 8,
+      "explosion.outer_radius": 8
+    },
+    "G-50 Seeker": {
+      "throwable.explosion": 8,
+      "throwable.count_from_supply": 5,
+      "throwable.starting_count": 5
+    },
+    "G-123 Thermite": {
+      "throwable.max_count": 4
     }
   },
   "vehicles": {

@@ -112,6 +112,20 @@ int SmrCheckoutComplete(void);
 int SmrTakeCheckoutRequest(void);
 void SmrFinishCheckout(int ready);
 int SmrLoadPrices(const char* const* names, unsigned* prices, size_t count, char* result, size_t size);
+/* Kill rewards: an enemy missing from kill-rewards.json is worth the default; 0 excludes it. */
+enum { SMR_KILL_DEFAULT_VALUE = 1, SMR_KILL_MAX_VALUE = 1000000, SMR_KILL_BONUS_PERCENT = 5 };
+int SmrLoadKillRewards(const char* const* names, unsigned* values, size_t count, char* result, size_t size);
+/* The last counted kill: Requisition with this mission's projected reward before and after it, capped. base is the
+ * amount without this mission's kills. sequence changes with each kill and is 0 before the first. */
+typedef struct SmrKillNotice { uint32_t sequence; unsigned base, before, after; } SmrKillNotice;
+void SmrLastKill(SmrKillNotice* out);
+/* Completed mission rewards, before the wallet cap, retained after the live tally resets. */
+typedef struct SmrKillSummary {
+    uint32_t sequence;
+    unsigned team_kills, own_kills, players;
+    uint64_t team, mine, share, bonus;
+} SmrKillSummary;
+void SmrLastKillSummary(SmrKillSummary* out);
 int SmrCurrencyItem(size_t i, SmrCurrency* out);
 int SmrExchangeQuote(size_t from, size_t to, unsigned batches, unsigned* debit, unsigned* credit);
 int SmrExchange(HfMod* mod, size_t from, size_t to, unsigned batches);

@@ -1,6 +1,11 @@
-#include "../src/shop/shop_frontend.cpp"
+#include "../src/shop/frontend/frontend_internal.h"
 #include "imgui_internal.h"
 #include "imgui_impl_dx11.h"
+#include <algorithm>
+#include <cfloat>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
 #include <stdarg.h>
 #include <stdlib.h>
 
@@ -25,7 +30,7 @@ static bool checkoutComplete;
 static int purchaseCalls, continueCalls;
 static std::string fixtureLog;
 static SmrDestroyerStatus upgrade = {{5000, 40, 20, 3, 50}, 1, SMR_UPGRADE_NONE, SMR_UPGRADE_NONE, 0};
-static const SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT] = {
+static SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT] = {
     {}, {{2000, 10, 5, 1, 10}, -66, 50, 0, 0, 0}, {{2000, 10, 5, 1, 10}, 0, 50, 20, 2, 30},
     {{2000, 10, 5, 1, 10}, -66, 50, 0, 0, 0}, {{2000, 2, 0, 1, 7}, -62.5, -25, 0, 0, 0},
     {{2000, 10, 5, 1, 50}, 0, 10, 0, 0, 0},
@@ -116,6 +121,12 @@ extern "C" size_t SmrExtraChoices(SmrExtraChoice* choices, size_t capacity)
 extern "C" int SmrBalance(unsigned* balance) { *balance = upgrade.balance[REQUISITION_SLIPS]; return 1; }
 extern "C" int SmrLoadoutOpen(HfMod*) { return pickerOpen && fixtureState == HF_STATE_SHIP; }
 extern "C" int SmrQuoteLoadout(HfMod*, SmrLoadoutQuote* out) { *out = loadoutQuote; return quoteValid; }
+static SmrKillNotice killNotice;
+static SmrKillSummary killSummary;
+static ULONGLONG fixtureNow = 1000;
+static ULONGLONG WINAPI FixtureClock() { return fixtureNow; }
+extern "C" void SmrLastKill(SmrKillNotice* out) { *out = killNotice; }
+extern "C" void SmrLastKillSummary(SmrKillSummary* out) { *out = killSummary; }
 extern "C" SmrCheckoutAction SmrCheckout(unsigned* total, unsigned upgrade_price[CURRENCY_COUNT], int* pending)
 {
     *total = due;
@@ -218,26 +229,294 @@ static void CheckCustomCostPosition()
     ImGuiWindow* panel = ImGui::FindWindowByName("Loadout cost");
     CHECK(panel);
     auto& position = editorapp::panelPositions[editorapp::PositionIndex(editorapp::PositionPanel::LoadoutCost)];
-    position.pinned = false;
-    ImGui::SetWindowPos("Loadout cost", ImVec2(180, 90));
-    ImGui::NewFrame();
-    editorapp::Overlay(nullptr, 1280, 720);
-    ImGui::Render();
-    CHECK(panel->Pos.x == 180 && panel->Pos.y == 90);
-
-    position.position = panel->Pos;
-    position.hasPosition = position.pinned = true;
+    position.position = ImVec2(180, 90);
+    position.hasPosition = true;
     editorapp::SavePanelPositions();
     position = {};
     editorapp::panelPositionsLoaded = false;
-    ImGui::SetWindowPos("Loadout cost", ImVec2(300, 16));
     for (int i = 0; i < 2; ++i)
     {
         ImGui::NewFrame();
         editorapp::Overlay(nullptr, 1280, 720);
         ImGui::Render();
-        CHECK(panel->Pos.x == 180 && panel->Pos.y == 90);
+        CHECK(panel->Pos.x == 180 && panel->Pos.y == 90 && (panel->Flags & ImGuiWindowFlags_NoInputs));
     }
+}
+
+static std::string DrawKillCard()
+{
+    ImGui::NewFrame();
+    ImGui::LogToBuffer();
+    editorapp::Overlay(nullptr, 1280, 720);
+    std::string text = GImGui->LogBuffer.c_str();
+    ImGui::LogFinish();
+    ImGui::Render();
+    return text;
+}
+
+static void CheckKillCard()
+{
+    editorapp::killClock = FixtureClock;
+    fixtureState = HF_STATE_MISSION;
+    editorapp::Tick();
+    CHECK(!editorapp::NoticeShown());
+    killNotice = {1, 10000, 10000, 10300};
+    editorapp::Tick();
+    CHECK(editorapp::NoticeShown() && editorapp::KillCardAlpha(fixtureNow) == 0);
+    std::string text = DrawKillCard();
+    CHECK(text.find("Kill reward") != std::string::npos && text.find("0") != std::string::npos &&
+        text.find("10000") == std::string::npos && text.find("Req") == std::string::npos);
+    ImGuiWindow* card = ImGui::FindWindowByName("Kill reward");
+    CHECK(card && (card->Flags & ImGuiWindowFlags_NoInputs) && card->Pos.x == 180 && card->Pos.y == 90);
+    fixtureNow += 350;
+    const double halfway = editorapp::KillCardAmount(fixtureNow);
+    CHECK(halfway > 0 && halfway < 300 && editorapp::KillCardAlpha(fixtureNow) == 1);
+    DrawKillCard();
+    float titleLeft = FLT_MAX, titleRight = -FLT_MAX;
+    for (const ImDrawVert& vertex : card->DrawList->VtxBuffer)
+        if (vertex.col == editorapp::kAccentText)
+        {
+            titleLeft = std::min(titleLeft, vertex.pos.x);
+            titleRight = std::max(titleRight, vertex.pos.x);
+        }
+    CHECK(titleLeft < titleRight &&
+        std::abs((titleLeft + titleRight) / 2 - (card->Pos.x + card->Size.x / 2)) <= 2);
+
+    /* A changing wallet must not disturb the displayed reward when another kill arrives. */
+    killNotice = {2, 20000, 20300, 20600};
+    editorapp::Tick();
+    CHECK(editorapp::KillCardAmount(fixtureNow) == halfway && editorapp::KillCardAlpha(fixtureNow) == 1);
+    fixtureNow += 700;
+    text = DrawKillCard();
+    CHECK(text.find("600") != std::string::npos && text.find("20600") == std::string::npos &&
+        text.find("20000") == std::string::npos && text.find("Req") == std::string::npos);
+    fixtureNow += 4300;
+    CHECK(editorapp::NoticeShown() && editorapp::KillCardAlpha(fixtureNow) == 1);
+    fixtureNow += 250;
+    CHECK(editorapp::KillCardAlpha(fixtureNow) == 0.5f);
+    fixtureNow += 250;
+    CHECK(!editorapp::NoticeShown() && DrawKillCard().find("Kill reward") == std::string::npos);
+
+    killNotice = {3, 49900, 49950, 50000};
+    editorapp::Tick();
+    CHECK(editorapp::KillCardAmount(fixtureNow) == 50);
+    fixtureNow += 700;
+    CHECK(editorapp::KillCardAmount(fixtureNow) == 100 && DrawKillCard().find("100") != std::string::npos);
+    fixtureNow += 4800;
+    CHECK(!editorapp::NoticeShown());
+    fixtureState = HF_STATE_SHIP;
+}
+
+static void CheckKillSummary()
+{
+    fixtureState = HF_STATE_MISSION;
+    killNotice = {4, 10000, 10000, 10327};
+    editorapp::Tick();
+    CHECK(editorapp::NoticeShown());
+    killSummary = {1, 3, 2, 2, 601, 501, 301, 26};
+    editorapp::Tick();
+    fixtureState = HF_STATE_PREPARE_MISSION;
+    editorapp::Tick();
+    CHECK(!editorapp::NoticeShown());
+    fixtureNow += 9000;
+    editorapp::Tick();
+    CHECK(!editorapp::NoticeShown());
+    fixtureState = HF_STATE_SHIP;
+    editorapp::Tick();
+    CHECK(!editorapp::NoticeShown());
+    fixtureNow += 2999;
+    editorapp::Tick();
+    CHECK(!editorapp::NoticeShown());
+    ++fixtureNow;
+    editorapp::Tick();
+    const ULONGLONG shownAt = fixtureNow;
+    CHECK(editorapp::KillSummaryShowing(fixtureNow) && editorapp::KillCardAlpha(fixtureNow) == 0);
+    fixtureNow += 250;
+    editorapp::Tick();
+    CHECK(editorapp::KillCardAlpha(fixtureNow) == 1 && editorapp::KillCardAmount(fixtureNow) == 327);
+    pickerOpen = true;
+    editorapp::Tick();
+    const std::string text = DrawKillCard();
+    CHECK(text.find("Mission kill rewards") != std::string::npos &&
+        text.find("327") != std::string::npos &&
+        text.find("Team kills: 3 (601 Req)") != std::string::npos &&
+        text.find("Your kills: 2 (501 Req)") != std::string::npos &&
+        text.find("Your share (2 players): 301 Req") != std::string::npos &&
+        text.find("Contribution bonus: 26 Req") != std::string::npos &&
+        text.find("Earned reward before the wallet cap.") != std::string::npos &&
+        text.find("Loadout cost") == std::string::npos);
+    pickerOpen = false;
+    editorapp::Tick();
+    fixtureNow = shownAt + 10000;
+    editorapp::Tick();
+    CHECK(editorapp::NoticeShown() && editorapp::KillCardAlpha(fixtureNow) == 1);
+    fixtureNow += 250;
+    CHECK(editorapp::KillCardAlpha(fixtureNow) == 0.5f);
+    fixtureNow += 250;
+    editorapp::Tick();
+    CHECK(!editorapp::NoticeShown());
+    fixtureNow += 10000;
+    editorapp::Tick();
+    CHECK(!editorapp::NoticeShown());
+
+    fixtureState = HF_STATE_MISSION;
+    editorapp::Tick();
+    killSummary = {2, 0, 0, 1, 0, 0, 0, 0};
+    editorapp::Tick();
+    fixtureState = HF_STATE_SHIP;
+    editorapp::Tick();
+    fixtureNow += 3000;
+    editorapp::Tick();
+    CHECK(editorapp::KillSummaryShowing(fixtureNow) && editorapp::KillCardAmount(fixtureNow) == 0);
+    fixtureNow += 250;
+    editorapp::Tick();
+    CHECK(DrawKillCard().find("Your share (1 player): 0 Req") != std::string::npos);
+    fixtureState = HF_STATE_PREPARE_MISSION;
+    editorapp::Tick();
+    CHECK(!editorapp::NoticeShown());
+    fixtureState = HF_STATE_SHIP;
+    editorapp::Tick();
+    fixtureNow += 5000;
+    editorapp::Tick();
+    CHECK(!editorapp::NoticeShown());
+
+    /* Settlement can arrive after the ship transition; its delay still starts on returning to the ship. */
+    killSummary = {3, 1, 1, 1, 500, 500, 500, 0};
+    editorapp::Tick();
+    CHECK(editorapp::KillSummaryShowing(fixtureNow) && editorapp::KillCardAmount(fixtureNow) == 500);
+    fixtureState = HF_STATE_MISSION;
+    editorapp::Tick();
+    killSummary = {4, 1, 1, 1, 100, 100, 100, 0};
+    editorapp::Tick();
+    fixtureState = HF_STATE_SHIP;
+    editorapp::Tick();
+    fixtureNow += 2999;
+    editorapp::Tick();
+    CHECK(!editorapp::NoticeShown());
+    fixtureState = HF_STATE_MISSION;
+    editorapp::Tick();
+    fixtureState = HF_STATE_SHIP;
+    editorapp::Tick();
+    fixtureNow += 5000;
+    editorapp::Tick();
+    CHECK(!editorapp::NoticeShown());
+}
+
+static bool f3Down;
+static bool FixtureF3() { return f3Down; }
+
+static void PressF3()
+{
+    f3Down = true;
+    editorapp::Tick();
+    f3Down = false;
+    editorapp::Tick();
+}
+
+static void DrawLayout()
+{
+    ImGui::NewFrame();
+    editorapp::Modal(nullptr, 1280, 720, 1.0f / 60);
+    ImGui::Render();
+}
+
+static void CheckLayoutScreen()
+{
+    using editorapp::PositionIndex;
+    using editorapp::PositionPanel;
+    auto& positions = editorapp::panelPositions;
+    editorapp::layoutKeyDown = FixtureF3;
+    /* F3 covers an open checkout, which waits hidden and returns when the layout screen closes. */
+    pickerOpen = requested = true;
+    editorapp::Tick();
+    CHECK(editorapp::shopOpen && modalShown);
+    PressF3();
+    CHECK(editorapp::layoutOpen && editorapp::shopOpen && modalShown);
+    DrawLayout();
+    CHECK(ImGui::FindWindowByName("###layout-checkout")->Active &&
+        !ImGui::FindWindowByName("Spend My Resources")->Active);
+    checkoutComplete = true; /* a purchase finishing under the screen readies only after it closes */
+    editorapp::Tick();
+    CHECK(editorapp::shopOpen && !automaticReady);
+    PressF3();
+    CHECK(!editorapp::layoutOpen && !editorapp::shopOpen && !modalShown && automaticReady);
+    requested = true;
+    editorapp::Tick();
+    PressF3();
+    DrawLayout();
+    ImGui::GetIO().AddKeyEvent(ImGuiKey_Escape, true);
+    DrawLayout();
+    ImGui::GetIO().AddKeyEvent(ImGuiKey_Escape, false);
+    CHECK(!editorapp::layoutOpen && editorapp::shopOpen && modalShown);
+    DrawLayout();
+    CHECK(editorapp::shopOpen && ImGui::FindWindowByName("Spend My Resources")->Active);
+    pickerOpen = false;
+    editorapp::Tick();
+    CHECK(!editorapp::shopOpen && !modalShown);
+    const ImVec2 cost = positions[PositionIndex(PositionPanel::LoadoutCost)].position;
+    CHECK(!positions[PositionIndex(PositionPanel::Checkout)].hasPosition &&
+        !positions[PositionIndex(PositionPanel::Exchange)].hasPosition &&
+        !positions[PositionIndex(PositionPanel::KillReward)].hasPosition && cost.x == 180 && cost.y == 90);
+
+    PressF3();
+    CHECK(editorapp::layoutOpen && modalShown && !editorapp::NoticeShown());
+    DrawLayout();
+    DrawLayout();
+    const char* previews[] = {"###layout-checkout", "###layout-exchange", "###layout-loadout-cost", "###layout-kill-reward"};
+    for (const char* name : previews)
+    {
+        const ImGuiWindow* preview = ImGui::FindWindowByName(name);
+        CHECK(preview && preview->Active &&
+            !(preview->Flags & (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoMouseInputs)));
+    }
+    const ImGuiWindow* killPreview = ImGui::FindWindowByName("###layout-kill-reward");
+    CHECK(killPreview->Pos.x == 180 && killPreview->Pos.y == 90); /* follows the loadout cost card */
+
+    /* Drag the exchange preview by its body. */
+    ImGuiWindow* exchange = ImGui::FindWindowByName("###layout-exchange");
+    const ImVec2 from = exchange->Pos;
+    const ImVec2 grab(from.x + 24, from.y + exchange->Size.y - 12);
+    auto& io = ImGui::GetIO();
+    io.AddMousePosEvent(grab.x, grab.y);
+    DrawLayout();
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+    DrawLayout();
+    io.AddMousePosEvent(grab.x - 200, grab.y + 60);
+    DrawLayout();
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+    DrawLayout();
+    CHECK(exchange->Pos.x == from.x - 200 && exchange->Pos.y == from.y + 60);
+
+    io.AddKeyEvent(ImGuiKey_Escape, true);
+    DrawLayout();
+    io.AddKeyEvent(ImGuiKey_Escape, false);
+    CHECK(!editorapp::layoutOpen && !modalShown);
+    for (auto& position : positions) position = {};
+    editorapp::panelPositionsLoaded = false;
+    editorapp::LoadPanelPositions();
+    const auto& saved = positions[PositionIndex(PositionPanel::Exchange)];
+    CHECK(saved.hasPosition && saved.position.x == from.x - 200 && saved.position.y == from.y + 60);
+    /* Panels left at their default anchor keep following it. */
+    CHECK(!positions[PositionIndex(PositionPanel::Checkout)].hasPosition &&
+        !positions[PositionIndex(PositionPanel::KillReward)].hasPosition &&
+        positions[PositionIndex(PositionPanel::LoadoutCost)].position.x == 180);
+
+    /* The real exchange opens where its preview was left, and F3 closes the layout screen too. */
+    editorapp::Opened();
+    for (int i = 0; i < 2; ++i)
+    {
+        ImGui::NewFrame();
+        editorapp::Frame(nullptr, 1280, 720, 1.0f / 60);
+        ImGui::Render();
+    }
+    const ImGuiWindow* real = ImGui::FindWindowByName("Spend My Resources - Currency Exchange");
+    CHECK(real->Pos.x == saved.position.x && real->Pos.y == saved.position.y);
+    windowClosed = false;
+    PressF3();
+    CHECK(windowClosed && !editorapp::exchangeOpen && editorapp::layoutOpen && modalShown);
+    DrawLayout();
+    PressF3();
+    CHECK(!editorapp::layoutOpen && !modalShown);
 }
 
 static void STDMETHODCALLTYPE ExecuteTestLists(ID3D12CommandQueue* queue, UINT count, ID3D12CommandList* const* lists)
@@ -689,33 +968,6 @@ static void CheckAnimatedTabs()
     Draw();
 }
 
-static void CheckCheckoutPositionToggle()
-{
-    ImGuiWindow* window = CheckoutWindow();
-    const ImVec2 original = window->Pos;
-    PressModalButton("Unpin##checkout-position");
-    CHECK(!editorapp::panelPositions[editorapp::PositionIndex(editorapp::PositionPanel::Checkout)].pinned);
-    Draw();
-    CHECK((window->Flags & ImGuiWindowFlags_NoMove) == 0);
-
-    window->Pos = ImVec2(original.x + 32, original.y + 24);
-    PressModalButton("Pin##checkout-position");
-    auto& position = editorapp::panelPositions[editorapp::PositionIndex(editorapp::PositionPanel::Checkout)];
-    CHECK(position.pinned && position.position.x == window->Pos.x && position.position.y == window->Pos.y);
-    const ImVec2 saved = position.position;
-    position.hasPosition = false;
-    editorapp::panelPositionsLoaded = false;
-    editorapp::LoadPanelPositions();
-    CHECK(position.hasPosition && position.position.x == saved.x && position.position.y == saved.y);
-    Draw();
-    CHECK((window->Flags & ImGuiWindowFlags_NoMove) != 0);
-
-    PressModalButton("Unpin##checkout-position");
-    Draw();
-    window->Pos = original;
-    PressModalButton("Pin##checkout-position");
-    CHECK(window->Pos.x == original.x && window->Pos.y == original.y);
-}
 
 static ImRect PressExtraTile(uint32_t type)
 {
@@ -922,17 +1174,18 @@ int main(int argc, char** argv)
     Draw();
     Draw();
     CheckAnimatedTabs();
-    CheckCheckoutPositionToggle();
+    CHECK(CheckoutWindow()->Flags & ImGuiWindowFlags_NoMove);
     CheckHelldiverTab(argc >= 2 ? argv[1] : nullptr, expectGameIcons);
     ImGuiWindow* checkoutWindow = CheckoutWindow();
     const ImVec2 checkoutPos = checkoutWindow->Pos;
     const int opened = modalChanges;
     const char* choices[] = {"##Eagle Upgrade", "##Defensive Upgrade", "##Support Upgrade", "##Extra Stratagem Slot"};
+    const SmrUpgrade expected[] = {SMR_UPGRADE_EAGLE, SMR_UPGRADE_DEFENSIVE, SMR_UPGRADE_SUPPORT, SMR_UPGRADE_NONE};
     for (size_t i = 0; i < IM_ARRAYSIZE(choices); ++i)
     {
         PressModalButton(choices[i], true);
         CHECK(editorapp::destroyerSelection == i + 1);
-        CHECK(upgrade.selected == (i == 3 ? SMR_UPGRADE_NONE : editorapp::kDestroyerUpgrades[i + 1].upgrade));
+        CHECK(upgrade.selected == expected[i]);
         CHECK(editorapp::checkoutPanel == editorapp::CheckoutPanel::Destroyer && !purchaseCalls && modalShown);
     }
     PressModalButton("Review purchase");
@@ -1007,8 +1260,29 @@ int main(int argc, char** argv)
     CHECK(!modalShown && !editorapp::shopOpen && !upgrade.selected && !upgrade.extra && !automaticReady);
     io.AddKeyEvent(ImGuiKey_Escape, false);
 
-    upgrade.available = 0;
     due = 0;
+    const unsigned supportReq = tuning[SMR_UPGRADE_SUPPORT].price[REQUISITION_SLIPS];
+    tuning[SMR_UPGRADE_SUPPORT].price[REQUISITION_SLIPS] = 0;
+    requested = true;
+    editorapp::Tick();
+    PressModalButton("##Support Upgrade", true);
+    PressModalButton("Review purchase");
+    CheckModalText("After purchase, you will ready automatically.", "Total due:", "7");
+    ImGui::NewFrame();
+    ImGui::LogToBuffer();
+    editorapp::Modal(nullptr, 1280, 720, 1.0f / 60);
+    const std::string summary = GImGui->LogBuffer.c_str();
+    ImGui::LogFinish();
+    ImGui::Render();
+    const size_t total = summary.find("Total due:");
+    CHECK(total != std::string::npos);
+    const std::string totalLine = summary.substr(total, summary.find('\n', total) - total);
+    CHECK(totalLine.find("7") != std::string::npos && totalLine.find("0") == std::string::npos);
+    CHECK(upgrade.selected == SMR_UPGRADE_SUPPORT && !purchaseCalls && modalShown);
+    editorapp::CloseCheckout();
+    tuning[SMR_UPGRADE_SUPPORT].price[REQUISITION_SLIPS] = supportReq;
+
+    upgrade.available = 0;
     requested = true;
     editorapp::Tick();
     CheckModalText("Upgrade selection unavailable.");
@@ -1066,16 +1340,7 @@ int main(int argc, char** argv)
     CHECK(ImGui::FindWindowByName("Spend My Resources - Currency Exchange"));
     CHECK(!automaticReady && !editorapp::shopOpen);
     CheckExchangeControls(argc >= 2 ? argv[1] : nullptr);
-    PressExchangeButton("Unpin##exchange-position");
-    CHECK(!editorapp::panelPositions[editorapp::PositionIndex(editorapp::PositionPanel::Exchange)].pinned);
-    PressExchangeButton("Pin##exchange-position");
-    CHECK(editorapp::panelPositions[editorapp::PositionIndex(editorapp::PositionPanel::Exchange)].pinned &&
-        editorapp::panelPositions[editorapp::PositionIndex(editorapp::PositionPanel::Exchange)].hasPosition);
-    PressExchangeButton("Unpin##loadout_cost-position");
-    CHECK(!editorapp::panelPositions[editorapp::PositionIndex(editorapp::PositionPanel::LoadoutCost)].pinned);
-    PressExchangeButton("Pin##loadout_cost-position");
-    CHECK(editorapp::panelPositions[editorapp::PositionIndex(editorapp::PositionPanel::LoadoutCost)].pinned &&
-        editorapp::panelPositions[editorapp::PositionIndex(editorapp::PositionPanel::LoadoutCost)].hasPosition);
+    CHECK(ImGui::FindWindowByName("Spend My Resources - Currency Exchange")->Flags & ImGuiWindowFlags_NoMove);
     CHECK(!automaticReady && !editorapp::shopOpen);
     requested = true;
     windowClosed = false;
@@ -1113,7 +1378,10 @@ int main(int argc, char** argv)
     CHECK(!modalShown);
     CHECK(!editorapp::NoticeShown());
     CHECK(!automaticReady);
+    CheckKillCard();
+    CheckKillSummary();
+    CheckLayoutScreen();
     ImGui::DestroyContext();
     DeleteFileW(editorapp::panelPositionsPath.c_str());
-    puts("PASS frontend: hover fades and sliding underline, live costs, reversible panels, checkout, and F2 exchange.");
+    puts("PASS frontend: hover fades and sliding underline, live costs, F3 panel layout, checkout, and F2 exchange.");
 }

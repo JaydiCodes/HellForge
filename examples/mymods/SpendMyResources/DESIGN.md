@@ -1,10 +1,17 @@
 TODO:
+- Req slips for kills
+  - Each kill = 1 req slip
+  - List of enemies that rewards more:
+    - Bile titan, vox engine, etc = 500 req
+    - Hulk, charger etc = 100 req.
+    - Overseers, Alpha commanders etc = 10 req
+  - Overview at end of missions showing amount of REQ earned through kills
 - Problems:
   - Field medic is not removing limb injuries
 - Upgrades:
   - Primaries
-  - Secondaries
   - Stratagems
+- Finish list and release (share) mod
 
 - **Spend samples, Req or FC (Forge Credits) to empower weapons / strats for one operation**
 	- Remove resource limits
@@ -32,12 +39,9 @@ TODO:
         - Super: 1 of either:
             - When reaching 20% HP, auto stim. Only once every 30 seconds. -10% armor.
             - All injuries auto fix after 0.5 seconds, -10% movement speed, -10% armor.
-	- Primaries & Secondaries
+	- Primaries
     	- Elite: +2 mags
       	- Super:
-        	- Liberator series: 1 of either:
-                - Direct hit AP +1, Durable damage -50%
-            	- Direct hit AP -1, Durable damage +50%
         	- Hyena: 1 of either (ammo change)
             	- FDI:
                 	- "damage.durable_damage": 450, "damage.standard_damage": 225, "damage.ap_direct": 2, "damage.ap_slight": 2,

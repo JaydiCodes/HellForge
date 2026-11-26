@@ -5,6 +5,7 @@
 #include "gameplay/game_inventory.c"
 #include "currency/wallet_runtime.c"
 #include "gameplay/loadout.c"
+#include "gameplay/kill_rewards.c"
 #include "gameplay/extra_slot.c"
 #include "shop/ready_gate.c"
 #include "gameplay/destroyer.c"
@@ -51,7 +52,10 @@ int SmrInit(const HfApi* api, HfMod* mod)
         api->log(mod, "Cannot load helldiver-upgrades.json: %s Helldiver upgrades disabled.", detail);
     else
         api->log(mod, "Loaded helldiver-upgrades.json.%s%s", detail[0] ? " " : "", detail);
-    if (hf_on_state(mod, UpgradeStateChanged, NULL, 0) ||
+    kill_rewards_ready = InitKillRewards(mod);
+    if ((kill_rewards_ready &&
+            (hf_on_spawn(mod, EnemySpawned, NULL, 0) || hf_on_kill(mod, EnemyKilled, NULL, 0))) ||
+        hf_on_state(mod, UpgradeStateChanged, NULL, 0) ||
         (helldiver_config_loaded &&
             (hf_on_damage_pre(mod, HelldiverDamagePre, NULL, 0) || hf_on_weapon(mod, HelldiverWeapon, NULL, 0))) ||
         hf_on_mission_start(mod, MissionStart, NULL, 0) ||

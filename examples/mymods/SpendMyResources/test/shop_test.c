@@ -330,6 +330,24 @@ int SmrLoadPrices(const char* const* names, unsigned* prices, size_t count, char
     }
     return 1;
 }
+static size_t EnemyNamed(const char* name)
+{
+    for (size_t i = 0; i < ENEMY_COUNT; ++i)
+        if (!strcmp(kEnemies[i].name, name)) return i;
+    CHECK(0 && "Missing expected enemy.");
+    return 0;
+}
+int SmrLoadKillRewards(const char* const* names, unsigned* values, size_t count, char* result, size_t size)
+{
+    CHECK(count == ENEMY_COUNT);
+    for (size_t i = 0; i < count; ++i)
+    {
+        CHECK(!strcmp(names[i], kEnemies[i].name));
+        values[i] = !strcmp(names[i], "Bile Titan - Strider") ? 500 : !strcmp(names[i], "Charger") ? 100 :
+            !strcmp(names[i], "Stalker") ? 0 : SMR_KILL_DEFAULT_VALUE;
+    }
+    return 1;
+}
 static int GearCheckout(unsigned* total, int* pending)
 {
     unsigned price[CURRENCY_COUNT];
@@ -1573,6 +1591,105 @@ static void TestWalletPersistence(void)
     puts("PASS wallet: 60,000 Req spent across a mission payout, Forge Credit pickup, sample cap, and restoration without replay");
 }
 
+static uint8_t* KillDescriptor(uint32_t entity)
+{
+    static uint64_t charger;
+    charger = kEnemies[EnemyNamed("Charger")].resource;
+    return entity == 11 ? (uint8_t*)&charger : NULL;
+}
+static void Kill(uint32_t victim, uint64_t creditor)
+{
+    HfKillEvent event = {.victim = victim, .creditor = creditor};
+    EnemyKilled(&mod, &event, NULL);
+}
+static void TestKillRewards(void)
+{
+    ResetExchange();
+    const uintptr_t old_players = slot_players;
+    unsigned char players[0x400] = {0};
+    slot_players = (uintptr_t)players;
+    entity_descriptor = KillDescriptor;
+    const uint64_t titan = kEnemies[EnemyNamed("Bile Titan - Strider")].resource;
+    const uint64_t stalker = kEnemies[EnemyNamed("Stalker")].resource;
+    size_t plain = 0;
+    while (enemy_value[plain] != SMR_KILL_DEFAULT_VALUE) ++plain;
+    CHECK(kill_rewards_ready && EnemyIndex(0x1234) < 0);
+    SmrKillSummary summary;
+    SmrLastKillSummary(&summary);
+    uint32_t previous_summary = summary.sequence;
+
+    game_state = HF_STATE_MISSION;
+    MissionStart(&mod, NULL, NULL);
+    Put32(players + offsetof(HfPlayerManager, count), 2);
+    Tick();
+    Put32(players + offsetof(HfPlayerManager, count), 0); /* gone by mission end: the sampled count is used */
+    EnemySpawned(&mod, &(HfSpawnEvent){.entity = 10, .resource = titan}, NULL);
+    EnemySpawned(&mod, &(HfSpawnEvent){.entity = 12, .resource = kEnemies[plain].resource}, NULL);
+    EnemySpawned(&mod, &(HfSpawnEvent){.entity = 13, .resource = stalker}, NULL);
+    EnemySpawned(&mod, &(HfSpawnEvent){.entity = 14, .resource = 0x1234}, NULL);
+    EnemySpawned(&mod, &(HfSpawnEvent){.entity = 15, .resource = titan}, NULL);
+    Kill(10, local.peer);
+    Kill(10, 456);         /* the same victim pays once */
+    Kill(11, 456);         /* a teammate's Charger, identified by its descriptor */
+    Kill(12, local.peer);  /* unlisted: the default value */
+    Kill(13, local.peer);  /* valued 0 */
+    Kill(14, local.peer);  /* not an enemy */
+    Kill(15, 0);           /* nobody credited */
+    CHECK(kill_count == 3);
+    SmrKillNotice notice;
+    SmrLastKill(&notice);
+    /* The card's last kill was my unlisted one: 1 more for the team and for my bonus. */
+    CHECK(notice.sequence == 3 && notice.base == 10000 && notice.before == 10325 && notice.after == 10327);
+    MissionEnd(&mod, NULL, NULL);
+    /* Team 601 split 2 ways is 301 (rounded up), plus 5% of my 501 = 26 (rounded up). */
+    CHECK(kill_reward_due == 327 && !kill_count && Amount(REQUISITION) == 10000);
+    SmrLastKillSummary(&summary);
+    CHECK(summary.sequence && summary.sequence != previous_summary && summary.team_kills == 3 &&
+        summary.own_kills == 2 && summary.players == 2 && summary.team == 601 && summary.mine == 501 &&
+        summary.share == 301 && summary.bonus == 26);
+    previous_summary = summary.sequence;
+    Kill(15, local.peer);  /* not in a mission */
+    CHECK(!kill_count);
+    game_state = HF_STATE_SHIP;
+    Tick();
+    CHECK(!kill_reward_due && Amount(REQUISITION) == 10327 && saved_wallet == 10327 && wallet_writes == 1);
+    SmrLastKillSummary(&summary);
+    CHECK(summary.sequence == previous_summary && summary.share + summary.bonus == 327);
+
+    game_state = HF_STATE_MISSION;
+    MissionStart(&mod, NULL, NULL);
+    Put32(players + offsetof(HfPlayerManager, count), 1);
+    EnemySpawned(&mod, &(HfSpawnEvent){.entity = 10, .resource = titan}, NULL);
+    Kill(10, local.peer);
+    MissionEnd(&mod, NULL, NULL);
+    CHECK(kill_reward_due == 500); /* solo: no bonus */
+    SmrLastKillSummary(&summary);
+    CHECK(summary.sequence != previous_summary && summary.team_kills == 1 && summary.own_kills == 1 &&
+        summary.players == 1 && summary.share == 500 && summary.bonus == 0);
+    previous_summary = summary.sequence;
+    SetAmount(REQUISITION, 49990);
+    game_state = HF_STATE_SHIP;
+    Tick();
+    CHECK(!kill_reward_due && Amount(REQUISITION) == 50000 && saved_wallet == 50000 && !shop_failed);
+    SmrLastKillSummary(&summary);
+    CHECK(summary.sequence == previous_summary && summary.share == 500);
+
+    game_state = HF_STATE_MISSION;
+    MissionStart(&mod, NULL, NULL);
+    MissionEnd(&mod, NULL, NULL);
+    SmrLastKillSummary(&summary);
+    CHECK(summary.sequence != previous_summary && !summary.team_kills && !summary.own_kills &&
+        !summary.team && !summary.mine && !summary.share && !summary.bonus && !kill_reward_due);
+
+    entity_descriptor = NULL;
+    slot_players = old_players;
+    ResetExchange();
+    SetAmount(REQUISITION, 5000);
+    Tick();
+    wallet_writes = 0;
+    puts("PASS kill rewards: unique enemy kills split across the team with a 5% contribution bonus, paid on the ship");
+}
+
 int main(void)
 {
     size_t silo = PriceIndex("MS-11 Solo Silo");
@@ -1638,6 +1755,7 @@ int main(void)
     TestHelldiver();
     TestExtraSlot();
     TestExchanges();
+    TestKillRewards();
     TestLoadoutRefresh();
     CHECK(Amount(REQUISITION) == 5000 && !access[0] && !access[silo]);
     SmrLoadoutQuote quote;

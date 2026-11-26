@@ -16,8 +16,8 @@ The yellow underline marks the active panel, and yellow borders mark the preview
 Hover highlights fade in and out without moving the controls.
 
 The stratagem grid uses the available panel height and scrolls when needed. Destroyer costs use a compact summary.
-Use **Unpin** to move the checkout or currency exchange panel. The F2 exchange panel also controls the loadout cost
-panel. **Pin** saves each panel's position for the next session.
+Press F3 to move the panels, even with checkout open. A box in the middle of the screen names the layout screen, and
+every panel opens as a preview you can drag. Press F3 or Esc to save the positions and leave; an open checkout returns.
 
 Upgrade costs show a currency icon and the wallet balance before the price, such as `15 / 200`. Hover an icon to
 see its currency name. A balance below the price is highlighted.

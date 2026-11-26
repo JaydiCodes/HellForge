@@ -162,10 +162,62 @@ static void TestHelldiverConfig(const std::wstring& shippedPath, const std::wstr
     puts("PASS helldiver config: shipped tiers and perks, custom values, strict validation, and atomic failure.");
 }
 
+static const struct { uint64_t resource; const char* name; } kEnemies[] = {
+#include "smr_enemies.inc"
+};
+static constexpr size_t kEnemyCount = sizeof kEnemies / sizeof kEnemies[0];
+
+static void TestKillRewards(const std::wstring& shippedPath, const std::wstring& tempPath)
+{
+    using namespace hfjson;
+    const char* names[kEnemyCount];
+    for (size_t i = 0; i < kEnemyCount; ++i) names[i] = kEnemies[i].name;
+    std::vector<unsigned> values(kEnemyCount, 7);
+    char result[256] = {};
+    CHECK(ReadKillRewards(shippedPath, names, values.data(), kEnemyCount, result, sizeof result));
+    Value shipped;
+    std::string text, why;
+    CHECK(ReadFile(shippedPath, &text) && Parse(text, &shipped, &why) && !shipped.members.empty());
+    size_t listed = 0;
+    for (size_t i = 0; i < kEnemyCount; ++i)
+    {
+        CHECK(!strstr(names[i], "SEAF"));
+        const Value* value = shipped.Find(names[i]);
+        listed += value != nullptr;
+        CHECK(values[i] == (value ? shipped.GetNumber(names[i]) : SMR_KILL_DEFAULT_VALUE));
+    }
+    CHECK(listed == shipped.members.size());
+
+    Value valid;
+    valid.kind = Value::Object;
+    valid.At(names[0]) = Value::MakeNumber(0, true);
+    valid.At(names[1]) = Value::MakeNumber(SMR_KILL_MAX_VALUE, true);
+    CHECK(WriteAtomically(tempPath, Write(valid)));
+    CHECK(ReadKillRewards(tempPath, names, values.data(), kEnemyCount, result, sizeof result));
+    CHECK(values[0] == 0 && values[1] == SMR_KILL_MAX_VALUE && values[2] == SMR_KILL_DEFAULT_VALUE);
+    for (int test = 0; test < 10; ++test)
+    {
+        Value document = valid, value;
+        const char* invalid[] = {"-1", "1.5", "1e3", "\"5\"", "true", "1000001", "99999999999"};
+        if (test < 7)
+        {
+            CHECK(Parse(invalid[test], &value, &why));
+            document.At(names[2]) = value;
+        }
+        if (test == 7) document.At("Unknown enemy") = Value::MakeNumber(5, true);
+        if (test == 8) document.members.emplace_back(names[0], Value::MakeNumber(5, true));
+        if (test == 9) document.kind = Value::Array;
+        CHECK(WriteAtomically(tempPath, Write(document)));
+        CHECK(!ReadKillRewards(tempPath, names, values.data(), kEnemyCount, result, sizeof result) && result[0]);
+        CHECK(values[0] == 0 && values[1] == SMR_KILL_MAX_VALUE && values[2] == SMR_KILL_DEFAULT_VALUE);
+    }
+    puts("PASS kill rewards config: shipped enemy values, defaults, zero and maximum, strict validation.");
+}
+
 int main(int argc, char** argv)
 {
     using namespace hfjson;
-    CHECK(argc == 4);
+    CHECK(argc == 5);
     const char* names[PRICE_COUNT];
     unsigned prices[PRICE_COUNT] = {};
     for (size_t i = 0; i < PRICE_COUNT; ++i) names[i] = kLoadoutPrices[i].name;
@@ -220,5 +272,6 @@ int main(int argc, char** argv)
     CHECK(!ReadPrices(path, names, prices, PRICE_COUNT, result, sizeof result) && result[0]);
     puts("PASS price list: shipped roster, custom and reordered prices, overflow limits, atomic validation, missing/invalid files and entries.");
     TestUpgradeConfig(Wide(argv[2]), path);
+    TestKillRewards(Wide(argv[4]), path);
     TestHelldiverConfig(Wide(argv[3]), path);
 }

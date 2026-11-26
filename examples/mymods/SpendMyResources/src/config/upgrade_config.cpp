@@ -1,4 +1,10 @@
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include "json.h"
+#include "config_path.h"
+#include "../shop/shop.h"
 
 static int ReadUpgradeConfig(const std::wstring& path, SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT],
     char* result, size_t size)

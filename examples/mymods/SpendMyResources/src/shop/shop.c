@@ -81,6 +81,7 @@ static void ShopTick(HfMod* mod, float dt, void* user)
     const HfApi* api = HF_API(mod);
     ExtraSlotTick(mod, dt);
     HelldiverTick(mod, dt);
+    KillsTick(mod);
     if (shop_failed) return;
     if (!game_base)
     {
@@ -111,6 +112,8 @@ static void ShopTick(HfMod* mod, float dt, void* user)
     if (shop_failed) return;
     ReadCurrencies(mod, manager);
     ProcessExchange(mod, manager);
+    if (shop_failed) return;
+    ProcessKillReward(mod, manager);
     if (shop_failed) return;
     uint64_t equipped = 0;
     int selection_read = ReadEquippedItems(mod, &equipped);

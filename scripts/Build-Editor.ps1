@@ -141,6 +141,17 @@ if($SpendMyResources){
         '    {{{0}u, "{1}"}},' -f ([uint32]$entry.Value.id), $entry.Name.Replace('\','\\').Replace('"','\"')
     }
     [IO.File]::WriteAllLines((Join-Path $objects 'smr_extra_names.inc'), [string[]]$extraNames)
+    # Kill rewards: the hostile enemy units, sorted by resource for a binary search. SEAF and civilians are not enemies.
+    $entities=(Get-Content -LiteralPath (Join-Path $project 'mappings\entities.json') -Raw -Encoding UTF8 | ConvertFrom-Json).entities
+    $enemies=foreach($entry in $entities.PSObject.Properties){
+        if($entry.Value.kind -ne 'enemy' -or $entry.Value.faction -eq 'super_earth'){continue}
+        [pscustomobject]@{resource=[Convert]::ToUInt64($entry.Value.resource.Substring(2),16);label=$entry.Value.label}
+    }
+    if(-not $enemies){throw 'No enemies were found in mappings\entities.json.'}
+    $enemyLines=foreach($enemy in ($enemies | Sort-Object resource)){
+        '    {{UINT64_C(0x{0:X16}), "{1}"}},' -f $enemy.resource, $enemy.label.Replace('\','\\').Replace('"','\"')
+    }
+    [IO.File]::WriteAllLines((Join-Path $objects 'smr_enemies.inc'), [string[]]$enemyLines)
     # Helldiver upgrades: each loadout weapon's default magazines and each throwable's counts, by loadout id.
     $schema=Get-Content -LiteralPath (Join-Path $project 'src\HellForge.Core\stats-schema.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     $itemSlots=@{primary=0;secondary=1;throwable=2}
@@ -171,8 +182,16 @@ if($SpendMyResources){
         -c (Join-Path $src 'spend_my_resources.c') -o $gameplay
     if($LASTEXITCODE){throw 'Spend My Resources gameplay did not compile.'}
     $dll=Join-Path $out 'spend_my_resources.dll'
+    $frontend=@(
+        'shop\shop_frontend.cpp','shop\frontend\widgets.cpp','shop\frontend\layout.cpp',
+        'shop\frontend\kill_counter.cpp','shop\frontend\checkout.cpp','shop\frontend\destroyer_panel.cpp',
+        'shop\frontend\helldiver_panel.cpp','shop\frontend\exchange.cpp'
+    )|ForEach-Object {Join-Path $src $_}
+    $storage=@(
+        'config\config_path.cpp','config\prices.cpp','config\upgrade_config.cpp','currency\currency_ledger.cpp'
+    )|ForEach-Object {Join-Path $src $_}
     & $zig c++ @common -shared -Wall -Werror -Wno-unused-parameter -s -I $src -I $editor '-DHF_OVERLAY_FRONTEND=\"shop/shop_frontend.h\"' `
-        (Join-Path $editor 'editor.cpp') (Join-Path $editor 'icons.cpp') (Join-Path $src 'shop/shop_frontend.cpp') $gameplay @built `
+        (Join-Path $editor 'editor.cpp') (Join-Path $editor 'icons.cpp') (Join-Path $editor 'json.cpp') @frontend @storage $gameplay @built `
         -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -lole32 -luser32 -o $dll
     if($LASTEXITCODE){throw 'Spend My Resources overlay did not compile.'}
     $imageOut=Join-Path $out 'images'
@@ -204,7 +223,7 @@ if($SpendMyResources){
     }
     Copy-Item -LiteralPath (Join-Path $project 'data\forge-credits\currency-icon.png') -Destination (Join-Path $imageOut 'Forge_Credit.png') -Force
     Get-ChildItem -LiteralPath $out -Filter '*.lib' | Remove-Item
-    Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'README.md'),(Join-Path $mod 'extra-stratagem-slot.md'),(Join-Path $mod 'currency-ledger.md'),(Join-Path $mod 'prices.json'),(Join-Path $mod 'destroyer-upgrades.json'),(Join-Path $mod 'helldiver-upgrades.json'),(Join-Path $project 'LICENSE') -Destination $out
+    Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'README.md'),(Join-Path $mod 'extra-stratagem-slot.md'),(Join-Path $mod 'currency-ledger.md'),(Join-Path $mod 'kill-rewards.md'),(Join-Path $mod 'prices.json'),(Join-Path $mod 'destroyer-upgrades.json'),(Join-Path $mod 'helldiver-upgrades.json'),(Join-Path $mod 'kill-rewards.json'),(Join-Path $project 'LICENSE') -Destination $out
     Copy-Item -LiteralPath (Join-Path $imgui 'LICENSE.txt') -Destination (Join-Path $out 'imgui-LICENSE.txt')
     Write-Output "Built standalone mod: $dll"
     if($Test){
@@ -217,19 +236,19 @@ if($SpendMyResources){
         if($LASTEXITCODE){throw 'The resource shop fixture failed.'}
         $ledgerTest=Join-Path $testOut 'currency_ledger_test.exe'
         & $zig c++ -target x86_64-windows-gnu -O1 -std=c++17 -Wall -Werror -I (Join-Path $project 'native/mod-sdk') -I $editor `
-            (Join-Path $mod 'test/currency_ledger_test.cpp') -o $ledgerTest
+            (Join-Path $mod 'test/currency_ledger_test.cpp') (Join-Path $editor 'json.cpp') -o $ledgerTest
         if($LASTEXITCODE){throw 'The currency ledger fixture did not compile.'}
         & $ledgerTest
         if($LASTEXITCODE){throw 'The currency ledger fixture failed.'}
         $pricesTest=Join-Path $testOut 'prices_test.exe'
-        & $zig c++ -target x86_64-windows-gnu -O1 -std=c++17 -Wall -Werror -I (Join-Path $project 'native/mod-sdk') -I $editor `
-            (Join-Path $mod 'test/prices_test.cpp') -o $pricesTest
+        & $zig c++ -target x86_64-windows-gnu -O1 -std=c++17 -Wall -Werror -I (Join-Path $project 'native/mod-sdk') -I $editor -I $objects `
+            (Join-Path $mod 'test/prices_test.cpp') (Join-Path $src 'config\config_path.cpp') -o $pricesTest
         if($LASTEXITCODE){throw 'The price list fixture did not compile.'}
-        & $pricesTest (Join-Path $out 'prices.json') (Join-Path $out 'destroyer-upgrades.json') (Join-Path $out 'helldiver-upgrades.json')
+        & $pricesTest (Join-Path $out 'prices.json') (Join-Path $out 'destroyer-upgrades.json') (Join-Path $out 'helldiver-upgrades.json') (Join-Path $out 'kill-rewards.json')
         if($LASTEXITCODE){throw 'The price list fixture failed.'}
         $checkoutTest=Join-Path $testOut 'checkout_frontend_test.exe'
-        & $zig c++ @common -Wall -Werror -Wno-unused-parameter -I $editor `
-            (Join-Path $mod 'test/checkout_frontend_test.cpp') (Join-Path $editor 'icons.cpp') @built `
+        & $zig c++ @common -Wall -Werror -Wno-unused-parameter -I $src -I $editor `
+            (Join-Path $mod 'test/checkout_frontend_test.cpp') (Join-Path $editor 'icons.cpp') (Join-Path $editor 'json.cpp') @frontend @built `
             -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -lole32 -o $checkoutTest
         if($LASTEXITCODE){throw 'The checkout frontend fixture did not compile.'}
         $fixture=(New-Item -ItemType Directory -Path (Join-Path $testOut ('smr-icons-'+[guid]::NewGuid()))).FullName

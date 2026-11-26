@@ -1,5 +1,8 @@
 #include "json.h"
+#include "config_path.h"
 #include "../shop/shop.h"
+#include <cstdio>
+#include <cstdlib>
 #include <limits>
 
 static int ReadPrices(const std::wstring& path, const char* const* names, unsigned* prices,
@@ -55,29 +58,63 @@ static int ReadPrices(const std::wstring& path, const char* const* names, unsign
     return 1;
 }
 
-static std::wstring ConfigPath(const wchar_t* filename, char* result, size_t size)
-{
-    static const char moduleAnchor = 0;
-    HMODULE module = nullptr;
-    wchar_t path[32768];
-    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            reinterpret_cast<LPCWSTR>(&moduleAnchor), &module))
-    {
-        snprintf(result, size, "Cannot locate the mod DLL (Windows error %lu).", GetLastError());
-        return {};
-    }
-    DWORD length = GetModuleFileNameW(module, path, sizeof path / sizeof path[0]);
-    if (!length || length >= sizeof path / sizeof path[0])
-    {
-        snprintf(result, size, "Cannot read the mod DLL path (Windows error %lu).", GetLastError());
-        return {};
-    }
-    const std::wstring dllPath(path, length);
-    return dllPath.substr(0, dllPath.find_last_of(L'\\') + 1) + filename;
-}
-
 extern "C" int SmrLoadPrices(const char* const* names, unsigned* prices, size_t count, char* result, size_t size)
 {
     const auto path = ConfigPath(L"prices.json", result, size);
     return !path.empty() && ReadPrices(path, names, prices, count, result, size);
+}
+
+/* Unlike prices.json, enemies may be left out: they keep the default value. */
+static int ReadKillRewards(const std::wstring& path, const char* const* names, unsigned* values, size_t count,
+    char* result, size_t size)
+{
+    using namespace hfjson;
+    std::string text, why;
+    Value document;
+    if (!ReadFile(path, &text, &why) || !Parse(text, &document, &why))
+    {
+        snprintf(result, size, "%s", why.c_str());
+        return 0;
+    }
+    if (document.kind != Value::Object)
+    {
+        snprintf(result, size, "Expected an object of enemy names and their Requisition values.");
+        return 0;
+    }
+    std::vector<unsigned> loaded(count, SMR_KILL_DEFAULT_VALUE);
+    std::vector<bool> listed(count);
+    for (const auto& member : document.members)
+    {
+        size_t index = 0;
+        while (index < count && member.first != names[index]) ++index;
+        if (index == count)
+        {
+            snprintf(result, size, "Unknown enemy: %s.", member.first.c_str());
+            return 0;
+        }
+        if (listed[index])
+        {
+            snprintf(result, size, "Duplicate enemy: %s.", names[index]);
+            return 0;
+        }
+        const Value& value = member.second;
+        if (value.kind != Value::Number || value.text.empty() || value.text.size() > 7 ||
+            value.text.find_first_not_of("0123456789") != std::string::npos ||
+            strtoul(value.text.c_str(), nullptr, 10) > SMR_KILL_MAX_VALUE)
+        {
+            snprintf(result, size, "Invalid value for %s: use a whole number from 0 to %u.", names[index],
+                SMR_KILL_MAX_VALUE);
+            return 0;
+        }
+        loaded[index] = static_cast<unsigned>(strtoul(value.text.c_str(), nullptr, 10));
+        listed[index] = true;
+    }
+    for (size_t i = 0; i < count; ++i) values[i] = loaded[i];
+    return 1;
+}
+
+extern "C" int SmrLoadKillRewards(const char* const* names, unsigned* values, size_t count, char* result, size_t size)
+{
+    const auto path = ConfigPath(L"kill-rewards.json", result, size);
+    return !path.empty() && ReadKillRewards(path, names, values, count, result, size);
 }

@@ -134,6 +134,7 @@ static void MissionStart(HfMod* mod, const HfStateEvent* event, void* user)
     uintptr_t game = api->module_base("game.dll", NULL);
     waiting_for_spawn = 0;
     memset(&extra_deployment, 0, sizeof extra_deployment);
+    ResetKills();
     SmrFinishCheckout(0);
     if (!game || !LayoutMatches(api, game))
     {
@@ -169,6 +170,7 @@ static void MissionEnd(HfMod* mod, const HfStateEvent* event, void* user)
         HF_API(mod)->log(mod, "Mission end: no local deployment to retry the loadout read");
     waiting_for_spawn = 0;
     memset(&extra_deployment, 0, sizeof extra_deployment);
+    SettleKills(mod);
     int consumed_upgrade = upgraded_count != 0;
     ResetUpgrade(mod);
     int consumed_helldiver = FinishHelldiver(mod);
