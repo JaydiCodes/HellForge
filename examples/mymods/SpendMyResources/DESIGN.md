@@ -1,13 +1,4 @@
 TODO:
-- Req slips for kills
-  - Each kill = 1 req slip
-  - List of enemies that rewards more:
-    - Bile titan, vox engine, etc = 500 req
-    - Hulk, charger etc = 100 req.
-    - Overseers, Alpha commanders etc = 10 req
-  - Overview at end of missions showing amount of REQ earned through kills
-- Problems:
-  - Field medic is not removing limb injuries
 - Upgrades:
   - Primaries
   - Stratagems
@@ -38,21 +29,69 @@ TODO:
             - +25% stamina, -10% sprint speed
         - Super: 1 of either:
             - When reaching 20% HP, auto stim. Only once every 30 seconds. -10% armor.
-            - All injuries auto fix after 0.5 seconds, -10% movement speed, -10% armor.
-	- Primaries
-    	- Elite: +2 mags
-      	- Super:
-        	- Hyena: 1 of either (ammo change)
+            - Field Medic: regenerate 1 HP every second, -10% movement speed, -10% armor.
+	- Primaries:
+        - Super:
+        	- Hyena: 1 of either:
             	- FDI:
                 	- "damage.durable_damage": 450, "damage.standard_damage": 225, "damage.ap_direct": 2, "damage.ap_slight": 2,
               	- API:
                 	- "damage.durable_damage": 225, "damage.standard_damage": 450, "damage.ap_direct": 4, "damage.ap_slight": 4,
               	- HEI:
                 	- "damage.durable_damage": 225, "damage.standard_damage": 225, "damage.ap_direct": 2, "damage.ap_slight": 2, "terminal.primary.impact.explosion": 72
+          	- Eruptor: 1 of either:
+            	- HE:
+                	- "damage.ap_direct": 2,"damage.durable_damage": 100,"damage.standard_damage": 100,"explosions": {
+						"R-36 Eruptor (impact)": {
+						"explosion.damage.ap_extreme": 0,
+						"explosion.damage.ap_large": 0,
+						"explosion.damage.ap_slight": 0,
+						"explosion.damage.demolition": 40,
+						"explosion.damage.durable_damage": 1000,
+						"explosion.damage.standard_damage": 500,
+						"explosion.inner_radius": 4,
+						"explosion.outer_radius": 8,
+						"explosion.shockwave_radius": 8,
+						"explosion.shrapnel_count": 0,
+						"explosion.damage.stagger": 40
+						}
+					}
+              	- APHE
+                	- "damage.ap_direct": 5,"damage.durable_damage": 1000,"damage.standard_damage": 225,"explosions": {
+						"R-36 Eruptor (impact)": {
+						"explosion.damage.ap_extreme": 0,
+						"explosion.damage.ap_large": 0,
+						"explosion.damage.ap_slight": 0,
+						"explosion.damage.demolition": 40,
+						"explosion.damage.durable_damage": 100,
+						"explosion.damage.standard_damage": 100,
+						"explosion.inner_radius": 1,
+						"explosion.outer_radius": 2,
+						"explosion.shockwave_radius": 2,
+						"explosion.shrapnel_count": 0,
+						"explosion.damage.stagger": 20
+						}
+					}
+              	- APFSDS
+                	- "damage.ap_direct": 6,"damage.durable_damage": 225,"damage.standard_damage": 1000,"explosions": {
+						"R-36 Eruptor (impact)": {
+						"explosion.damage.ap_extreme": 0,
+						"explosion.damage.ap_large": 0,
+						"explosion.damage.ap_slight": 0,
+						"explosion.damage.demolition": 40,
+						"explosion.damage.durable_damage": 50,
+						"explosion.damage.standard_damage": 50,
+						"explosion.inner_radius": 1,
+						"explosion.outer_radius": 1,
+						"explosion.shockwave_radius": 1,
+						"explosion.shrapnel_count": 0,
+						"explosion.damage.stagger": 10
+						}
+					}
 	- Strats
 		- Eagles
     		- Elite: +1 Use
-    		- Super: 3 V formation eagles, +10s call-in time
+    		- Super: second eagle follows closely for a second run, +10s call-in time
   		- Orbitals
     		- Railcannon:
         		- Super: Fire another shot after the first one, 1 second later.

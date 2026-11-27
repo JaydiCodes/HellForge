@@ -6,14 +6,14 @@ namespace editorapp
 SmrHelldiverPerk helldiverSelection = SMR_PERK_PRIMARY_TRADEOFF;
 const char* const kHelldiverTiers[SMR_TIER_COUNT] = {"Plus", "Elite", "Super"};
 static constexpr const char* kPerkNames[SMR_PERK_COUNT] = {
-    "None", "Primary Ammo Trade-off", "Secondary Ammo Trade-off", "Light Kit", "Armored", "Sprinter", "Endurance",
+    "None", "Primary Ammo Trade-off", "Secondary Ammo Trade-off", "Grenade Kit", "Armored", "Sprinter", "Endurance",
     "Auto-Stim", "Field Medic",
 };
 const PerkIcon kPerkIcons[SMR_PERK_COUNT] = {
     {icons::WEAPON, nullptr, ""},
     {icons::WEAPON, "P-2 Peacemaker", "PA"},
     {icons::WEAPON, "AR-23 Liberator", "SA"},
-    {icons::PASSIVE, nullptr, "LK"},
+    {icons::PASSIVE, nullptr, "GK"},
     {icons::PASSIVE, "EXTRA PADDING", "AR"},
     {icons::BOOSTER, "Dead Sprint", "SP"},
     {icons::BOOSTER, "Stamina Enhancement", "EN"},
@@ -31,7 +31,7 @@ static void DescribePerk(SmrHelldiverPerk perk, const SmrHelldiverTuning& tuning
     if (perk == SMR_PERK_AUTO_STIM)
         ImGui::BulletText("Auto-heal at %.6g%% health or lower, once every %.6g s.", tuning.health_percent,
             tuning.cooldown_seconds);
-    if (perk == SMR_PERK_FIELD_MEDIC) ImGui::BulletText("Injured limbs heal after %.6g s.", tuning.injury_seconds);
+    if (perk == SMR_PERK_FIELD_MEDIC) ImGui::BulletText("Regenerate 1 HP every second.");
     const struct { const char* label; double value; } effects[] = {
         {"Primary magazines", tuning.primary_ammo_percent}, {"Secondary magazines", tuning.secondary_ammo_percent},
         {"Throwables", tuning.throwables_percent},

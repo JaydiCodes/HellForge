@@ -90,22 +90,22 @@ static void TestHelldiverConfig(const std::wstring& shippedPath, const std::wstr
     char result[256] = {};
     SmrHelldiverTuning tuning[SMR_PERK_COUNT] = {};
     CHECK(ReadHelldiverConfig(shippedPath, tuning, result, sizeof result));
-    CHECK(tuning[SMR_PERK_PRIMARY_TRADEOFF].price[COMMON_SAMPLES] == 15 && tuning[SMR_PERK_LIGHT_KIT].price[COMMON_SAMPLES] == 15 &&
+    CHECK(tuning[SMR_PERK_PRIMARY_TRADEOFF].price[COMMON_SAMPLES] == 15 && tuning[SMR_PERK_GRENADE_KIT].price[COMMON_SAMPLES] == 15 &&
         tuning[SMR_PERK_ARMORED].price[RARE_SAMPLES] == 10 && tuning[SMR_PERK_FIELD_MEDIC].price[SUPER_SAMPLES] == 5 &&
         !tuning[SMR_PERK_ARMORED].price[COMMON_SAMPLES] && !tuning[SMR_PERK_NONE].price[COMMON_SAMPLES]);
     CHECK(tuning[SMR_PERK_PRIMARY_TRADEOFF].primary_ammo_percent == -50 &&
         tuning[SMR_PERK_PRIMARY_TRADEOFF].secondary_ammo_percent == 50);
     CHECK(tuning[SMR_PERK_SECONDARY_TRADEOFF].primary_ammo_percent == 50 &&
         tuning[SMR_PERK_SECONDARY_TRADEOFF].secondary_ammo_percent == -50);
-    CHECK(tuning[SMR_PERK_LIGHT_KIT].throwables_percent == -50 && tuning[SMR_PERK_LIGHT_KIT].primary_ammo_percent == 33 &&
-        tuning[SMR_PERK_LIGHT_KIT].secondary_ammo_percent == 33);
-    CHECK(tuning[SMR_PERK_LIGHT_KIT].armor_percent == -10 && tuning[SMR_PERK_ARMORED].armor_percent == 25 &&
+    CHECK(tuning[SMR_PERK_GRENADE_KIT].throwables_percent == -50 && tuning[SMR_PERK_GRENADE_KIT].primary_ammo_percent == 33 &&
+        tuning[SMR_PERK_GRENADE_KIT].secondary_ammo_percent == 33);
+    CHECK(tuning[SMR_PERK_GRENADE_KIT].armor_percent == -10 && tuning[SMR_PERK_ARMORED].armor_percent == 25 &&
         tuning[SMR_PERK_ARMORED].primary_ammo_percent == -10);
     CHECK(tuning[SMR_PERK_SPRINTER].sprint_percent == 10 && tuning[SMR_PERK_SPRINTER].stamina_percent == -25 &&
         tuning[SMR_PERK_ENDURANCE].stamina_percent == 25);
     CHECK(tuning[SMR_PERK_AUTO_STIM].health_percent == 20 && tuning[SMR_PERK_AUTO_STIM].cooldown_seconds == 30 &&
         tuning[SMR_PERK_AUTO_STIM].armor_percent == -10);
-    CHECK(tuning[SMR_PERK_FIELD_MEDIC].injury_seconds == 0.5 && tuning[SMR_PERK_FIELD_MEDIC].movement_percent == -10 &&
+    CHECK(tuning[SMR_PERK_FIELD_MEDIC].movement_percent == -10 &&
         tuning[SMR_PERK_FIELD_MEDIC].armor_percent == -10);
     std::string text, why;
     Value valid;
@@ -132,11 +132,11 @@ static void TestHelldiverConfig(const std::wstring& shippedPath, const std::wstr
         CHECK(ReadHelldiverConfig(tempPath, tuning, result, sizeof result) && strstr(result, "-10%"));
         CHECK(tuning[SMR_PERK_AUTO_STIM].armor_percent == -10 && tuning[SMR_PERK_FIELD_MEDIC].armor_percent == -10);
     }
-    for (int i = 0; i < 18; ++i)
+    for (int i = 0; i < 19; ++i)
     {
         Value document = valid;
         if (i == 0) document.Erase("super");
-        if (i == 1) document.At("plus").Erase("light_kit");
+        if (i == 1) document.At("plus").Erase("grenade_kit");
         if (i == 2) document.At("elite").At("armored").Erase("armor_percent");
         if (i == 3) document.At("elite").At("armored").At("sprint_percent") = Value::MakeNumber(5, true);
         if (i == 4) document.At("plus").At("armored") = document.At("elite").At("armored");
@@ -153,6 +153,7 @@ static void TestHelldiverConfig(const std::wstring& shippedPath, const std::wstr
         if (i == 15) document.At("super").At("auto_stim").At("stim_heal_percent") = Value::MakeNumber(-33, true);
         if (i == 16) document.At("super").At("auto_stim").At("armor_percent") = Value::MakeNumber(-91, true);
         if (i == 17) document.At("super").At("field_medic").At("armor_percent") = Value::MakeNumber(-91, true);
+        if (i == 18) document.At("super").At("field_medic").At("injury_seconds") = Value::MakeNumber(0.5, false);
         CHECK(WriteAtomically(tempPath, Write(document)));
         CHECK(!ReadHelldiverConfig(tempPath, tuning, result, sizeof result) && result[0]);
         CHECK(tuning[SMR_PERK_AUTO_STIM].health_percent == 12.5 && tuning[SMR_PERK_SPRINTER].price[REQUISITION_SLIPS] == 1500);

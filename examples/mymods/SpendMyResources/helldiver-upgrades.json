@@ -3,17 +3,16 @@
     "common_samples": 15,
     "primary_tradeoff": {
       "primary_ammo_percent": -50,
-      "secondary_ammo_percent": 50
+      "secondary_ammo_percent": 66
     },
     "secondary_tradeoff": {
-      "secondary_ammo_percent": -50,
+      "secondary_ammo_percent": -66,
       "primary_ammo_percent": 50
     },
-    "light_kit": {
-      "throwables_percent": -50,
-      "armor_percent": -10,
-      "primary_ammo_percent": 33,
-      "secondary_ammo_percent": 33
+    "grenade_kit": {
+      "throwables_percent": 66,
+      "primary_ammo_percent": -33,
+      "secondary_ammo_percent": -33
     }
   },
   "elite": {
@@ -40,7 +39,6 @@
       "armor_percent": -10
     },
     "field_medic": {
-      "injury_seconds": 0.5,
       "movement_percent": -10,
       "armor_percent": -10
     }

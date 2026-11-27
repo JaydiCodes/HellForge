@@ -298,11 +298,11 @@ int SmrLoadHelldiverConfig(SmrHelldiverTuning tuning[SMR_PERK_COUNT], char* resu
     tuning[SMR_PERK_SECONDARY_TRADEOFF] = plus;
     tuning[SMR_PERK_SECONDARY_TRADEOFF].secondary_ammo_percent = -50;
     tuning[SMR_PERK_SECONDARY_TRADEOFF].primary_ammo_percent = 50;
-    tuning[SMR_PERK_LIGHT_KIT] = plus;
-    tuning[SMR_PERK_LIGHT_KIT].throwables_percent = -50;
-    tuning[SMR_PERK_LIGHT_KIT].armor_percent = -10;
-    tuning[SMR_PERK_LIGHT_KIT].primary_ammo_percent = 33;
-    tuning[SMR_PERK_LIGHT_KIT].secondary_ammo_percent = 33;
+    tuning[SMR_PERK_GRENADE_KIT] = plus;
+    tuning[SMR_PERK_GRENADE_KIT].throwables_percent = -50;
+    tuning[SMR_PERK_GRENADE_KIT].armor_percent = -10;
+    tuning[SMR_PERK_GRENADE_KIT].primary_ammo_percent = 33;
+    tuning[SMR_PERK_GRENADE_KIT].secondary_ammo_percent = 33;
     tuning[SMR_PERK_ARMORED] = elite;
     tuning[SMR_PERK_ARMORED].armor_percent = 25;
     tuning[SMR_PERK_ARMORED].primary_ammo_percent = -10;
@@ -318,7 +318,6 @@ int SmrLoadHelldiverConfig(SmrHelldiverTuning tuning[SMR_PERK_COUNT], char* resu
     tuning[SMR_PERK_AUTO_STIM].cooldown_seconds = 30;
     tuning[SMR_PERK_AUTO_STIM].armor_percent = -10;
     tuning[SMR_PERK_FIELD_MEDIC] = super;
-    tuning[SMR_PERK_FIELD_MEDIC].injury_seconds = 2;
     tuning[SMR_PERK_FIELD_MEDIC].movement_percent = -10;
     tuning[SMR_PERK_FIELD_MEDIC].armor_percent = -10;
     return 1;
@@ -911,26 +910,17 @@ static void TestUpgradeEffects(void)
 
 static unsigned char health_buckets[32], health_descriptor[24], health_record[0x1B8], health_ext[0x1C];
 static void* health_descriptors[1];
-static uint32_t injured_limbs;
-static int heal_calls, heal_limb_calls;
+static int heal_calls;
+static float last_heal_amount;
 static int Heal(HfMod* unused, float amount)
 {
     heal_calls++;
-    int32_t max;
+    last_heal_amount = amount;
+    int32_t health, max;
+    memcpy(&health, health_record + 0x14, sizeof health);
     memcpy(&max, health_ext + 0x14, sizeof max);
-    Put32(health_record + 0x14, (uint32_t)max);
+    Put32(health_record + 0x14, (uint32_t)fminf((float)max, health + amount));
     return HF_ACT_DONE;
-}
-static int HealLimb(HfMod* unused, uint32_t limb)
-{
-    heal_limb_calls++;
-    injured_limbs &= ~(1u << limb);
-    return HF_ACT_DONE;
-}
-static int LimbState(HfMod* unused, uint32_t entity, uint32_t limb, HfLimbState* out)
-{
-    *out = (HfLimbState){45, 45, (injured_limbs >> limb) & 1};
-    return 1;
 }
 static double ItemCount(uint32_t id, uint8_t slot, int f)
 {
@@ -983,7 +973,7 @@ static void TestHelldiver(void)
         SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_PRIMARY_TRADEOFF));
     CHECK(!SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_ARMORED));
     CHECK(SmrHelldiver(&mod).available[SMR_TIER_SUPER]);
-    CHECK(SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_LIGHT_KIT) &&
+    CHECK(SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_GRENADE_KIT) &&
         SmrSelectHelldiver(&mod, SMR_TIER_ELITE, SMR_PERK_ARMORED) &&
         SmrSelectHelldiver(&mod, SMR_TIER_SUPER, SMR_PERK_AUTO_STIM));
     CHECK(SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_PRIMARY_TRADEOFF));
@@ -1014,7 +1004,7 @@ static void TestHelldiver(void)
     SmrFinishCheckout(0);
     OpenCheckout();
     status = SmrHelldiver(&mod);
-    CHECK(!status.available[SMR_TIER_PLUS] && !SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_LIGHT_KIT));
+    CHECK(!status.available[SMR_TIER_PLUS] && !SmrSelectHelldiver(&mod, SMR_TIER_PLUS, SMR_PERK_GRENADE_KIT));
     SmrFinishCheckout(0);
 
     const HfStateEvent prepare = {{0}, HF_STATE_SHIP, HF_STATE_PREPARE_MISSION};
@@ -1091,7 +1081,7 @@ static void TestHelldiver(void)
     CHECK(!helldiver_purchased[SMR_TIER_PLUS] && ItemCount(HF_ITEM_AR23_LIBERATOR, 0, 0) == 6 &&
         ItemCount(HF_ITEM_P2_PEACEMAKER, 1, 0) == 6);
 
-    helldiver_purchased[SMR_TIER_PLUS] = SMR_PERK_LIGHT_KIT;
+    helldiver_purchased[SMR_TIER_PLUS] = SMR_PERK_GRENADE_KIT;
     helldiver_purchased[SMR_TIER_ELITE] = SMR_PERK_ARMORED;
     UpgradeStateChanged(&mod, &prepare, NULL);
     CHECK(helldiver_applied && ItemCount(HF_ITEM_AR23_LIBERATOR, 0, 0) == 7 &&
@@ -1107,7 +1097,7 @@ static void TestHelldiver(void)
     CHECK(!helldiver_applied && !helldiver_purchased[SMR_TIER_PLUS] &&
         ItemCount(HF_ITEM_AR23_LIBERATOR, 0, 0) == 6 && ItemCount(HF_ITEM_P2_PEACEMAKER, 1, 0) == 6);
 
-    helldiver_purchased[SMR_TIER_PLUS] = SMR_PERK_LIGHT_KIT;
+    helldiver_purchased[SMR_TIER_PLUS] = SMR_PERK_GRENADE_KIT;
     helldiver_purchased[SMR_TIER_ELITE] = SMR_PERK_SPRINTER;
     helldiver_purchased[SMR_TIER_SUPER] = SMR_PERK_FIELD_MEDIC;
     UpgradeStateChanged(&mod, &prepare, NULL);
@@ -1125,12 +1115,42 @@ static void TestHelldiver(void)
     hit.damage.amount = 100;
     HelldiverDamagePre(&mod, &hit, NULL);
     CHECK(hit.damage.amount == 123);
-    injured_limbs = 1u << HF_LIMB_LEFT_LEG;
+    Put32(health_record + 0x14, 490);
+    const uint32_t injured_word = 2u << (2 * HF_LIMB_LEFT_LEG);
+    Put32(health_record + 0x20, injured_word);
+    HelldiverTick(&mod, 0.75f);
+    CHECK(heal_calls == 2 && *(int32_t*)(health_record + 0x14) == 490);
+    HelldiverTick(&mod, 0.25f);
+    CHECK(heal_calls == 3 && last_heal_amount == 1 && *(int32_t*)(health_record + 0x14) == 491);
+    CHECK(*(uint32_t*)(health_record + 0x20) == injured_word);
+    HelldiverTick(&mod, 1.5f);
+    CHECK(heal_calls == 4 && last_heal_amount == 1 && *(int32_t*)(health_record + 0x14) == 492);
+    HelldiverTick(&mod, 0.5f);
+    CHECK(heal_calls == 5 && last_heal_amount == 1 && *(int32_t*)(health_record + 0x14) == 493);
+    HelldiverTick(&mod, 2);
+    CHECK(heal_calls == 6 && last_heal_amount == 2 && *(int32_t*)(health_record + 0x14) == 495);
+    Put32(health_record + 0x14, 499);
+    HelldiverTick(&mod, 2);
+    CHECK(heal_calls == 7 && *(int32_t*)(health_record + 0x14) == 500);
+    HelldiverTick(&mod, 10);
+    CHECK(heal_calls == 7);
+    Put32(health_record + 0x14, 490);
+    HelldiverTick(&mod, 0.75f);
+    CHECK(heal_calls == 7);
+    Put32(health_record + 0x19C, 1);
     HelldiverTick(&mod, 1);
-    CHECK(!heal_limb_calls && injured_limbs);
+    CHECK(heal_calls == 7);
+    Put32(health_record + 0x19C, 2);
     HelldiverTick(&mod, 1);
-    CHECK(heal_limb_calls == 1 && !injured_limbs && heal_calls == 2);
+    CHECK(heal_calls == 7);
+    Put32(health_record + 0x19C, 0);
+    HelldiverTick(&mod, 0.75f);
+    CHECK(heal_calls == 7);
+    HelldiverTick(&mod, 0.25f);
+    CHECK(heal_calls == 8 && last_heal_amount == 1 && *(int32_t*)(health_record + 0x14) == 491);
     MissionEnd(&mod, NULL, NULL);
+    HelldiverTick(&mod, 2);
+    CHECK(heal_calls == 8);
     game_state = HF_STATE_SHIP;
     CHECK(!helldiver_purchased[SMR_TIER_SUPER] && ItemCount(HF_ITEM_G12_HIGH_EXPLOSIVE, 2, 0) == 4 &&
         Near(HelldiverNow(HELLDIVER_RESOURCE, &kSprint), 10) && Near(HelldiverNow(HELLDIVER_RESOURCE, &kMovement[0]), 10));
@@ -1746,7 +1766,7 @@ int main(void)
     api.logs_folder = Logs;
     api.session = Session; api.get_live = GetLive; api.set_live = SetLive;
     api.get_stat = GetStat; api.set_stat = SetStat;
-    api.heal = Heal; api.heal_limb = HealLimb; api.limb_state = LimbState;
+    api.heal = Heal;
     prices_refused = 1;
     CHECK(SmrInit(&api, &mod) != 0 && !subscription_calls);
     prices_refused = 0;

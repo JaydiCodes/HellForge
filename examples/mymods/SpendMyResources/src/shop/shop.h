@@ -60,20 +60,20 @@ typedef struct SmrExtraChoice {
 typedef enum SmrHelldiverTier { SMR_TIER_PLUS, SMR_TIER_ELITE, SMR_TIER_SUPER, SMR_TIER_COUNT } SmrHelldiverTier;
 typedef enum SmrHelldiverPerk {
     SMR_PERK_NONE,
-    SMR_PERK_PRIMARY_TRADEOFF, SMR_PERK_SECONDARY_TRADEOFF, SMR_PERK_LIGHT_KIT,
+    SMR_PERK_PRIMARY_TRADEOFF, SMR_PERK_SECONDARY_TRADEOFF, SMR_PERK_GRENADE_KIT,
     SMR_PERK_ARMORED, SMR_PERK_SPRINTER, SMR_PERK_ENDURANCE,
     SMR_PERK_AUTO_STIM, SMR_PERK_FIELD_MEDIC,
     SMR_PERK_COUNT
 } SmrHelldiverPerk;
 static inline SmrHelldiverTier SmrPerkTier(SmrHelldiverPerk perk)
 {
-    return perk <= SMR_PERK_LIGHT_KIT ? SMR_TIER_PLUS : perk <= SMR_PERK_ENDURANCE ? SMR_TIER_ELITE : SMR_TIER_SUPER;
+    return perk <= SMR_PERK_GRENADE_KIT ? SMR_TIER_PLUS : perk <= SMR_PERK_ENDURANCE ? SMR_TIER_ELITE : SMR_TIER_SUPER;
 }
 typedef struct SmrHelldiverTuning {
     unsigned price[CURRENCY_COUNT]; /* The perk's tier price, kCurrencies order. */
     double primary_ammo_percent, secondary_ammo_percent, throwables_percent;
     double armor_percent, sprint_percent, stamina_percent, movement_percent;
-    double health_percent, cooldown_seconds, injury_seconds;
+    double health_percent, cooldown_seconds;
 } SmrHelldiverTuning;
 typedef struct SmrHelldiverStatus {
     unsigned balance[CURRENCY_COUNT];

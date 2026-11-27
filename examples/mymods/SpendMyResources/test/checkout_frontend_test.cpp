@@ -83,7 +83,7 @@ static const SmrHelldiverTuning helldiverTuning[SMR_PERK_COUNT] = {
     {{0, 0, 10}, 0, 0, 0, 0, 10, -25},
     {{0, 0, 10}, 0, 0, 0, 0, -10, 25},
     {{0, 0, 0, 5}, 0, 0, 0, -10, 0, 0, 0, 20, 30},
-    {{0, 0, 0, 5}, 0, 0, 0, -10, 0, 0, -10, 0, 0, 0.5},
+    {{0, 0, 0, 5}, 0, 0, 0, -10, 0, 0, -10},
 };
 static bool helldiverConfigAvailable = true;
 extern "C" SmrHelldiverStatus SmrHelldiver(HfMod*) { return helldiver; }
@@ -1027,25 +1027,25 @@ static void CheckHelldiverTab(const char* screenshot, bool expectGameIcons)
     ImGui::Render();
     const ImRect primary = PressHelldiverPerk(SMR_TIER_PLUS, SMR_PERK_PRIMARY_TRADEOFF);
     const ImRect secondary = PressHelldiverPerk(SMR_TIER_PLUS, SMR_PERK_SECONDARY_TRADEOFF);
-    const ImRect light = PressHelldiverPerk(SMR_TIER_PLUS, SMR_PERK_LIGHT_KIT);
-    CHECK(primary.Min.y == secondary.Min.y && secondary.Min.y == light.Min.y &&
-        primary.Max.y == secondary.Max.y && secondary.Max.y == light.Max.y);
+    const ImRect grenade = PressHelldiverPerk(SMR_TIER_PLUS, SMR_PERK_GRENADE_KIT);
+    CHECK(primary.Min.y == secondary.Min.y && secondary.Min.y == grenade.Min.y &&
+        primary.Max.y == secondary.Max.y && secondary.Max.y == grenade.Max.y);
     const ImRect armored = PressHelldiverPerk(SMR_TIER_ELITE, SMR_PERK_ARMORED);
     const ImRect medic = PressHelldiverPerk(SMR_TIER_SUPER, SMR_PERK_FIELD_MEDIC);
-    CHECK(helldiver.selected[SMR_TIER_PLUS] == SMR_PERK_LIGHT_KIT && helldiver.selected[SMR_TIER_SUPER] == SMR_PERK_FIELD_MEDIC &&
+    CHECK(helldiver.selected[SMR_TIER_PLUS] == SMR_PERK_GRENADE_KIT && helldiver.selected[SMR_TIER_SUPER] == SMR_PERK_FIELD_MEDIC &&
         helldiver.selected[SMR_TIER_ELITE] == SMR_PERK_ARMORED);
-    CHECK(light.Min.x == armored.Min.x + 2 * (light.GetWidth() + ImGui::GetStyle().ItemSpacing.x));
-    CHECK(armored.Min.x == medic.Min.x - light.GetWidth() - ImGui::GetStyle().ItemSpacing.x);
-    CHECK(light.Max.y < armored.Min.y && armored.Max.y < medic.Min.y);
+    CHECK(grenade.Min.x == armored.Min.x + 2 * (grenade.GetWidth() + ImGui::GetStyle().ItemSpacing.x));
+    CHECK(armored.Min.x == medic.Min.x - grenade.GetWidth() - ImGui::GetStyle().ItemSpacing.x);
+    CHECK(grenade.Max.y < armored.Min.y && armored.Max.y < medic.Min.y);
     ImGuiWindow* panel = PanelWindow();
     CHECK(panel->DC.ChildWindows.Size == 1);
     ImGuiWindow* description = panel->DC.ChildWindows[0];
     Draw();
     CHECK(description->Pos.y > medic.Max.y && panel->ScrollMax.y == 0);
-    CheckModalText("Super: Field Medic", "Injured limbs heal after 0.5 s.", "Armor rating: -10%");
+    CheckModalText("Super: Field Medic", "Regenerate 1 HP every second.", "Armor rating: -10%");
     auto& io = ImGui::GetIO();
-    io.AddMousePosEvent(light.GetCenter().x, light.GetCenter().y);
-    CheckModalText("Plus: Light Kit", "Throwables: -50%", "Cost:");
+    io.AddMousePosEvent(grenade.GetCenter().x, grenade.GetCenter().y);
+    CheckModalText("Plus: Grenade Kit", "Throwables: -50%", "Cost:");
     CHECK(helldiver.selected[SMR_TIER_SUPER] == SMR_PERK_FIELD_MEDIC &&
         editorapp::helldiverSelection == SMR_PERK_FIELD_MEDIC);
     io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
@@ -1058,11 +1058,11 @@ static void CheckHelldiverTab(const char* screenshot, bool expectGameIcons)
     }
     PressModalButton("Review purchase");
     CHECK(editorapp::checkoutPanel == editorapp::CheckoutPanel::Purchase && !purchaseCalls);
-    CheckModalText("Plus: Light Kit", "Elite: Armored", "Super: Field Medic");
+    CheckModalText("Plus: Grenade Kit", "Elite: Armored", "Super: Field Medic");
     PressModalButton("Helldiver");
     CheckModalText("Super: Field Medic");
     PressHelldiverPerk(SMR_TIER_ELITE, SMR_PERK_NONE);
-    CHECK(!helldiver.selected[SMR_TIER_ELITE] && helldiver.selected[SMR_TIER_PLUS] == SMR_PERK_LIGHT_KIT &&
+    CHECK(!helldiver.selected[SMR_TIER_ELITE] && helldiver.selected[SMR_TIER_PLUS] == SMR_PERK_GRENADE_KIT &&
         helldiver.selected[SMR_TIER_SUPER] == SMR_PERK_FIELD_MEDIC);
     PressHelldiverPerk(SMR_TIER_PLUS, SMR_PERK_PRIMARY_TRADEOFF);
     CHECK(helldiver.selected[SMR_TIER_PLUS] == SMR_PERK_PRIMARY_TRADEOFF);
@@ -1074,10 +1074,10 @@ static void CheckHelldiverTab(const char* screenshot, bool expectGameIcons)
     CHECK(helldiver.selected[SMR_TIER_SUPER] == SMR_PERK_FIELD_MEDIC);
     transactionPending = 0;
     helldiver.available[SMR_TIER_PLUS] = 0;
-    PressHelldiverPerk(SMR_TIER_PLUS, SMR_PERK_LIGHT_KIT);
+    PressHelldiverPerk(SMR_TIER_PLUS, SMR_PERK_GRENADE_KIT);
     CHECK(!helldiver.selected[SMR_TIER_PLUS]);
-    io.AddMousePosEvent(light.GetCenter().x, light.GetCenter().y);
-    CheckModalText("Plus: Light Kit", "Upgrade selection unavailable.");
+    io.AddMousePosEvent(grenade.GetCenter().x, grenade.GetCenter().y);
+    CheckModalText("Plus: Grenade Kit", "Upgrade selection unavailable.");
     io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
     helldiver.available[SMR_TIER_PLUS] = 1;
     helldiver.purchased[SMR_TIER_SUPER] = SMR_PERK_FIELD_MEDIC;

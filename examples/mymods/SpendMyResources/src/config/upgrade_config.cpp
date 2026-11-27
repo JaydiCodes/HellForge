@@ -141,7 +141,7 @@ static int ReadHelldiverConfig(const std::wstring& path, SmrHelldiverTuning tuni
         return 0;
     }
     constexpr const char* tiers[SMR_TIER_COUNT] = {"plus", "elite", "super"};
-    constexpr const char* perks[SMR_PERK_COUNT] = {"", "primary_tradeoff", "secondary_tradeoff", "light_kit",
+    constexpr const char* perks[SMR_PERK_COUNT] = {"", "primary_tradeoff", "secondary_tradeoff", "grenade_kit",
         "armored", "sprinter", "endurance", "auto_stim", "field_medic"};
     constexpr struct { const char* name; size_t currency; } currencies[] = {
         {"requisition", REQUISITION_SLIPS}, {"common_samples", COMMON_SAMPLES}, {"rare_samples", RARE_SAMPLES},
@@ -155,13 +155,13 @@ static int ReadHelldiverConfig(const std::wstring& path, SmrHelldiverTuning tuni
         double SmrHelldiverTuning::* number;
     } fields[] = {
         {"primary_ammo_percent", (1u << SMR_PERK_PRIMARY_TRADEOFF) | (1u << SMR_PERK_SECONDARY_TRADEOFF) |
-            (1u << SMR_PERK_LIGHT_KIT) | (1u << SMR_PERK_ARMORED),
+            (1u << SMR_PERK_GRENADE_KIT) | (1u << SMR_PERK_ARMORED),
             -100, 1000, &SmrHelldiverTuning::primary_ammo_percent},
         {"secondary_ammo_percent", (1u << SMR_PERK_PRIMARY_TRADEOFF) | (1u << SMR_PERK_SECONDARY_TRADEOFF) |
-            (1u << SMR_PERK_LIGHT_KIT) | (1u << SMR_PERK_ARMORED),
+            (1u << SMR_PERK_GRENADE_KIT) | (1u << SMR_PERK_ARMORED),
             -100, 1000, &SmrHelldiverTuning::secondary_ammo_percent},
-        {"throwables_percent", 1u << SMR_PERK_LIGHT_KIT, -100, 1000, &SmrHelldiverTuning::throwables_percent},
-        {"armor_percent", (1u << SMR_PERK_LIGHT_KIT) | (1u << SMR_PERK_ARMORED) |
+        {"throwables_percent", 1u << SMR_PERK_GRENADE_KIT, -100, 1000, &SmrHelldiverTuning::throwables_percent},
+        {"armor_percent", (1u << SMR_PERK_GRENADE_KIT) | (1u << SMR_PERK_ARMORED) |
             (1u << SMR_PERK_AUTO_STIM) | (1u << SMR_PERK_FIELD_MEDIC), -90, 1000,
             &SmrHelldiverTuning::armor_percent},
         {"sprint_percent", (1u << SMR_PERK_SPRINTER) | (1u << SMR_PERK_ENDURANCE), -90, 1000,
@@ -171,7 +171,6 @@ static int ReadHelldiverConfig(const std::wstring& path, SmrHelldiverTuning tuni
         {"movement_percent", 1u << SMR_PERK_FIELD_MEDIC, -90, 1000, &SmrHelldiverTuning::movement_percent},
         {"health_percent", 1u << SMR_PERK_AUTO_STIM, 1, 99, &SmrHelldiverTuning::health_percent},
         {"cooldown_seconds", 1u << SMR_PERK_AUTO_STIM, 0, 86400, &SmrHelldiverTuning::cooldown_seconds},
-        {"injury_seconds", 1u << SMR_PERK_FIELD_MEDIC, 0, 3600, &SmrHelldiverTuning::injury_seconds},
     };
     SmrHelldiverTuning loaded[SMR_PERK_COUNT] = {};
     unsigned seenTiers = 0;

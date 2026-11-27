@@ -6,7 +6,6 @@ enum {
     MAX_HELLDIVER_EDITS = 24,
     MAX_MAGAZINES = 31,
     MAX_THROWABLES = 99,
-    LIMB_COUNT = 6,
     HEALTH_MAP = 0x1030,
     HEALTH_RECORD_STRIDE = 0x1B8,
     HEALTH_EXT_STRIDE = 0x1C
@@ -49,7 +48,7 @@ typedef struct HelldiverEdit {
 typedef struct HelldiverEffects {
     double primary, secondary, throwables, armor, damage, sprint, stamina, movement;
     int auto_stim, field_medic;
-    double health_percent, cooldown_seconds, injury_seconds;
+    double health_percent, cooldown_seconds;
 } HelldiverEffects;
 
 static SmrHelldiverTuning helldiver_tuning[SMR_PERK_COUNT];
@@ -60,7 +59,7 @@ static int helldiver_applied, helldiver_refused;
 static HelldiverEffects helldiver_effects;
 static struct {
     uint32_t avatar;
-    float poll, since_stim, injured[LIMB_COUNT];
+    float poll, since_stim, since_heal;
 } helldiver_runtime;
 
 const SmrHelldiverTuning* SmrGetHelldiverTuning(SmrHelldiverPerk perk)
@@ -142,10 +141,7 @@ static HelldiverEffects HelldiverPlanEffects(const SmrHelldiverPerk perks[SMR_TI
             fx.cooldown_seconds = t->cooldown_seconds;
         }
         if (perks[tier] == SMR_PERK_FIELD_MEDIC)
-        {
             fx.field_medic = 1;
-            fx.injury_seconds = t->injury_seconds;
-        }
     }
     fx.damage = 1 / fx.armor;
     return fx;
@@ -331,6 +327,8 @@ static int FinishHelldiver(HfMod* mod)
 
 static void HelldiverWeapon(HfMod* mod, const HfWeaponEvent* event, void* user)
 {
+    if (helldiver_runtime.avatar != event->avatar)
+        helldiver_runtime.since_heal = 0;
     helldiver_runtime.avatar = event->avatar;
 }
 
@@ -414,16 +412,17 @@ static void HelldiverTick(HfMod* mod, float dt)
         }
     }
     if (!helldiver_effects.field_medic) return;
-    for (uint32_t limb = 0; limb < LIMB_COUNT; ++limb)
+    if (!alive)
     {
-        HfLimbState state;
-        if (!alive || !api->limb_state(mod, avatar, limb, &state) || !state.injured)
-        {
-            helldiver_runtime.injured[limb] = 0;
-            continue;
-        }
-        helldiver_runtime.injured[limb] += elapsed;
-        if (helldiver_runtime.injured[limb] >= helldiver_effects.injury_seconds && api->heal_limb(mod, limb))
-            helldiver_runtime.injured[limb] = 0;
+        helldiver_runtime.since_heal = 0;
+        return;
+    }
+    helldiver_runtime.since_heal += elapsed;
+    float amount = floorf(helldiver_runtime.since_heal);
+    if (amount >= 1)
+    {
+        helldiver_runtime.since_heal -= amount;
+        if (health < max && !api->heal(mod, amount))
+            api->log(mod, "Field medic: health regeneration refused.");
     }
 }
