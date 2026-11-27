@@ -12,10 +12,10 @@ static int (*ready_input_original)(uintptr_t button, uintptr_t input);
 static int ReadReadyLoadout(HfMod* mod, uintptr_t card, uint64_t* selected)
 {
     uint64_t equipped = 0;
-    int valid = ReadRestrictedItems(HF_API(mod), ReadCardLoadout(mod, card), &equipped);
+    uint32_t primary = 0;
+    int valid = ReadRestrictedItems(HF_API(mod), ReadCardLoadout(mod, card), &equipped, &primary);
     AcquireSRWLockExclusive(&shop_lock);
-    checkout_equipped = equipped;
-    checkout_valid = valid;
+    UpdateCheckoutLoadout(equipped, primary, valid);
     if (selected) *selected = WithExtraAccess(equipped);
     ReleaseSRWLockExclusive(&shop_lock);
     if (!valid) ShopMessage(mod, "Ready blocked: could not read the current local loadout.");
@@ -36,7 +36,7 @@ static int ResumeReady(HfMod* mod, uintptr_t card)
     if (!ReadReadyLoadout(mod, card, &selected)) return 0;
     AcquireSRWLockShared(&shop_lock);
     unsigned total;
-    int ready = selected == ready_selection && !UnpaidItems(selected, &total) && !upgrade_selected &&
+    int ready = selected == ready_selection && checkout_primary == ready_primary && !UnpaidItems(selected, &total) && !upgrade_selected &&
         !helldiver_selected[SMR_TIER_PLUS] && !helldiver_selected[SMR_TIER_ELITE] && !helldiver_selected[SMR_TIER_SUPER];
     ReleaseSRWLockShared(&shop_lock);
     if (!ready) ShopMessage(mod, "Automatic Ready cancelled: review the current loadout costs.");

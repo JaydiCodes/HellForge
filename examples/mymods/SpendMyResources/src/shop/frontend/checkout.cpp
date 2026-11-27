@@ -10,8 +10,10 @@ static void PurchasePanel(uint64_t requisition, const unsigned price[CURRENCY_CO
 {
     const SmrDestroyerStatus upgrade = SmrDestroyer(mod);
     const SmrHelldiverStatus helldiver = SmrHelldiver(mod);
+    const SmrEquipmentStatus equipment = SmrEquipment();
     bool perks = false;
     for (SmrHelldiverPerk perk : helldiver.selected) perks = perks || perk != SMR_PERK_NONE;
+    for (const auto& row : equipment.tiers) perks = perks || row.selected;
     unsigned balance = 0;
     if (SmrBalance(&balance))
     {
@@ -47,6 +49,10 @@ static void PurchasePanel(uint64_t requisition, const unsigned price[CURRENCY_CO
         for (int tier = 0; tier < SMR_TIER_COUNT; ++tier)
             if (helldiver.selected[tier])
                 ImGui::TextWrapped("%s: %s", kHelldiverTiers[tier], PerkName(helldiver.selected[tier]));
+        for (const auto& row : equipment.tiers)
+            if (row.selected)
+                ImGui::TextWrapped("%s - %s: %s", row.group->weapon, kHelldiverTiers[row.group->tier],
+                    row.group->choices[row.selected - 1].title);
         ImGui::TextUnformatted("Cost:");
         ImGui::SameLine();
         UpgradeCostValues(price, upgrade.balance);
@@ -96,11 +102,13 @@ static void CheckoutTabs(bool pending)
 {
     static constexpr struct { const char* label; CheckoutPanel panel; } tabs[] = {
         {"Destroyer", CheckoutPanel::Destroyer}, {"Helldiver", CheckoutPanel::Helldiver},
-        {"Purchase##tab", CheckoutPanel::Purchase}
+        {"Equipment", CheckoutPanel::Equipment}, {"Purchase##tab", CheckoutPanel::Purchase}
     };
     constexpr size_t count = IM_ARRAYSIZE(tabs);
     ImVec2 min[count], max[count];
     size_t current = 0;
+    const float tabWidth = std::min(100.0f, (ImGui::GetContentRegionAvail().x -
+        (count - 1) * ImGui::GetStyle().ItemSpacing.x) / count);
     ImGui::BeginDisabled(pending);
     ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
     for (size_t i = 0; i < IM_ARRAYSIZE(tabs); ++i)
@@ -113,7 +121,7 @@ static void CheckoutTabs(bool pending)
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, surface);
         ImGui::PushStyleColor(ImGuiCol_Text, active ? ImGui::ColorConvertU32ToFloat4(kAccentText) :
             ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-        if (ImGui::Selectable(tab.label, active, 0, ImVec2(100, ImGui::GetFrameHeight())) && !pending)
+        if (ImGui::Selectable(tab.label, active, 0, ImVec2(tabWidth, ImGui::GetFrameHeight())) && !pending)
             checkoutPanel = tab.panel;
         ImGui::PopStyleColor(3);
         min[i] = ImGui::GetItemRectMin();
@@ -158,7 +166,8 @@ void CheckoutFrame(float width, float height)
         CheckoutTabs(pending != 0);
         ImGui::Separator();
         const bool destroyer = checkoutPanel == CheckoutPanel::Destroyer;
-        const bool helldiverTab = checkoutPanel == CheckoutPanel::Helldiver, purchase = !destroyer && !helldiverTab;
+        const bool helldiverTab = checkoutPanel == CheckoutPanel::Helldiver;
+        const bool equipmentTab = checkoutPanel == CheckoutPanel::Equipment, purchase = checkoutPanel == CheckoutPanel::Purchase;
         const uint64_t requisition = SmrRequisitionDue(gearCost, price);
         const bool hasCharges = requisition != 0 || HasOtherCurrencyCharge(price);
         const SmrDestroyerStatus upgrade = destroyer ? SmrDestroyer(mod) : SmrDestroyerStatus{};
@@ -168,11 +177,13 @@ void CheckoutFrame(float width, float height)
         float footer = ImGui::GetFrameHeightWithSpacing() + spacing;
         if (purchase)
             footer += ImGui::CalcTextSize(totalText.c_str(), nullptr, false, ImGui::GetContentRegionAvail().x).y + spacing;
-        if (ImGui::BeginChild(destroyer ? "Destroyer panel" : helldiverTab ? "Helldiver panel" : "Purchase panel",
+        if (ImGui::BeginChild(destroyer ? "Destroyer panel" : helldiverTab ? "Helldiver panel" :
+                equipmentTab ? "Equipment panel" : "Purchase panel",
                 ImVec2(0, -footer)))
         {
             if (destroyer) DestroyerPanel(upgrade, pending != 0);
             else if (helldiverTab) HelldiverPanel(helldiver, pending != 0);
+            else if (equipmentTab) EquipmentPanel(pending != 0);
             else
             {
                 PurchasePanel(requisition, price);
@@ -187,6 +198,7 @@ void CheckoutFrame(float width, float height)
         ImGui::Separator();
         if (destroyer) DestroyerActions(pending != 0);
         else if (helldiverTab) HelldiverActions(pending != 0);
+        else if (equipmentTab) EquipmentActions(pending != 0);
         else PurchaseActions(requisition, price, hasCharges, action, pending);
     }
     TrackPanel(PositionPanel::Checkout);

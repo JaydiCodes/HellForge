@@ -54,7 +54,7 @@ int SmrQuoteLoadout(HfMod* mod, SmrLoadoutQuote* out)
     uintptr_t game = shop_failed ? 0 : game_base;
     ReleaseSRWLockShared(&shop_lock);
     uint64_t equipped;
-    if (!game || !ReadRestrictedItems(HF_API(mod), ReadPickerLoadout(mod, game), &equipped))
+    if (!game || !ReadRestrictedItems(HF_API(mod), ReadPickerLoadout(mod, game), &equipped, NULL))
         return 0;
     AcquireSRWLockShared(&shop_lock);
     int valid = !shop_failed;
@@ -116,7 +116,8 @@ static void ShopTick(HfMod* mod, float dt, void* user)
     ProcessKillReward(mod, manager);
     if (shop_failed) return;
     uint64_t equipped = 0;
-    int selection_read = ReadEquippedItems(mod, &equipped);
+    uint32_t primary = 0;
+    int selection_read = ReadEquippedItems(mod, &equipped, &primary);
     unsigned balance = 0;
     int ready = manager && ItemRecord(api, manager, REQUISITION, &balance);
     AcquireSRWLockExclusive(&shop_lock);
@@ -124,8 +125,7 @@ static void ShopTick(HfMod* mod, float dt, void* user)
     inventory_ready = ready;
     wallet = balance;
     int state = charge.state;
-    checkout_equipped = equipped;
-    checkout_valid = selection_read;
+    UpdateCheckoutLoadout(equipped, primary, selection_read);
     ReleaseSRWLockExclusive(&shop_lock);
     if (became_ready && state == CHARGE_IDLE)
         ShopMessage(mod, "Purchases charge your saved Spend My Resources wallet.");

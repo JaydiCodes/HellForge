@@ -10,6 +10,7 @@
 #include "shop/ready_gate.c"
 #include "gameplay/destroyer.c"
 #include "gameplay/helldiver.c"
+#include "gameplay/equipment.c"
 #include "gameplay/missions.c"
 #include "currency/exchange.c"
 #include "shop/purchases.c"
@@ -52,6 +53,11 @@ int SmrInit(const HfApi* api, HfMod* mod)
         api->log(mod, "Cannot load helldiver-upgrades.json: %s Helldiver upgrades disabled.", detail);
     else
         api->log(mod, "Loaded helldiver-upgrades.json.%s%s", detail[0] ? " " : "", detail);
+    equipment_config_loaded = SmrLoadEquipmentConfig(kEquipmentGroups, EQUIPMENT_GROUP_COUNT, detail, sizeof detail);
+    if (!equipment_config_loaded)
+        api->log(mod, "Cannot load equipment-upgrades.json: %s Equipment upgrades disabled.", detail);
+    else
+        api->log(mod, "Loaded equipment-upgrades.json.");
     kill_rewards_ready = InitKillRewards(mod);
     if ((kill_rewards_ready &&
             (hf_on_spawn(mod, EnemySpawned, NULL, 0) || hf_on_kill(mod, EnemyKilled, NULL, 0))) ||

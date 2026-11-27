@@ -11,6 +11,7 @@ void SmrFinishCheckout(int ready)
         AcquireSRWLockExclusive(&shop_lock);
         upgrade_selected = SMR_UPGRADE_NONE;
         memset(helldiver_selected, 0, sizeof helldiver_selected);
+        memset(equipment_selected, 0, sizeof equipment_selected);
         if (upgrade_purchased != SMR_UPGRADE_EXTRA_SLOT) extra_pick = 0;
         InterlockedExchange(&checkout_gate, CHECKOUT_IDLE);
         ReleaseSRWLockExclusive(&shop_lock);
@@ -26,14 +27,24 @@ static int UpgradeAffordable(const unsigned price[CURRENCY_COUNT], const unsigne
     return 1;
 }
 
-/* The Destroyer and Helldiver upgrade prices together; returns whether either is priced. */
+static void AddUpgradePrice(unsigned total[CURRENCY_COUNT], const unsigned add[CURRENCY_COUNT])
+{
+    for (size_t i = 0; i < CURRENCY_COUNT; ++i)
+        total[i] = total[i] > UINT32_MAX - add[i] ? UINT32_MAX : total[i] + add[i];
+}
+
 static int CheckoutUpgradePrice(SmrUpgrade upgrade, const SmrHelldiverPerk perks[SMR_TIER_COUNT],
-    unsigned price[CURRENCY_COUNT])
+    const unsigned equipment[EQUIPMENT_GROUP_COUNT], unsigned price[CURRENCY_COUNT])
 {
     unsigned helldiver[CURRENCY_COUNT];
     int destroyer = UpgradePrice(upgrade, price), any = HelldiverPrice(perks, helldiver);
-    for (size_t i = 0; i < CURRENCY_COUNT; ++i)
-        price[i] = price[i] > UINT32_MAX - helldiver[i] ? UINT32_MAX : price[i] + helldiver[i];
+    AddUpgradePrice(price, helldiver);
+    for (size_t i = 0; i < EQUIPMENT_GROUP_COUNT; ++i)
+        if (equipment[i])
+        {
+            AddUpgradePrice(price, kEquipmentGroups[i].price);
+            any = 1;
+        }
     return destroyer || any;
 }
 
@@ -57,7 +68,7 @@ SmrCheckoutAction SmrCheckout(unsigned* gear_cost, unsigned upgrade_price[CURREN
 {
     AcquireSRWLockShared(&shop_lock);
     UnpaidItems(WithExtraAccess(checkout_equipped), gear_cost);
-    int upgrade = CheckoutUpgradePrice(upgrade_selected, helldiver_selected, upgrade_price);
+    int upgrade = CheckoutUpgradePrice(upgrade_selected, helldiver_selected, equipment_selected, upgrade_price);
     *pending = CheckoutPending();
     SmrCheckoutAction action = CheckoutAction(*gear_cost, upgrade, upgrade_price, *pending);
     ReleaseSRWLockShared(&shop_lock);
@@ -75,7 +86,7 @@ int SmrConfirmCheckout(HfMod* mod, SmrCheckoutAction action)
     unsigned gear_cost, upgrade_price[CURRENCY_COUNT];
     uint64_t selected = WithExtraAccess(checkout_equipped);
     uint64_t unpaid = UnpaidItems(selected, &gear_cost);
-    int upgrade = CheckoutUpgradePrice(upgrade_selected, helldiver_selected, upgrade_price);
+    int upgrade = CheckoutUpgradePrice(upgrade_selected, helldiver_selected, equipment_selected, upgrade_price);
     if (CheckoutGate() != CHECKOUT_OPEN || action == SMR_CHECKOUT_BLOCKED ||
         action != CheckoutAction(gear_cost, upgrade, upgrade_price, CheckoutPending()))
     {
@@ -86,6 +97,7 @@ int SmrConfirmCheckout(HfMod* mod, SmrCheckoutAction action)
     if (action == SMR_CHECKOUT_CONTINUE)
     {
         ready_selection = selected;
+        ready_primary = checkout_primary;
         InterlockedExchange(&checkout_gate, CHECKOUT_CONFIRMED);
         ReleaseSRWLockExclusive(&shop_lock);
         return 1;
@@ -97,6 +109,7 @@ int SmrConfirmCheckout(HfMod* mod, SmrCheckoutAction action)
     for (int tier = 0; tier < SMR_TIER_COUNT; ++tier)
         charge.helldiver[tier] = SmrGetHelldiverTuning(helldiver_selected[tier]) ? helldiver_selected[tier] : SMR_PERK_NONE;
     charge.extra = charge.upgrade == SMR_UPGRADE_EXTRA_SLOT ? extra_pick : 0;
+    memcpy(charge.equipment, equipment_selected, sizeof charge.equipment);
     charge.state = CHARGE_QUEUED;
     ReleaseSRWLockExclusive(&shop_lock);
     ShopMessage(mod, "Processing loadout purchase...");
@@ -123,7 +136,8 @@ static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, un
     if (state != CHARGE_QUEUED) return;
     uint64_t equipped = 0;
     unsigned gear_cost, upgrade_price[CURRENCY_COUNT], expected[CURRENCY_COUNT];
-    int readable = ReadEquippedItems(mod, &equipped);
+    uint32_t primary = 0;
+    int readable = ReadEquippedItems(mod, &equipped, &primary);
     AcquireSRWLockShared(&shop_lock);
     uint64_t selected = WithExtraAccess(equipped);
     uint64_t unpaid = UnpaidItems(selected, &gear_cost), mask = charge.mask;
@@ -134,11 +148,14 @@ static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, un
     uint32_t extra = charge.extra;
     SmrHelldiverPerk helldiver[SMR_TIER_COUNT];
     memcpy(helldiver, charge.helldiver, sizeof helldiver);
-    int helldiver_any = HelldiverAny(helldiver), upgrades = upgrade || helldiver_any;
-    int upgrade_valid = upgrades &&
-        (!upgrade || (upgrade_selected == upgrade && !upgrade_purchased &&
+    unsigned equipment[EQUIPMENT_GROUP_COUNT];
+    memcpy(equipment, charge.equipment, sizeof equipment);
+    int upgrades = CheckoutUpgradePrice(upgrade, helldiver, equipment, expected);
+    int upgrade_valid = (!upgrade || (upgrade_selected == upgrade && !upgrade_purchased &&
             (upgrade != SMR_UPGRADE_EXTRA_SLOT || extra == extra_pick))) &&
-        CheckoutUpgradePrice(upgrade, helldiver, expected) && !memcmp(expected, upgrade_price, sizeof expected);
+        !memcmp(expected, upgrade_price, sizeof expected);
+    for (size_t i = 0; i < EQUIPMENT_GROUP_COUNT; ++i)
+        if (equipment[i] && (equipment_selected[i] != equipment[i] || equipment_purchased[i])) upgrade_valid = 0;
     for (int tier = 0; tier < SMR_TIER_COUNT; ++tier)
         if (helldiver[tier] && (helldiver_selected[tier] != helldiver[tier] || helldiver_purchased[tier]))
             upgrade_valid = 0;
@@ -149,7 +166,8 @@ static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, un
     if (!active || api->game_state(mod) != HF_STATE_SHIP || !manager || !readable || unpaid != mask ||
         gear_cost != quoted_gear_cost || (requisition && (!balance_ready || balance < requisition)) ||
         (upgrades && (!upgrade_valid || !UpgradeFunded(api, manager, upgrade_price, before) ||
-            (upgrade && !CanApplyUpgrade(mod, upgrade, extra)) || (helldiver_any && !CanApplyHelldiver(mod, helldiver)))))
+            (upgrade && !CanApplyUpgrade(mod, upgrade, extra)) || !CanApplyHelldiver(mod, helldiver) ||
+            !CanApplyEquipment(mod, primary, equipment))))
     {
         AcquireSRWLockExclusive(&shop_lock);
         charge.state = CHARGE_IDLE;
@@ -186,10 +204,17 @@ static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, un
                 helldiver_purchased[tier] = helldiver[tier];
                 helldiver_selected[tier] = SMR_PERK_NONE;
             }
+        for (size_t i = 0; i < EQUIPMENT_GROUP_COUNT; ++i)
+            if (equipment[i])
+            {
+                equipment_purchased[i] = equipment[i];
+                equipment_selected[i] = 0;
+            }
         for (size_t i = COMMON_SAMPLES; i < CURRENCY_COUNT && upgrades; ++i)
             if (upgrade_price[i]) currency_amount[i] = upgrade_after[i];
         charge.state = CHARGE_IDLE;
         ready_selection = selected;
+        ready_primary = primary;
         InterlockedCompareExchange(&checkout_gate, CHECKOUT_CONFIRMED, CHECKOUT_OPEN);
         ReleaseSRWLockExclusive(&shop_lock);
         api->log(mod, "Purchased loadout: %u Req, %u Forge Credits, %u Common, %u Rare and %u Super samples, "

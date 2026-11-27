@@ -43,6 +43,7 @@ static int LogLoadout(HfMod* mod, uintptr_t loadout, const char* when)
     api->log(mod, "  Total listed loadout price: %u Requisition slips (charged at purchase, not again at deployment)", total);
     ApplyUpgrade(mod, loadout, 0);
     ApplyHelldiver(mod, loadout);
+    ApplyEquipment(mod, weapons[0]);
     return 1;
 }
 
@@ -175,6 +176,7 @@ static void MissionEnd(HfMod* mod, const HfStateEvent* event, void* user)
     int consumed_upgrade = upgraded_count != 0;
     ResetUpgrade(mod);
     int consumed_helldiver = FinishHelldiver(mod);
+    FinishEquipment(mod);
     AcquireSRWLockExclusive(&shop_lock);
     if (consumed_upgrade)
     {

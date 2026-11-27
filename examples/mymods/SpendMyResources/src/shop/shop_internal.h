@@ -1,6 +1,7 @@
 #pragma once
 #include "shop.h"
 #include "../access/access_items.h"
+#include "../gameplay/equipment_catalog.h"
 #include "../currency/currency_ledger.h"
 #include <windows.h>
 #include <stdio.h>
@@ -18,6 +19,7 @@ static char shop_message[192] = "Waiting for the player's inventory.";
 static SRWLOCK shop_lock = SRWLOCK_INIT;
 static const char* logs_folder;
 static uint64_t checkout_equipped, ready_selection;
+static uint32_t checkout_primary, ready_primary;
 static int checkout_valid;
 enum { CHECKOUT_IDLE, CHECKOUT_REQUESTED, CHECKOUT_OPEN, CHECKOUT_CONFIRMED, CHECKOUT_RESUME };
 static volatile LONG checkout_gate;
@@ -25,6 +27,7 @@ static LONG CheckoutGate(void) { return InterlockedCompareExchange(&checkout_gat
 static SmrUpgrade upgrade_selected, upgrade_purchased;
 static uint32_t extra_pick;
 static SmrHelldiverPerk helldiver_selected[SMR_TIER_COUNT], helldiver_purchased[SMR_TIER_COUNT];
+static unsigned equipment_selected[EQUIPMENT_GROUP_COUNT], equipment_purchased[EQUIPMENT_GROUP_COUNT];
 static unsigned currency_amount[CURRENCY_COUNT], currency_cap[CURRENCY_COUNT];
 static int exchange_ready, upgrade_funds_ready;
 static struct {
@@ -41,7 +44,13 @@ static struct {
     SmrUpgrade upgrade;
     uint32_t extra;
     SmrHelldiverPerk helldiver[SMR_TIER_COUNT];
+    unsigned equipment[EQUIPMENT_GROUP_COUNT];
 } charge;
+
+static int TierSelectionOpen(void)
+{
+    return CheckoutGate() == CHECKOUT_OPEN && charge.state == CHARGE_IDLE && !exchange.pending;
+}
 
 static void ShopMessage(HfMod* mod, const char* text);
 static void StopShop(HfMod* mod, const char* text);

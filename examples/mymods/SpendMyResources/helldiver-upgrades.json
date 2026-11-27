@@ -11,6 +11,7 @@
     },
     "grenade_kit": {
       "throwables_percent": 66,
+      "armor_percent": 0,
       "primary_ammo_percent": -33,
       "secondary_ammo_percent": -33
     }

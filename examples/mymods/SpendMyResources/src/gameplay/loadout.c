@@ -100,13 +100,14 @@ static int ContainsPick(const uint32_t* picks, uint32_t count, uint32_t type)
     return 0;
 }
 
-static int ReadRestrictedItems(const HfApi* api, uintptr_t loadout, uint64_t* selected)
+static int ReadRestrictedItems(const HfApi* api, uintptr_t loadout, uint64_t* selected, uint32_t* primary)
 {
     uint32_t count = 0, weapons[3], stratagems[MAX_STRATAGEMS];
     if (!ReadStratagems(api, loadout, stratagems, &count)) return 0;
     for (size_t i = 0; i < 3; ++i)
         if (api->read(loadout + i * WEAPON_STRIDE, &weapons[i], sizeof weapons[i])) return 0;
     *selected = 0;
+    if (primary) *primary = weapons[0];
     for (size_t i = 0; i < PRICE_COUNT; ++i)
     {
         int weapon = kLoadoutPrices[i].kind == PRICE_WEAPON;
@@ -117,9 +118,18 @@ static int ReadRestrictedItems(const HfApi* api, uintptr_t loadout, uint64_t* se
     return 1;
 }
 
-static int ReadEquippedItems(HfMod* mod, uint64_t* selected)
+static int ReadEquippedItems(HfMod* mod, uint64_t* selected, uint32_t* primary)
 {
-    return ReadRestrictedItems(HF_API(mod), ReadPickerLoadout(mod, game_base), selected);
+    return ReadRestrictedItems(HF_API(mod), ReadPickerLoadout(mod, game_base), selected, primary);
+}
+
+/* Called under shop_lock: a checkout pick belongs to the item it was made for, not its slot. */
+static void UpdateCheckoutLoadout(uint64_t equipped, uint32_t primary, int valid)
+{
+    checkout_equipped = equipped;
+    checkout_valid = valid;
+    if (checkout_primary != primary || !valid) memset(equipment_selected, 0, sizeof equipment_selected);
+    checkout_primary = valid ? primary : 0;
 }
 
 /* Merge the extra under shop_lock so a new or removed upgrade changes the quote immediately. */

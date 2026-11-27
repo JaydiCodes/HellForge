@@ -17,4 +17,5 @@ the mod removes the custom override so co-op uses the regular balance-pass stats
 
 Todo:
 - Suppport modded items
-- Stamina should affect level of knockdown mitigation
+- Mod menu to disable sections, individual changes or all together
+- Release mod

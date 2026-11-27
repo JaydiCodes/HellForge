@@ -2,6 +2,7 @@
 #include "../src/config/prices.cpp"
 #include "../src/config/upgrade_config.cpp"
 #include "../src/access/access_items.h"
+#include "../src/gameplay/equipment_catalog.h"
 #include <algorithm>
 
 #define CHECK(test) do { if (!(test)) { printf("FAIL line %d: %s\n", __LINE__, #test); exit(1); } } while (0)
@@ -89,17 +90,19 @@ static void TestHelldiverConfig(const std::wstring& shippedPath, const std::wstr
     using namespace hfjson;
     char result[256] = {};
     SmrHelldiverTuning tuning[SMR_PERK_COUNT] = {};
-    CHECK(ReadHelldiverConfig(shippedPath, tuning, result, sizeof result));
+    const int loaded = ReadHelldiverConfig(shippedPath, tuning, result, sizeof result);
+    if (!loaded) printf("Helldiver configuration rejected: %s\n", result);
+    CHECK(loaded);
     CHECK(tuning[SMR_PERK_PRIMARY_TRADEOFF].price[COMMON_SAMPLES] == 15 && tuning[SMR_PERK_GRENADE_KIT].price[COMMON_SAMPLES] == 15 &&
         tuning[SMR_PERK_ARMORED].price[RARE_SAMPLES] == 10 && tuning[SMR_PERK_FIELD_MEDIC].price[SUPER_SAMPLES] == 5 &&
         !tuning[SMR_PERK_ARMORED].price[COMMON_SAMPLES] && !tuning[SMR_PERK_NONE].price[COMMON_SAMPLES]);
     CHECK(tuning[SMR_PERK_PRIMARY_TRADEOFF].primary_ammo_percent == -50 &&
-        tuning[SMR_PERK_PRIMARY_TRADEOFF].secondary_ammo_percent == 50);
+        tuning[SMR_PERK_PRIMARY_TRADEOFF].secondary_ammo_percent == 66);
     CHECK(tuning[SMR_PERK_SECONDARY_TRADEOFF].primary_ammo_percent == 50 &&
-        tuning[SMR_PERK_SECONDARY_TRADEOFF].secondary_ammo_percent == -50);
-    CHECK(tuning[SMR_PERK_GRENADE_KIT].throwables_percent == -50 && tuning[SMR_PERK_GRENADE_KIT].primary_ammo_percent == 33 &&
-        tuning[SMR_PERK_GRENADE_KIT].secondary_ammo_percent == 33);
-    CHECK(tuning[SMR_PERK_GRENADE_KIT].armor_percent == -10 && tuning[SMR_PERK_ARMORED].armor_percent == 25 &&
+        tuning[SMR_PERK_SECONDARY_TRADEOFF].secondary_ammo_percent == -66);
+    CHECK(tuning[SMR_PERK_GRENADE_KIT].throwables_percent == 66 && tuning[SMR_PERK_GRENADE_KIT].primary_ammo_percent == -33 &&
+        tuning[SMR_PERK_GRENADE_KIT].secondary_ammo_percent == -33);
+    CHECK(tuning[SMR_PERK_GRENADE_KIT].armor_percent == 0 && tuning[SMR_PERK_ARMORED].armor_percent == 25 &&
         tuning[SMR_PERK_ARMORED].primary_ammo_percent == -10);
     CHECK(tuning[SMR_PERK_SPRINTER].sprint_percent == 10 && tuning[SMR_PERK_SPRINTER].stamina_percent == -25 &&
         tuning[SMR_PERK_ENDURANCE].stamina_percent == 25);
@@ -215,10 +218,113 @@ static void TestKillRewards(const std::wstring& shippedPath, const std::wstring&
     puts("PASS kill rewards config: shipped enemy values, defaults, zero and maximum, strict validation.");
 }
 
+static std::vector<double> EquipmentSnapshot()
+{
+    std::vector<double> values;
+    for (const auto& group : kEquipmentGroups)
+    {
+        for (unsigned price : group.price) values.push_back(price);
+        for (size_t c = 0; c < group.count; ++c)
+            for (size_t e = 0; e < group.choices[c].edit_count; ++e)
+                values.push_back(group.choices[c].edits[e].value);
+    }
+    return values;
+}
+
+static void TestEquipmentConfig(const std::wstring& shippedPath, const std::wstring& tempPath)
+{
+    using namespace hfjson;
+    char result[256] = {};
+    CHECK(ReadEquipmentConfig(shippedPath, kEquipmentGroups, EQUIPMENT_GROUP_COUNT, result, sizeof result));
+    CHECK(kHe[0].value == 100 && kAphe[1].value == 1000 && kApfsds[2].value == 6 &&
+        kFdi[1].value == 450 && kApi[0].value == 450);
+    Value valid;
+    std::string text, why;
+    CHECK(ReadFile(shippedPath, &text) && Parse(text, &valid, &why));
+    for (const auto& group : kEquipmentGroups)
+    {
+        CHECK(group.price[SUPER_SAMPLES] == 5 && !group.price[REQUISITION_SLIPS]);
+        auto& tier = valid.At(group.weapon).At("super");
+        tier.At("requisition") = Value::MakeNumber(250, true);
+        tier.At("common_samples") = Value::MakeNumber(3, true);
+        tier.At("rare_samples") = Value::MakeNumber(4, true);
+        tier.At("super_samples") = Value::MakeNumber(7, true);
+        tier.At("forge_credits") = Value::MakeNumber(2, true);
+        for (size_t c = 0; c < group.count; ++c)
+            for (size_t e = 0; e < group.choices[c].edit_count; ++e)
+            {
+                const auto& edit = group.choices[c].edits[e];
+                const bool whole = edit.field.type != HF_TYPE_F32;
+                tier.At(group.choices[c].title).At(edit.key) = Value::MakeNumber(whole ? 17 : 2.75, whole);
+            }
+        std::reverse(tier.members.begin(), tier.members.end());
+    }
+    std::reverse(valid.members.begin(), valid.members.end());
+    CHECK(WriteAtomically(tempPath, Write(valid)));
+    CHECK(ReadEquipmentConfig(tempPath, kEquipmentGroups, EQUIPMENT_GROUP_COUNT, result, sizeof result) && !result[0]);
+    for (const auto& group : kEquipmentGroups)
+    {
+        const unsigned expected[] = {250, 3, 4, 7, 2};
+        CHECK(!memcmp(group.price, expected, sizeof expected));
+        for (size_t c = 0; c < group.count; ++c)
+            for (size_t e = 0; e < group.choices[c].edit_count; ++e)
+            {
+                const auto& edit = group.choices[c].edits[e];
+                CHECK(edit.value == (edit.field.type == HF_TYPE_F32 ? 2.75 : 17));
+            }
+    }
+    const auto before = EquipmentSnapshot();
+    for (int i = 0; i < 14; ++i)
+    {
+        Value document = valid;
+        auto& tier = document.At("R-36 Eruptor").At("super");
+        auto& choice = tier.At("HE");
+        if (i == 0) document.Erase("R-4 Hyena");
+        if (i == 1) document.At("Unknown weapon") = document.At("R-4 Hyena");
+        if (i == 2) document.members.emplace_back("R-36 Eruptor", document.At("R-36 Eruptor"));
+        if (i == 3) tier.Erase("HE");
+        if (i == 4) choice.Erase("damage.standard_damage");
+        if (i == 5) choice.At("unknown") = Value::MakeNumber(1, true);
+        if (i == 6) choice.members.emplace_back("damage.standard_damage", Value::MakeNumber(1, true));
+        if (i == 7) tier.members.emplace_back("HE", choice);
+        if (i == 8) document.At("R-36 Eruptor").At("elite") = tier;
+        if (i == 9) tier.At("super_samples") = Value::MakeNumber(-1, true);
+        if (i == 10) choice.At("damage.standard_damage") = Value::MakeNumber(2147483648.0, true);
+        if (i == 11) choice.At("damage.ap_direct") = Value::MakeNumber(2.5, false);
+        if (i == 12) choice.kind = Value::Array;
+        if (i == 13) choice.At("damage.ap_direct") = Value::MakeNumber(4294967296.0, true);
+        CHECK(WriteAtomically(tempPath, Write(document)));
+        const int accepted = ReadEquipmentConfig(tempPath, kEquipmentGroups, EQUIPMENT_GROUP_COUNT, result, sizeof result);
+        if (accepted) printf("Accepted invalid equipment case %d\n", i);
+        CHECK(!accepted && result[0]);
+        CHECK(EquipmentSnapshot() == before);
+    }
+    for (const char* bad : {"-1", "\"2\"", "null", "true", "1e999", "1e40"})
+    {
+        Value document = valid, value;
+        CHECK(Parse(bad, &value, &why));
+        document.At("R-4 Hyena").At("super").At("super_samples") = Value::MakeNumber(0, true);
+        document.At("R-36 Eruptor").At("super").At("HE").At("explosion.inner_radius") = value;
+        CHECK(WriteAtomically(tempPath, Write(document)));
+        CHECK(!ReadEquipmentConfig(tempPath, kEquipmentGroups, EQUIPMENT_GROUP_COUNT, result, sizeof result) && result[0]);
+        CHECK(EquipmentSnapshot() == before);
+    }
+    CHECK(WriteAtomically(tempPath, "{"));
+    CHECK(!ReadEquipmentConfig(tempPath, kEquipmentGroups, EQUIPMENT_GROUP_COUNT, result, sizeof result) && result[0]);
+    CHECK(DeleteFileW(tempPath.c_str()));
+    CHECK(!ReadEquipmentConfig(tempPath, kEquipmentGroups, EQUIPMENT_GROUP_COUNT, result, sizeof result) && result[0]);
+    CHECK(EquipmentSnapshot() == before);
+    puts("PASS equipment config: shipped values, custom prices and every stat, strict validation, atomic failure.");
+}
+
 int main(int argc, char** argv)
 {
     using namespace hfjson;
-    CHECK(argc == 5);
+    CHECK(argc == 6 || (argc == 3 && !strcmp(argv[1], "--equipment")));
+    wchar_t equipmentTemp[MAX_PATH], equipmentFile[MAX_PATH];
+    CHECK(GetTempPathW(MAX_PATH, equipmentTemp) && GetTempFileNameW(equipmentTemp, L"smr", 0, equipmentFile));
+    TestEquipmentConfig(Wide(argv[argc == 3 ? 2 : 5]), equipmentFile);
+    if (argc == 3) return 0;
     const char* names[PRICE_COUNT];
     unsigned prices[PRICE_COUNT] = {};
     for (size_t i = 0; i < PRICE_COUNT; ++i) names[i] = kLoadoutPrices[i].name;

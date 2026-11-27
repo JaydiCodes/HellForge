@@ -1,0 +1,72 @@
+{
+  "R-36 Eruptor": {
+    "super": {
+      "super_samples": 5,
+      "HE": {
+        "damage.standard_damage": 100,
+        "damage.durable_damage": 100,
+        "damage.ap_direct": 2,
+        "explosion.damage.standard_damage": 225,
+        "explosion.damage.durable_damage": 750,
+        "explosion.damage.ap_slight": 0,
+        "explosion.damage.ap_large": 0,
+        "explosion.damage.ap_extreme": 0,
+        "explosion.damage.demolition": 40,
+        "explosion.damage.stagger": 40,
+        "explosion.inner_radius": 3,
+        "explosion.outer_radius": 5,
+        "explosion.shockwave_radius": 5,
+        "explosion.shrapnel_count": 15
+      },
+      "APHE": {
+        "damage.standard_damage": 225,
+        "damage.durable_damage": 750,
+        "damage.ap_direct": 5,
+        "explosion.damage.standard_damage": 100,
+        "explosion.damage.durable_damage": 100,
+        "explosion.damage.ap_slight": 0,
+        "explosion.damage.ap_large": 0,
+        "explosion.damage.ap_extreme": 0,
+        "explosion.damage.demolition": 40,
+        "explosion.damage.stagger": 20,
+        "explosion.inner_radius": 1,
+        "explosion.outer_radius": 2,
+        "explosion.shockwave_radius": 2,
+        "explosion.shrapnel_count": 0
+      },
+      "APFSDS": {
+        "damage.standard_damage": 750,
+        "damage.durable_damage": 225,
+        "damage.ap_direct": 6,
+        "explosion.damage.standard_damage": 50,
+        "explosion.damage.durable_damage": 50,
+        "explosion.damage.ap_slight": 0,
+        "explosion.damage.ap_large": 0,
+        "explosion.damage.ap_extreme": 0,
+        "explosion.damage.demolition": 40,
+        "explosion.damage.stagger": 10,
+        "explosion.inner_radius": 1,
+        "explosion.outer_radius": 1,
+        "explosion.shockwave_radius": 1,
+        "explosion.shrapnel_count": 0
+      }
+    }
+  },
+  "R-4 Hyena": {
+    "super": {
+      "super_samples": 5,
+      "FDI": {
+        "damage.standard_damage": 225,
+        "damage.durable_damage": 450,
+        "damage.ap_direct": 2,
+        "damage.ap_slight": 2
+      },
+      "API": {
+        "damage.standard_damage": 450,
+        "damage.durable_damage": 225,
+        "damage.ap_direct": 4,
+        "damage.ap_slight": 4
+      }
+    }
+  }
+}

@@ -71,7 +71,7 @@ void DrawCurrencyIcon(size_t currency, const char* detail = "wallet balance / co
 void DrawCurrencyAmount(size_t currency, uint64_t amount);
 void UpgradeCostValues(const unsigned price[CURRENCY_COUNT], const unsigned balance[CURRENCY_COUNT]);
 
-enum class CheckoutPanel { Destroyer, Helldiver, Purchase };
+enum class CheckoutPanel { Destroyer, Helldiver, Equipment, Purchase };
 extern CheckoutPanel checkoutPanel;
 extern float tabIndicator;
 extern size_t destroyerSelection;
@@ -92,6 +92,8 @@ void DestroyerActions(bool pending);
 const char* PerkName(SmrHelldiverPerk perk);
 void HelldiverPanel(const SmrHelldiverStatus& status, bool pending);
 void HelldiverActions(bool pending);
+void EquipmentPanel(bool pending);
+void EquipmentActions(bool pending);
 ImVec2 CheckoutSize(float width, float height);
 void CheckoutFrame(float width, float height);
 

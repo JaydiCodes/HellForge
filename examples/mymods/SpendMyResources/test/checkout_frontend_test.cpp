@@ -73,6 +73,13 @@ extern "C" void SmrFinishCheckout(int ready)
 }
 extern "C" int SmrTakeCheckoutRequest() { bool value = requested; requested = false; return value; }
 extern "C" SmrDestroyerStatus SmrDestroyer(HfMod*) { return upgrade; }
+static SmrEquipmentStatus equipment = {{}, {}, 1};
+extern "C" SmrEquipmentStatus SmrEquipment(void) { return equipment; }
+extern "C" int SmrSelectEquipment(HfMod*, const SmrEquipmentGroup* group, unsigned choice)
+{
+    equipment.tiers[group->tier].selected = choice;
+    return 1;
+}
 static SmrHelldiverStatus helldiver = {{5000, 40, 20, 3, 50}, {1, 1, 1}};
 static const SmrHelldiverTuning helldiverTuning[SMR_PERK_COUNT] = {
     {},
@@ -784,13 +791,14 @@ static ImGuiWindow* PanelWindow()
     return window->DC.ChildWindows[0];
 }
 
-static ImRect PressModalButton(const char* label, bool inPanel = false)
+static ImRect PressModalButton(const char* label, bool inPanel = false, int tier = -1)
 {
     ImGuiWindow* window = inPanel ? PanelWindow() : CheckoutWindow();
     ImGui::GetIO().DeltaTime = 1.0f / 60;
     ImGui::NewFrame();
     GImGui->NavWindow = window;
-    GImGui->NavId = GImGui->NavActivateId = GImGui->NavActivateDownId = window->GetID(label);
+    GImGui->NavId = GImGui->NavActivateId = GImGui->NavActivateDownId =
+        tier < 0 ? window->GetID(label) : ImHashStr(label, 0, window->GetID(tier));
     GImGui->NavInputSource = ImGuiInputSource_Keyboard;
     editorapp::Modal(nullptr, 1280, 720, 1.0f / 60);
     ImGui::Render();
@@ -1126,6 +1134,39 @@ static void CheckModalText(const char* text, const char* second, const char* thi
     ImGui::Render();
 }
 
+static void CheckEquipmentTab()
+{
+    PressModalButton("Equipment");
+    CheckModalText("No upgrades available for your equipped primary.");
+    static EquipmentEdit fdi[] = {{HF_DAMAGE_R4_HYENA, HF_FIELD(DamageInfo, durable_damage),
+        "damage.durable_damage", "Durable damage", 654}};
+    static EquipmentEdit api[] = {{HF_DAMAGE_R4_HYENA, HF_FIELD_AT(DamageInfo, armor_penetration, 0),
+        "damage.ap_direct", "Direct penetration", 5}};
+    static const SmrEquipmentChoice choices[] = {{"FDI", fdi, 1}, {"API", api, 1}};
+    static const SmrEquipmentGroup group = {HF_ITEM_R4_HYENA, "R-4 Hyena", SMR_TIER_SUPER, choices, 2};
+    static const unsigned price[CURRENCY_COUNT] = {0, 0, 0, 5};
+    auto& row = equipment.tiers[SMR_TIER_SUPER];
+    row = {&group, price, 0, 0, 1};
+    CheckModalText("R-4 Hyena", "FDI", "API");
+    CheckModalText("Durable damage: 654");
+    PressModalButton("FDI", true, SMR_TIER_SUPER);
+    PressModalButton("API", true, SMR_TIER_SUPER);
+    CheckModalText("Selected for purchase: API", "Direct penetration: 5");
+    PressModalButton("Review purchase");
+    CheckModalText("R-4 Hyena - Super: API");
+    PressModalButton("Equipment");
+    PressModalButton("API", true, SMR_TIER_SUPER);
+    CHECK(!row.selected);
+    equipment.configured = 0;
+    CheckModalText("Equipment upgrades disabled: check equipment-upgrades.json and the mod log.");
+    PressModalButton("FDI", true, SMR_TIER_SUPER);
+    CHECK(!row.selected);
+    equipment = {};
+    equipment.configured = 1;
+    PressModalButton("Destroyer");
+    Draw(0.20f);
+}
+
 int main(int argc, char** argv)
 {
     if (argc == 3 && (!strcmp(argv[1], "--currency-icons") || !strcmp(argv[1], "--currency-icons12")))
@@ -1179,6 +1220,7 @@ int main(int argc, char** argv)
     CheckAnimatedTabs();
     CHECK(CheckoutWindow()->Flags & ImGuiWindowFlags_NoMove);
     CheckHelldiverTab(argc >= 2 ? argv[1] : nullptr, expectGameIcons);
+    CheckEquipmentTab();
     ImGuiWindow* checkoutWindow = CheckoutWindow();
     const ImVec2 checkoutPos = checkoutWindow->Pos;
     const int opened = modalChanges;

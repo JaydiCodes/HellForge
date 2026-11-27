@@ -185,7 +185,7 @@ if($SpendMyResources){
     $frontend=@(
         'shop\shop_frontend.cpp','shop\frontend\widgets.cpp','shop\frontend\layout.cpp',
         'shop\frontend\kill_counter.cpp','shop\frontend\checkout.cpp','shop\frontend\destroyer_panel.cpp',
-        'shop\frontend\helldiver_panel.cpp','shop\frontend\exchange.cpp'
+        'shop\frontend\helldiver_panel.cpp','shop\frontend\equipment_panel.cpp','shop\frontend\exchange.cpp'
     )|ForEach-Object {Join-Path $src $_}
     $storage=@(
         'config\config_path.cpp','config\prices.cpp','config\upgrade_config.cpp','currency\currency_ledger.cpp'
@@ -224,6 +224,7 @@ if($SpendMyResources){
     Copy-Item -LiteralPath (Join-Path $project 'data\forge-credits\currency-icon.png') -Destination (Join-Path $imageOut 'Forge_Credit.png') -Force
     Get-ChildItem -LiteralPath $out -Filter '*.lib' | Remove-Item
     Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'README.md'),(Join-Path $mod 'extra-stratagem-slot.md'),(Join-Path $mod 'currency-ledger.md'),(Join-Path $mod 'kill-rewards.md'),(Join-Path $mod 'prices.json'),(Join-Path $mod 'destroyer-upgrades.json'),(Join-Path $mod 'helldiver-upgrades.json'),(Join-Path $mod 'kill-rewards.json'),(Join-Path $project 'LICENSE') -Destination $out
+    Copy-Item -LiteralPath (Join-Path $mod 'equipment-upgrades.json') -Destination $out
     Copy-Item -LiteralPath (Join-Path $imgui 'LICENSE.txt') -Destination (Join-Path $out 'imgui-LICENSE.txt')
     Write-Output "Built standalone mod: $dll"
     if($Test){
@@ -244,7 +245,7 @@ if($SpendMyResources){
         & $zig c++ -target x86_64-windows-gnu -O1 -std=c++17 -Wall -Werror -I (Join-Path $project 'native/mod-sdk') -I $editor -I $objects `
             (Join-Path $mod 'test/prices_test.cpp') (Join-Path $src 'config\config_path.cpp') -o $pricesTest
         if($LASTEXITCODE){throw 'The price list fixture did not compile.'}
-        & $pricesTest (Join-Path $out 'prices.json') (Join-Path $out 'destroyer-upgrades.json') (Join-Path $out 'helldiver-upgrades.json') (Join-Path $out 'kill-rewards.json')
+        & $pricesTest (Join-Path $out 'prices.json') (Join-Path $out 'destroyer-upgrades.json') (Join-Path $out 'helldiver-upgrades.json') (Join-Path $out 'kill-rewards.json') (Join-Path $out 'equipment-upgrades.json')
         if($LASTEXITCODE){throw 'The price list fixture failed.'}
         $checkoutTest=Join-Path $testOut 'checkout_frontend_test.exe'
         & $zig c++ @common -Wall -Werror -Wno-unused-parameter -I $src -I $editor `

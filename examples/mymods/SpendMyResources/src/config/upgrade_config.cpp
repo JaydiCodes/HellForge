@@ -2,6 +2,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <array>
+#include <cfloat>
 #include "json.h"
 #include "config_path.h"
 #include "../shop/shop.h"
@@ -285,4 +287,144 @@ extern "C" int SmrLoadHelldiverConfig(SmrHelldiverTuning tuning[SMR_PERK_COUNT],
 {
     const auto path = ConfigPath(L"helldiver-upgrades.json", result, size);
     return !path.empty() && ReadHelldiverConfig(path, tuning, result, size);
+}
+
+static bool EquipmentObject(const hfjson::Value& value, const std::string& path, std::string& why)
+{
+    if (value.kind != hfjson::Value::Object || value.members.empty())
+    {
+        why = "Expected a non-empty object: " + path;
+        return false;
+    }
+    for (size_t i = 0; i < value.members.size(); ++i)
+        for (size_t j = 0; j < i; ++j)
+            if (value.members[i].first == value.members[j].first)
+            {
+                why = "Duplicate setting: " + path + "." + value.members[i].first;
+                return false;
+            }
+    return true;
+}
+
+using EquipmentValues = std::vector<std::pair<double*, double>>;
+
+static bool ReadEquipmentChoice(const hfjson::Value& object, const SmrEquipmentChoice& choice,
+    const std::string& path, EquipmentValues& values, std::string& why)
+{
+    if (!EquipmentObject(object, path, why)) return false;
+    for (size_t i = 0; i < choice.edit_count; ++i)
+    {
+        auto& edit = choice.edits[i];
+        const auto* value = object.Find(edit.key);
+        const bool whole = edit.field.type != HF_TYPE_F32;
+        const double max = whole ?
+            (edit.field.type == HF_TYPE_I32 ? static_cast<double>(INT32_MAX) : static_cast<double>(UINT32_MAX)) : FLT_MAX;
+        double number;
+        if (!value || !ReadConfigNumber(*value, 0, max, whole, &number))
+        {
+            why = "Missing or invalid " + path + "." + edit.key + " (expected a non-negative " +
+                (whole ? "whole number" : "number") + " within the field's range).";
+            return false;
+        }
+        values.emplace_back(&edit.value, number);
+    }
+    if (object.members.size() != choice.edit_count)
+    {
+        why = "Unknown setting in " + path;
+        return false;
+    }
+    return true;
+}
+
+static bool ReadEquipmentTier(const hfjson::Value& object, const SmrEquipmentGroup& group,
+    const std::string& path, std::array<unsigned, CURRENCY_COUNT>& price, EquipmentValues& values, std::string& why)
+{
+    if (!EquipmentObject(object, path, why)) return false;
+    constexpr const char* currencies[CURRENCY_COUNT] = {
+        "requisition", "common_samples", "rare_samples", "super_samples", "forge_credits"
+    };
+    bool priced = false;
+    size_t choices = 0;
+    for (const auto& member : object.members)
+    {
+        size_t c = 0;
+        while (c < CURRENCY_COUNT && member.first != currencies[c]) ++c;
+        if (c < CURRENCY_COUNT)
+        {
+            double number;
+            if (!ReadConfigNumber(member.second, 0, UINT32_MAX, true, &number))
+            {
+                why = "Invalid price: " + path + "." + member.first + " (expected a whole number from 0 to 4294967295).";
+                return false;
+            }
+            price[c] = static_cast<unsigned>(number);
+            priced = true;
+            continue;
+        }
+        size_t i = 0;
+        while (i < group.count && member.first != group.choices[i].title) ++i;
+        if (i == group.count)
+        {
+            why = "Unknown setting: " + path + "." + member.first;
+            return false;
+        }
+        if (!ReadEquipmentChoice(member.second, group.choices[i], path + "." + member.first, values, why)) return false;
+        ++choices;
+    }
+    if (!priced || choices != group.count)
+    {
+        why = "Missing price or upgrade choice in " + path;
+        return false;
+    }
+    return true;
+}
+
+static int ReadEquipmentConfig(const std::wstring& path, SmrEquipmentGroup* groups, size_t count,
+    char* result, size_t size)
+{
+    using namespace hfjson;
+    Value document;
+    std::string text, why;
+    constexpr const char* tiers[SMR_TIER_COUNT] = {"plus", "elite", "super"};
+    std::vector<std::array<unsigned, CURRENCY_COUNT>> prices(count);
+    std::vector<bool> seen(count);
+    EquipmentValues values;
+    if (!ReadFile(path, &text, &why) || !Parse(text, &document, &why) ||
+        !EquipmentObject(document, "equipment", why)) goto failed;
+    for (const auto& weapon : document.members)
+    {
+        if (!EquipmentObject(weapon.second, weapon.first, why)) goto failed;
+        for (const auto& tier : weapon.second.members)
+        {
+            size_t i = 0;
+            while (i < count && (weapon.first != groups[i].weapon || tier.first != tiers[groups[i].tier])) ++i;
+            const std::string name = weapon.first + "." + tier.first;
+            if (i == count)
+            {
+                why = "Unknown equipment tier: " + name;
+                goto failed;
+            }
+            if (!ReadEquipmentTier(tier.second, groups[i], name, prices[i], values, why)) goto failed;
+            seen[i] = true;
+        }
+    }
+    for (size_t i = 0; i < count; ++i)
+        if (!seen[i])
+        {
+            why = std::string("Missing equipment tier: ") + groups[i].weapon + "." + tiers[groups[i].tier];
+            goto failed;
+        }
+    for (const auto& value : values) *value.first = value.second;
+    for (size_t i = 0; i < count; ++i) memcpy(groups[i].price, prices[i].data(), sizeof groups[i].price);
+    if (size) result[0] = '\0';
+    return 1;
+failed:
+    snprintf(result, size, "%s", why.c_str());
+    return 0;
+}
+
+extern "C" int SmrLoadEquipmentConfig(SmrEquipmentGroup* groups, size_t count, char* result, size_t size)
+{
+    const auto path = ConfigPath(L"equipment-upgrades.json", result, size);
+    return !path.empty() && ReadEquipmentConfig(path, groups, count, result, size);
 }

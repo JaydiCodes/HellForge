@@ -591,7 +591,7 @@
       "weapon.capacity": 2
     },
     "R-36 Eruptor": {
-      "damage.ap_direct": 3,
+      "damage.ap_direct": 2,
       "damage.ap_large": 1,
       "damage.ap_slight": 2,
       "damage.durable_damage": 85,
@@ -601,10 +601,10 @@
       "explosion.primary.impact.damage.ap_large": 2,
       "explosion.primary.impact.damage.ap_slight": 3,
       "explosion.primary.impact.damage.demolition": 30,
-      "explosion.primary.impact.damage.durable_damage": 275,
-      "explosion.primary.impact.damage.standard_damage": 325,
-      "magazine.magazines_from_supply": 5,
-      "magazine.spare_magazines": 5,
+      "explosion.primary.impact.damage.durable_damage": 225,
+      "explosion.primary.impact.damage.standard_damage": 355,
+      "magazine.magazines_from_supply": 4,
+      "magazine.spare_magazines": 4,
       "projectile.lifetime": 2,
       "projectile.mass": 125
     },

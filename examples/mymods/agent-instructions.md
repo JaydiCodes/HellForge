@@ -12,6 +12,7 @@ If the user gives instruction on things to change, assume that they know what th
 
 Do not edit:
 - README.md files without explicit instruction to do so.
+- Design.md
 - Changelog.md
 - Any main hellforge files causing a backend rebuild to be required to use the mod
 

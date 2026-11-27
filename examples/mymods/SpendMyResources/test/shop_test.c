@@ -118,8 +118,22 @@ static int SetStat(HfMod* unused, const HfStat* stat, const HfValue* value, uint
     live_sets += value != NULL;
     return HF_APPLIES_RESPAWN;
 }
+static int EquipmentFixtureField(const HfField* field)
+{
+    return !strcmp(field->component, "DamageInfo") || !strcmp(field->component, "ExplosionSettings") ||
+        !strcmp(field->component, "ProjectileSettings");
+}
+static HelldiverValue* EquipmentValue(HfRef target, uint32_t offset)
+{
+    return HelldiverFixtureValue(2, target, NULL, 0, offset);
+}
 static int GetLive(HfMod* mod, HfRef type, const HfField* field, HfLiveValue* out)
 {
+    if (EquipmentFixtureField(field))
+    {
+        out->now.number = EquipmentValue(type, field->offset)->now;
+        return HF_APPLIES_NOW;
+    }
     CHECK(type != 27 || strcmp(field->component, fixture_stim_duration.component) || field->offset != fixture_stim_duration.offset);
     if (HelldiverFixtureField(field))
     {
@@ -144,6 +158,14 @@ static int GetLive(HfMod* mod, HfRef type, const HfField* field, HfLiveValue* ou
 }
 static int SetLive(HfMod* mod, HfRef type, const HfField* field, const HfValue* value, uint32_t flags)
 {
+    if (EquipmentFixtureField(field))
+    {
+        if (value && field == refused_field) return 0;
+        CHECK(!value || value->type == field->type);
+        HelldiverValue* v = EquipmentValue(type, field->offset);
+        v->now = value ? value->number : HelldiverBase(v);
+        return HF_APPLIES_NOW;
+    }
     CHECK(type != 27 || strcmp(field->component, fixture_stim_duration.component) || field->offset != fixture_stim_duration.offset);
     if (HelldiverFixtureField(field))
     {
@@ -288,6 +310,24 @@ int SmrLoadUpgradeConfig(SmrUpgradeTuning tuning[SMR_UPGRADE_COUNT], char* resul
         .other_cooldown_percent = 10};
     return 1;
 }
+int SmrLoadEquipmentConfig(SmrEquipmentGroup* groups, size_t count, char* result, size_t size)
+{
+    const double values[][14] = {
+        {100, 100, 2, 500, 1000, 0, 0, 0, 40, 40, 4, 8, 8, 0},
+        {225, 1000, 5, 100, 100, 0, 0, 0, 40, 20, 1, 2, 2, 0},
+        {1000, 225, 6, 50, 50, 0, 0, 0, 40, 10, 1, 1, 1, 0},
+        {225, 450, 2, 2}, {450, 225, 4, 4}
+    };
+    size_t next = 0;
+    for (size_t i = 0; i < count; ++i)
+    {
+        groups[i].price[SUPER_SAMPLES] = 5;
+        for (size_t c = 0; c < groups[i].count; ++c, ++next)
+            for (size_t e = 0; e < groups[i].choices[c].edit_count; ++e)
+                groups[i].choices[c].edits[e].value = values[next][e];
+    }
+    return 1;
+}
 int SmrLoadHelldiverConfig(SmrHelldiverTuning tuning[SMR_PERK_COUNT], char* result, size_t size)
 {
     const SmrHelldiverTuning plus = {.price = {[COMMON_SAMPLES] = 50}}, elite = {.price = {[RARE_SAMPLES] = 25}},
@@ -417,7 +457,7 @@ static int BuyItem(size_t i)
         Pick(i == 0 ? HF_ITEM_R36_ERUPTOR : HF_ITEM_AR23_LIBERATOR,
             i == PriceIndex("MS-11 Solo Silo") ? HF_STRATAGEM_MS11_SOLO_SILO : 0);
         checkout_equipped = 0;
-        checkout_valid = ReadEquippedItems(&mod, &checkout_equipped);
+        checkout_valid = ReadEquippedItems(&mod, &checkout_equipped, &checkout_primary);
     }
     return BuyCheckout();
 }
@@ -1163,6 +1203,103 @@ static void TestHelldiver(void)
         "damage scaling, auto-stim, field medic and one-mission use");
 }
 
+static void TestEquipment(void)
+{
+    ResetExchange();
+    OpenCheckout();
+    SmrEquipmentStatus status = SmrEquipment();
+    for (int t = 0; t < SMR_TIER_COUNT; ++t) CHECK(!status.tiers[t].group);
+
+    unsigned char picker[STRATAGEM_COUNT + sizeof(uint32_t)] = {0};
+    Put32(picker, HF_ITEM_R36_ERUPTOR);
+    SetPickerSelection(picker);
+    Tick();
+    status = SmrEquipment();
+    const SmrEquipmentGroup* eruptor = status.tiers[SMR_TIER_SUPER].group;
+    CHECK(eruptor && eruptor->primary == HF_ITEM_R36_ERUPTOR && !status.tiers[SMR_TIER_PLUS].group &&
+        !status.tiers[SMR_TIER_ELITE].group && SmrSelectEquipment(&mod, eruptor, 2));
+    CHECK(eruptor->count == 3 && !strcmp(eruptor->choices[0].title, "HE") &&
+        !strcmp(eruptor->choices[1].title, "APHE") && !strcmp(eruptor->choices[2].title, "APFSDS"));
+    Put32(picker, HF_ITEM_R4_HYENA);
+    Tick();
+    status = SmrEquipment();
+    const SmrEquipmentGroup* hyena = status.tiers[SMR_TIER_SUPER].group;
+    CHECK(hyena && hyena->primary == HF_ITEM_R4_HYENA && !status.tiers[SMR_TIER_SUPER].selected &&
+        !SmrSelectEquipment(&mod, eruptor, 1));
+    CHECK(hyena->count == 2 && !strcmp(hyena->choices[0].title, "FDI") &&
+        !strcmp(hyena->choices[1].title, "API"));
+    CHECK(!SmrSelectEquipment(&mod, hyena, 3) && !SmrEquipment().tiers[SMR_TIER_SUPER].selected);
+    equipment_config_loaded = 0;
+    CHECK(!SmrEquipment().configured && !SmrEquipment().tiers[SMR_TIER_SUPER].available &&
+        !SmrSelectEquipment(&mod, hyena, 1));
+    equipment_config_loaded = 1;
+    unsigned original_price = kEquipmentGroups[1].price[SUPER_SAMPLES];
+    kEquipmentGroups[1].price[SUPER_SAMPLES] = 7;
+    CHECK(SmrSelectEquipment(&mod, hyena, 1) && SmrSelectEquipment(&mod, hyena, 2));
+    CHECK(SmrSelectHelldiver(&mod, SMR_TIER_SUPER, SMR_PERK_FIELD_MEDIC));
+    unsigned total, price[CURRENCY_COUNT];
+    int pending;
+    CHECK(SmrCheckout(&total, price, &pending) == SMR_CHECKOUT_PURCHASE && price[SUPER_SAMPLES] == 12);
+    kEquipmentGroups[1].price[SUPER_SAMPLES] = original_price;
+    CHECK(SmrSelectHelldiver(&mod, SMR_TIER_SUPER, SMR_PERK_NONE));
+    const uint32_t samples = kCurrencies[SUPER_SAMPLES].id;
+    SetAmount(samples, 4);
+    Tick();
+    CHECK(!BuyCheckout());
+    SetAmount(samples, 5);
+    Tick();
+    const int writes_before = wallet_writes;
+    /* Switching between two paid weapons doesn't change the unpaid gear mask. */
+    access[PriceIndex("R-36 Eruptor")] = access[PriceIndex("R-4 Hyena")] = 1;
+    CHECK(BuyCheckout());
+    Put32(picker, HF_ITEM_R36_ERUPTOR);
+    Tick();
+    CHECK(!SmrCheckoutComplete() && wallet_writes == writes_before && Amount(samples) == 5);
+    CHECK(SmrSelectEquipment(&mod, eruptor, 2) && BuyCheckout());
+    Tick();
+    CHECK(SmrCheckoutComplete() && wallet_writes == writes_before + 1 && !Amount(samples));
+    SmrFinishCheckout(0);
+
+    /* The briefing card and deployed primary need not agree. Only a matching deployment spends the purchase. */
+    SetPickerSelection(history + LOADOUT);
+    MissionStart(&mod, NULL, NULL);
+    MissionEnd(&mod, NULL, NULL);
+    Pick(HF_ITEM_R36_ERUPTOR, 0);
+    Tick();
+    CHECK(SmrEquipment().tiers[SMR_TIER_SUPER].purchased == 2);
+    refused_field = &kAphe[3].field;
+    MissionStart(&mod, NULL, NULL);
+    CHECK(EquipmentValue(HF_DAMAGE_R36_ERUPTOR, offsetof(HfDamageInfo, durable_damage))->now == 6);
+    MissionEnd(&mod, NULL, NULL);
+    CHECK(SmrEquipment().tiers[SMR_TIER_SUPER].purchased == 2);
+    refused_field = NULL;
+    kAphe[1].value = 1234;
+    kAphe[11].value = 2.75;
+    MissionStart(&mod, NULL, NULL);
+    CHECK(EquipmentValue(HF_DAMAGE_R36_ERUPTOR, offsetof(HfDamageInfo, durable_damage))->now == 1234);
+    CHECK(EquipmentValue(HF_DAMAGE_R36_ERUPTOR_IMPACT, offsetof(HfDamageInfo, standard_damage))->now == 100);
+    CHECK(EquipmentValue(HF_EXPLOSION_R36_ERUPTOR_IMPACT, offsetof(HfExplosionSettings, outer_radius))->now == 2.75);
+    MissionEnd(&mod, NULL, NULL);
+    CHECK(!SmrEquipment().tiers[SMR_TIER_SUPER].purchased &&
+        EquipmentValue(HF_EXPLOSION_R36_ERUPTOR_IMPACT, offsetof(HfExplosionSettings, outer_radius))->now == 6);
+    kAphe[1].value = 1000;
+    kAphe[11].value = 2;
+
+    ResetExchange();
+    Pick(HF_ITEM_R4_HYENA, 0);
+    Tick();
+    OpenCheckout();
+    CHECK(SmrSelectEquipment(&mod, hyena, 2) && BuyCheckout());
+    Tick();
+    MissionStart(&mod, NULL, NULL);
+    CHECK(EquipmentValue(HF_DAMAGE_R4_HYENA, offsetof(HfDamageInfo, standard_damage))->now == 450);
+    MissionEnd(&mod, NULL, NULL);
+    CHECK(!SmrEquipment().tiers[SMR_TIER_SUPER].purchased &&
+        EquipmentValue(HF_DAMAGE_R4_HYENA, offsetof(HfDamageInfo, standard_damage))->now == 6);
+    ResetExchange();
+    puts("PASS equipment: equipped primary filtering, stacked prices, revalidation, deployment, rollback and expiry");
+}
+
 static bool SlotOwned(uintptr_t inventory, uint32_t type)
 {
     CHECK(inventory == (uintptr_t)manager);
@@ -1510,7 +1647,7 @@ static void TestExpandedCatalog(void)
         uint64_t selected;
         unsigned total;
         int pending;
-        CHECK(ReadEquippedItems(&mod, &selected) && selected == (UINT64_C(1) << index));
+        CHECK(ReadEquippedItems(&mod, &selected, NULL) && selected == (UINT64_C(1) << index));
         RequestCheckout(&mod, (uintptr_t)PickerCard());
         CHECK(SmrTakeCheckoutRequest());
         CHECK(GearCheckout(&total, &pending) && total == expected[i].price && !pending);
@@ -1806,6 +1943,7 @@ int main(void)
     TestDestroyer();
     TestUpgradeEffects();
     TestHelldiver();
+    TestEquipment();
     TestExtraSlot();
     TestExchanges();
     TestKillRewards();

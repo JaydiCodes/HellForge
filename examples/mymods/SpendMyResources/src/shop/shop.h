@@ -81,6 +81,41 @@ typedef struct SmrHelldiverStatus {
     SmrHelldiverPerk selected[SMR_TIER_COUNT], purchased[SMR_TIER_COUNT];
 } SmrHelldiverStatus;
 
+typedef struct EquipmentEdit {
+    HfRef target;
+    HfField field;
+    const char* key;
+    const char* label;
+    double value;
+} EquipmentEdit;
+typedef struct SmrEquipmentChoice {
+    const char* title;
+    EquipmentEdit* edits;
+    size_t edit_count;
+} SmrEquipmentChoice;
+typedef struct SmrEquipmentGroup {
+    uint32_t primary;
+    const char* weapon;
+    SmrHelldiverTier tier;
+    const SmrEquipmentChoice* choices;
+    size_t count;
+    unsigned price[CURRENCY_COUNT];
+} SmrEquipmentGroup;
+typedef struct SmrEquipmentTierStatus {
+    const SmrEquipmentGroup* group; /* NULL when the equipped weapon has no upgrades at this tier. */
+    const unsigned* price;
+    unsigned selected, purchased; /* One-based choices; zero means none. */
+    int available;
+} SmrEquipmentTierStatus;
+typedef struct SmrEquipmentStatus {
+    SmrEquipmentTierStatus tiers[SMR_TIER_COUNT];
+    unsigned balance[CURRENCY_COUNT];
+    int configured;
+} SmrEquipmentStatus;
+SmrEquipmentStatus SmrEquipment(void);
+int SmrSelectEquipment(HfMod* mod, const SmrEquipmentGroup* group, unsigned choice);
+int SmrLoadEquipmentConfig(SmrEquipmentGroup* groups, size_t count, char* result, size_t size);
+
 SmrHelldiverStatus SmrHelldiver(HfMod* mod);
 int SmrSelectHelldiver(HfMod* mod, SmrHelldiverTier tier, SmrHelldiverPerk perk);
 const SmrHelldiverTuning* SmrGetHelldiverTuning(SmrHelldiverPerk perk);

@@ -82,16 +82,11 @@ static int HelldiverPrice(const SmrHelldiverPerk perks[SMR_TIER_COUNT], unsigned
     return any;
 }
 
-static int HelldiverSelectionOpen(void)
-{
-    return CheckoutGate() == CHECKOUT_OPEN && charge.state == CHARGE_IDLE && !exchange.pending;
-}
-
 SmrHelldiverStatus SmrHelldiver(HfMod* mod)
 {
     SmrHelldiverStatus status = {{0}};
     AcquireSRWLockShared(&shop_lock);
-    int open = upgrade_funds_ready && !shop_failed && HelldiverSelectionOpen();
+    int open = upgrade_funds_ready && !shop_failed && TierSelectionOpen();
     for (int tier = 0; tier < SMR_TIER_COUNT; ++tier)
     {
         status.available[tier] = open && !helldiver_purchased[tier];
@@ -107,7 +102,7 @@ int SmrSelectHelldiver(HfMod* mod, SmrHelldiverTier tier, SmrHelldiverPerk perk)
 {
     int on_ship = HF_API(mod)->game_state(mod) == HF_STATE_SHIP;
     AcquireSRWLockExclusive(&shop_lock);
-    int allowed = on_ship && tier >= SMR_TIER_PLUS && tier < SMR_TIER_COUNT && HelldiverSelectionOpen() &&
+    int allowed = on_ship && tier >= SMR_TIER_PLUS && tier < SMR_TIER_COUNT && TierSelectionOpen() &&
         !helldiver_purchased[tier] &&
         (perk == SMR_PERK_NONE ||
             (upgrade_funds_ready && !shop_failed && SmrGetHelldiverTuning(perk) && SmrPerkTier(perk) == tier));

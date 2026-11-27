@@ -5,6 +5,15 @@ balance for each of the five currencies. The first session seeds the wallet from
 Subsequent sessions restore the saved wallet for that profile. Checkout and exchanges save all five balances
 together; gear access and destroyer upgrades remain session-only.
 
+Equipment upgrades read their prices and weapon values from `equipment-upgrades.json` beside the mod DLL.
+Edit a weapon's `super` section to change its sample price or an option's damage, penetration and explosion values.
+Other price keys are `requisition`, `common_samples`, `rare_samples` and `forge_credits`; omitted currencies cost zero.
+Keep every weapon, tier, option and stat key present. Invalid or missing configuration disables Equipment upgrades
+and reports the reason in the mod log.
+
+Restart the game session after editing; JSON changes need no rebuild. The Equipment tab displays the configured
+values, and its price is added to other checkout charges. An upgrade lasts one mission with that weapon.
+
 In the F2 exchange, choose the currency to give on the top icon row and the currency to receive on the bottom row.
 The arrow shows the direction. Select the number of whole-unit batches, then press **Exchange**.
 
