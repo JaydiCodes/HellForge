@@ -320,19 +320,29 @@ static void TestEquipmentConfig(const std::wstring& shippedPath, const std::wstr
 int main(int argc, char** argv)
 {
     using namespace hfjson;
-    CHECK(argc == 6 || (argc == 3 && !strcmp(argv[1], "--equipment")));
-    wchar_t equipmentTemp[MAX_PATH], equipmentFile[MAX_PATH];
-    CHECK(GetTempPathW(MAX_PATH, equipmentTemp) && GetTempFileNameW(equipmentTemp, L"smr", 0, equipmentFile));
-    TestEquipmentConfig(Wide(argv[argc == 3 ? 2 : 5]), equipmentFile);
-    if (argc == 3) return 0;
+    const bool pricesOnly = argc == 3 && !strcmp(argv[1], "--prices");
+    const bool equipmentOnly = argc == 3 && !strcmp(argv[1], "--equipment");
+    CHECK(argc == 6 || pricesOnly || equipmentOnly);
+    if (!pricesOnly)
+    {
+        wchar_t equipmentTemp[MAX_PATH], equipmentFile[MAX_PATH];
+        CHECK(GetTempPathW(MAX_PATH, equipmentTemp) && GetTempFileNameW(equipmentTemp, L"smr", 0, equipmentFile));
+        TestEquipmentConfig(Wide(argv[equipmentOnly ? 2 : 5]), equipmentFile);
+        if (equipmentOnly) return 0;
+    }
     const char* names[PRICE_COUNT];
     unsigned prices[PRICE_COUNT] = {};
-    for (size_t i = 0; i < PRICE_COUNT; ++i) names[i] = kLoadoutPrices[i].name;
+    for (size_t i = 0; i < PRICE_COUNT; ++i)
+    {
+        CHECK(kLoadoutPrices[i].name);
+        names[i] = kLoadoutPrices[i].name;
+    }
     char result[256] = {};
-    CHECK(ReadPrices(Wide(argv[1]), names, prices, PRICE_COUNT, result, sizeof result));
+    const std::wstring pricePath = Wide(argv[pricesOnly ? 2 : 1]);
+    CHECK(ReadPrices(pricePath, names, prices, PRICE_COUNT, result, sizeof result));
     Value shipped;
     std::string shippedText, shippedError;
-    CHECK(ReadFile(Wide(argv[1]), &shippedText) && Parse(shippedText, &shipped, &shippedError));
+    CHECK(ReadFile(pricePath, &shippedText) && Parse(shippedText, &shipped, &shippedError));
     for (size_t i = 0; i < PRICE_COUNT; ++i) CHECK(prices[i] == shipped.GetNumber(names[i]));
 
     wchar_t temp[MAX_PATH], file[MAX_PATH];
@@ -349,7 +359,14 @@ int main(int argc, char** argv)
     CHECK(WriteAtomically(path, Write(valid)));
     CHECK(ReadPrices(path, names, prices, PRICE_COUNT, result, sizeof result));
     CHECK(prices[0] == 0);
+    Value duplicateZero = valid;
+    duplicateZero.members.emplace_back(names[0], Value::MakeNumber(500, true));
+    CHECK(WriteAtomically(path, Write(duplicateZero)));
+    CHECK(!ReadPrices(path, names, prices, PRICE_COUNT, result, sizeof result));
+    CHECK(strstr(result, "Duplicate item:") && prices[0] == 0);
     valid.At(names[0]) = Value::MakeNumber(1375, true);
+    CHECK(WriteAtomically(path, Write(valid)));
+    CHECK(ReadPrices(path, names, prices, PRICE_COUNT, result, sizeof result));
     const unsigned maximum = std::numeric_limits<unsigned>::max() / PRICE_COUNT;
     for (const char* invalid : {"-1", "1.5", "1e3", "\"500\"", "true", "null", "4294967296",
             "999999999999999999999999999999"})
@@ -383,6 +400,7 @@ int main(int argc, char** argv)
     CHECK(DeleteFileW(path.c_str()));
     CHECK(!ReadPrices(path, names, prices, PRICE_COUNT, result, sizeof result) && result[0]);
     puts("PASS price list: shipped roster, custom and reordered prices, overflow limits, atomic validation, missing/invalid files and entries.");
+    if (pricesOnly) return 0;
     TestUpgradeConfig(Wide(argv[2]), path);
     TestKillRewards(Wide(argv[4]), path);
     TestHelldiverConfig(Wide(argv[3]), path);

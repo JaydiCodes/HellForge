@@ -110,6 +110,7 @@ static int ReadRestrictedItems(const HfApi* api, uintptr_t loadout, SmrItemSet* 
     if (primary) *primary = weapons[0];
     for (size_t i = 0; i < loadout_price_count; ++i)
     {
+        if (!kLoadoutPrices[i].requisition) continue;
         int weapon = kLoadoutPrices[i].kind == PRICE_WEAPON;
         uint32_t type = kLoadoutPrices[i].id;
         if (weapon ? ContainsPick(weapons, 3, type) : ContainsPick(stratagems, count, type))
@@ -138,7 +139,8 @@ static SmrItemSet WithExtraAccess(SmrItemSet equipped)
     if (extra_pick &&
         (upgrade_selected == SMR_UPGRADE_EXTRA_SLOT || upgrade_purchased == SMR_UPGRADE_EXTRA_SLOT))
         for (size_t i = 0; i < loadout_price_count; ++i)
-            if (kLoadoutPrices[i].kind == PRICE_STRATAGEM && kLoadoutPrices[i].id == extra_pick)
+            if (kLoadoutPrices[i].requisition && kLoadoutPrices[i].kind == PRICE_STRATAGEM &&
+                kLoadoutPrices[i].id == extra_pick)
             {
                 SmrItemSetAdd(&equipped, i);
                 return equipped;

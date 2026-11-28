@@ -5,6 +5,7 @@ static unsigned TrackSelectedAccess(HfMod* mod, const uint32_t weapons[3], const
     unsigned total = 0;
     for (size_t i = 0; i < loadout_price_count; ++i)
     {
+        if (!kLoadoutPrices[i].requisition) continue;
         int weapon = kLoadoutPrices[i].kind == PRICE_WEAPON;
         const uint32_t* picks = weapon ? weapons : stratagems;
         uint32_t pick_count = weapon ? 3 : count;

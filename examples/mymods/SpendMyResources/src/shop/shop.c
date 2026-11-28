@@ -95,6 +95,7 @@ static void ShopTick(HfMod* mod, float dt, void* user)
         AcquireSRWLockExclusive(&shop_lock);
         game_base = game;
         ReleaseSRWLockExclusive(&shop_lock);
+        api->log(mod, "Inventory layout verified: %s.", inventory_layout->name);
         inventory_remove = (void (*)(uintptr_t, uint32_t, uint32_t))(game + 0x136F5E0);
         inventory_add = (void (*)(uintptr_t, uint32_t, uint32_t, uint32_t, const char*, int))(game + 0x136EF80);
         InitExtraSlot(mod);

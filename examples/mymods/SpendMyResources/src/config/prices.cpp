@@ -27,6 +27,7 @@ static int ReadPrices(const std::wstring& path, const char* const* names, unsign
         return 0;
     }
     std::vector<unsigned> loaded(count);
+    std::vector<bool> listed(count);
     for (const auto& member : document.members)
     {
         size_t index = 0;
@@ -37,7 +38,7 @@ static int ReadPrices(const std::wstring& path, const char* const* names, unsign
             snprintf(result, size, "Unknown item: %s.", member.first.c_str());
             return 0;
         }
-        if (loaded[index])
+        if (listed[index])
         {
             snprintf(result, size, "Duplicate item: %s.", names[index]);
             return 0;
@@ -52,9 +53,10 @@ static int ReadPrices(const std::wstring& path, const char* const* names, unsign
             return 0;
         }
         loaded[index] = static_cast<unsigned>(strtoull(value.text.c_str(), nullptr, 10));
+        listed[index] = true;
     }
     for (size_t i = 0; i < count; ++i)
-        if (!loaded[i])
+        if (!listed[i])
         {
             snprintf(result, size, "Missing item: %s.", names[i]);
             return 0;

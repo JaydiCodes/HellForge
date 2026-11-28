@@ -17,6 +17,7 @@ static uintptr_t slot_players, slot_mode;
 static int package_state, grant_calls, refuse_grant;
 static uint32_t game_state = HF_STATE_SHIP;
 static int local_ready = 1, pins_match = 1, remove_failed;
+static int relocated_remove_pin, relocated_sort_pin;
 static int wallet_exists, wallet_refused, wallet_writes;
 static SmrWallet stored_wallet;
 #define saved_currency (stored_wallet.amount)
@@ -194,7 +195,15 @@ static int SetLive(HfMod* mod, HfRef type, const HfField* field, const HfValue* 
     live_sets += value != NULL;
     return field == &kUses ? HF_APPLIES_MISSION : HF_APPLIES_NOW;
 }
-static int Matches(uintptr_t at, const char* pin) { return pins_match; }
+static int Matches(uintptr_t at, const char* pin)
+{
+    if (!pins_match) return 0;
+    if (at == (uintptr_t)image + 0x136F5E0)
+        return (strstr(pin, "F0 2D DA 04") != NULL) == relocated_remove_pin;
+    if (at == (uintptr_t)image + 0x136E6C1)
+        return (strstr(pin, "F0 2D DA 04") != NULL) == relocated_sort_pin;
+    return 1;
+}
 static unsigned char health_manager[0x1100], *health_manager_pointer = health_manager;
 static uintptr_t Global(HfMod* unused, const char* name)
 {
@@ -526,6 +535,15 @@ static void TestReadyGate(void)
     CHECK(ReadyInput(button, 1234) == 2);
     input_result = 1;
     Pick(HF_ITEM_AR23_LIBERATOR, 0);
+    SmrItemSet free_selection;
+    CHECK(ReadEquippedItems(&mod, &free_selection, NULL));
+    CHECK(SmrItemSetEqual(&free_selection, &(SmrItemSet){0}));
+    extra_pick = kLoadoutPrices[PriceIndex("A/ARC-3 Tesla Tower")].id;
+    upgrade_selected = SMR_UPGRADE_EXTRA_SLOT;
+    SmrItemSet free_extra = WithExtraAccess(free_selection);
+    CHECK(SmrItemSetEqual(&free_extra, &free_selection));
+    extra_pick = 0;
+    upgrade_selected = SMR_UPGRADE_NONE;
     CHECK(ReadyWithoutPurchase(button, 1234) == 1);
     Put32(history + RECORD_STRIDE + LOADOUT + STRATAGEM_COUNT, 1);
     Put32(history + RECORD_STRIDE + LOADOUT + STRATAGEM_SLOTS, HF_STRATAGEM_MS11_SOLO_SILO);
@@ -1726,7 +1744,7 @@ static void TestExpandedCatalog(void)
 
 static void TestModdedLoadoutItem(void)
 {
-    const size_t index = 64;
+    const size_t index = PRICE_COUNT + 2;
     const uint32_t weapon = UINT32_C(0xF0000001);
     CHECK(index < SMR_MAX_RESTRICTED_ITEMS);
     kLoadoutPrices[index] = (AccessItem){PRICE_WEAPON, weapon, "Rail Rifle", 750};
@@ -1759,7 +1777,7 @@ static void TestModdedLoadoutItem(void)
     Pick(HF_ITEM_AR23_LIBERATOR, 0);
     SetAmount(REQUISITION, 5000);
     Tick();
-    puts("PASS modded loadout: item at index 64 quotes, charges, grants access and expires.");
+    puts("PASS modded loadout: item beyond the built-in catalog quotes, charges, grants access and expires.");
 }
 
 static void TestWalletPersistence(void)
@@ -1932,6 +1950,41 @@ static void TestKillRewards(void)
         "abandoned, paid on the ship");
 }
 
+static void TestInventoryLayouts(void)
+{
+    CHECK(LayoutMatches(&api, (uintptr_t)image) && inventory_layout == &kOriginalInventory);
+    relocated_remove_pin = 1;
+    CHECK(!LayoutMatches(&api, (uintptr_t)image) && inventory_layout == &kOriginalInventory);
+    relocated_sort_pin = 1;
+    CHECK(LayoutMatches(&api, (uintptr_t)image) && inventory_layout == &kMovedInventory);
+
+    unsigned char* moved = VirtualAlloc(NULL, MOVED_INVENTORY_STATUS + 4, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    CHECK(moved);
+    PutPointer(INVENTORY_CELL, moved);
+    game_base = (uintptr_t)image;
+    Put32(moved + MOVED_CATALOGUE_STATUS, 2);
+    Put32(moved + MOVED_INVENTORY_STATUS, 2);
+    Put32(moved + MOVED_INVENTORY_COUNT, 5001);
+    unsigned char* record = moved + MOVED_INVENTORY_RECORDS + (size_t)5000 * INVENTORY_STRIDE;
+    Put32(record + 4, REQUISITION);
+    Put32(record + 0xB0, 1234);
+    unsigned amount = 0;
+    CHECK(Inventory(&api) == (uintptr_t)moved);
+    CHECK(ItemRecord(&api, (uintptr_t)moved, REQUISITION, &amount) == (uintptr_t)record && amount == 1234);
+    Put32(moved + MOVED_INVENTORY_STATUS, 0);
+    CHECK(!Inventory(&api));
+    Put32(moved + MOVED_INVENTORY_STATUS, 2);
+    Put32(moved + MOVED_INVENTORY_COUNT, 40961);
+    CHECK(!ItemRecord(&api, (uintptr_t)moved, UINT32_C(0x12345678), &amount));
+
+    PutPointer(INVENTORY_CELL, manager);
+    CHECK(VirtualFree(moved, 0, MEM_RELEASE));
+    game_base = 0;
+    relocated_remove_pin = relocated_sort_pin = 0;
+    CHECK(LayoutMatches(&api, (uintptr_t)image) && inventory_layout == &kOriginalInventory);
+    puts("PASS inventory layouts: original, relocated, mixed pins rejected, expanded records and status.");
+}
+
 int main(void)
 {
     size_t silo = PriceIndex("MS-11 Solo Silo");
@@ -1967,6 +2020,7 @@ int main(void)
     Tick();
     CHECK(!game_base && !inventory_ready);
     pins_match = 1;
+    TestInventoryLayouts();
     game_base = (uintptr_t)image;
     inventory_remove = Remove;
     inventory_add = Add;

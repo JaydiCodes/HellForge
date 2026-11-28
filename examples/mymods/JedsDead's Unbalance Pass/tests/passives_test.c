@@ -19,7 +19,7 @@ static HfPassives state;
 static int row_ready = 1, live_allowed = 1;
 static unsigned live_calls, releases;
 static double multiplier = 0.4;
-static HfRef swap_targets[19];
+static HfRef swap_targets[21];
 static unsigned swap_calls, swap_releases, feed_calls;
 static int refuse_arbitrator;
 
@@ -76,6 +76,8 @@ static int SwapLive(HfRef target, const HfField* field, const HfValue* value)
     {
         assert(!strcmp(field->component, "ProjectileWeaponComponentData") && field->offset == 0);
         if (value && target == HF_ENTITY_AR61_TENDERIZER) assert(value->number == 135);
+        if (value && target == HF_ENTITY_JAR5_DOMINATOR) assert(value->number == 202);
+        if (value && target == HF_ENTITY_SMG37_DEFENDER) assert(value->number == 215);
         if (target == HF_ENTITY_AR11_ARBITRATOR)
         {
             assert(!value || value->number == 276);
@@ -139,31 +141,38 @@ int main(void)
     state.want_second = BLUNT_FORCE_MITIGATION;
     strcpy(state.status, "held");
     registered_tick(&mod, 0.0f, NULL);
-    assert(swap_calls == 19 && feed_calls == 1 && swap_releases == 0);
+    assert(swap_calls == 21 && feed_calls == 1 && swap_releases == 0);
+    int dominator = 0, defender = 0;
+    for (unsigned i = 0; i < swap_calls; i++)
+    {
+        dominator |= swap_targets[i] == HF_ENTITY_JAR5_DOMINATOR;
+        defender |= swap_targets[i] == HF_ENTITY_SMG37_DEFENDER;
+    }
+    assert(dominator && defender);
     assert(strstr(last_log, "held"));
     unsigned logs = log_calls;
     registered_tick(&mod, 2.0f, NULL);
-    assert(log_calls == logs && swap_calls == 19);
+    assert(log_calls == logs && swap_calls == 21);
 
     /* The F7 menu's switch: off releases every swap, on puts them back, and a refusal is counted. */
     swap_calls = feed_calls = 0;
     UnbalanceSetProjectileSwaps(0);
     registered_tick(&mod, 2.0f, NULL);
-    assert(swap_calls == 19 && swap_releases == 19 && feed_calls == 1 && strstr(last_log, "off: 19 released, 0 refused"));
+    assert(swap_calls == 21 && swap_releases == 21 && feed_calls == 1 && strstr(last_log, "off: 21 released, 0 refused"));
     swap_calls = feed_calls = swap_releases = 0;
     refuse_arbitrator = 1;
     UnbalanceSetProjectileSwaps(1);
     registered_tick(&mod, 2.0f, NULL);
-    assert(swap_calls == 19 && feed_calls == 1 && strstr(last_log, "on: 18 applied, 1 refused"));
+    assert(swap_calls == 21 && feed_calls == 1 && strstr(last_log, "on: 20 applied, 1 refused"));
     swap_calls = feed_calls = 0;
     refuse_arbitrator = 0;
     UnbalanceSetProjectileSwaps(0);
     registered_tick(&mod, 2.0f, NULL);
-    assert(swap_calls == 19 && swap_releases == 19 && strstr(last_log, "off: 19 released, 0 refused"));
+    assert(swap_calls == 21 && swap_releases == 21 && strstr(last_log, "off: 21 released, 0 refused"));
     swap_calls = feed_calls = swap_releases = 0;
     UnbalanceSetProjectileSwaps(1);
     registered_tick(&mod, 2.0f, NULL);
-    assert(swap_calls == 19 && feed_calls == 1 && strstr(last_log, "on: 19 applied, 0 refused"));
+    assert(swap_calls == 21 && feed_calls == 1 && strstr(last_log, "on: 21 applied, 0 refused"));
     swap_calls = 0;
     registered_tick(&mod, 2.0f, NULL);
     assert(swap_calls == 0); /* the wanted state holds: nothing is written again */

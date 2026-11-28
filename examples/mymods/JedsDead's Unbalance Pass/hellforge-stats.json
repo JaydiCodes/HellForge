@@ -115,7 +115,6 @@
       "presentation.traits.2": 0
     },
     "JAR-5 Dominator": {
-      "ammunition.projectile": 202,
       "attachment.magazine.jet_assisted_rifle_15mm_drum_standard.magazines_from_supply": 5,
       "attachment.magazine.jet_assisted_rifle_15mm_drum_standard.spare_magazines": 5,
       "fire_mode.modes.2": 0,
@@ -127,10 +126,10 @@
       "weapon.fire_rate": 200,
       "weapon.horizontal_spread": 15,
       "weapon.recoil_climb_horizontal": 45,
-      "weapon.recoil_climb_vertical": 135,
+      "weapon.recoil_climb_vertical": 170,
       "weapon.recoil_drift_horizontal": 45,
       "weapon.recoil_drift_vertical": 45,
-      "weapon.sway": 0.95,
+      "weapon.sway": 1.1,
       "weapon.vertical_spread": 15,
       "fire_mode.modes.1": 1
     },
@@ -733,9 +732,6 @@
       "missile.turn_rate_at_max_angle": 2,
       "weapon.capacity": 14,
       "weapon.fire_rate": 1000
-    },
-    "SMG-37 Defender": {
-      "ammunition.projectile": 215
     },
     "LAS-5 Scythe": {
       "damage.status_2_strength": 2,
