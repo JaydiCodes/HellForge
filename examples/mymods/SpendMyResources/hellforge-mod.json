@@ -2,7 +2,7 @@
   "format": 1,
   "id": "jedsdead.spend-my-resources",
   "name": "Spend My Resources",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Equipment costs and upgrades, using your currencies. F2 opens currency exchange.",
   "gameplay": true,
   "coop": "shared",
