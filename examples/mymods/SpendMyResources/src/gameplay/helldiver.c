@@ -48,7 +48,7 @@ typedef struct HelldiverEdit {
 typedef struct HelldiverEffects {
     double primary, secondary, throwables, armor, damage, sprint, stamina, movement;
     int auto_stim, field_medic;
-    double health_percent, cooldown_seconds;
+    double health_percent, cooldown_seconds, heal_per_second;
 } HelldiverEffects;
 
 static SmrHelldiverTuning helldiver_tuning[SMR_PERK_COUNT];
@@ -136,7 +136,10 @@ static HelldiverEffects HelldiverPlanEffects(const SmrHelldiverPerk perks[SMR_TI
             fx.cooldown_seconds = t->cooldown_seconds;
         }
         if (perks[tier] == SMR_PERK_FIELD_MEDIC)
+        {
             fx.field_medic = 1;
+            fx.heal_per_second = t->heal_per_second;
+        }
     }
     fx.damage = 1 / fx.armor;
     return fx;
@@ -412,7 +415,8 @@ static void HelldiverTick(HfMod* mod, float dt)
         helldiver_runtime.since_heal = 0;
         return;
     }
-    helldiver_runtime.since_heal += elapsed;
+    /* since_heal accumulates owed HP so fractional rates still pay out over time. */
+    helldiver_runtime.since_heal += elapsed * (float)helldiver_effects.heal_per_second;
     float amount = floorf(helldiver_runtime.since_heal);
     if (amount >= 1)
     {

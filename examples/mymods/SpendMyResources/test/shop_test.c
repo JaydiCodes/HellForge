@@ -375,6 +375,7 @@ int SmrLoadHelldiverConfig(SmrHelldiverTuning tuning[SMR_PERK_COUNT], char* resu
     tuning[SMR_PERK_FIELD_MEDIC] = super;
     tuning[SMR_PERK_FIELD_MEDIC].movement_percent = -10;
     tuning[SMR_PERK_FIELD_MEDIC].armor_percent = -10;
+    tuning[SMR_PERK_FIELD_MEDIC].heal_per_second = 1;
     return 1;
 }
 
@@ -1229,6 +1230,22 @@ static void TestHelldiver(void)
     hit.damage.amount = 100;
     HelldiverDamagePre(&mod, &hit, NULL);
     CHECK(Near(hit.damage.amount, 100));
+
+    /* A configured heal rate pays out fractional HP over successive ticks. */
+    helldiver_tuning[SMR_PERK_FIELD_MEDIC].heal_per_second = 2.5;
+    helldiver_purchased[SMR_TIER_SUPER] = SMR_PERK_FIELD_MEDIC;
+    UpgradeStateChanged(&mod, &prepare, NULL);
+    MissionStart(&mod, NULL, NULL);
+    game_state = HF_STATE_MISSION;
+    HelldiverWeapon(&mod, &weapon, NULL);
+    Put32(health_record + 0x14, 490);
+    HelldiverTick(&mod, 1);
+    CHECK(heal_calls == 9 && last_heal_amount == 2 && *(int32_t*)(health_record + 0x14) == 492);
+    HelldiverTick(&mod, 0.2f);
+    CHECK(heal_calls == 10 && last_heal_amount == 1 && *(int32_t*)(health_record + 0x14) == 493);
+    MissionEnd(&mod, NULL, NULL);
+    game_state = HF_STATE_SHIP;
+    helldiver_tuning[SMR_PERK_FIELD_MEDIC].heal_per_second = 1;
     ResetExchange();
     session_role = HF_SESSION_SOLO;
     puts("PASS helldiver: one stacked perk per tier, combined sample prices, mission apply, ammo trade-offs, "

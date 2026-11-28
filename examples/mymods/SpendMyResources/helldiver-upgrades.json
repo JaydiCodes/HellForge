@@ -24,12 +24,12 @@
       "secondary_ammo_percent": -10
     },
     "sprinter": {
-      "sprint_percent": 10,
+      "sprint_percent": 15,
       "stamina_percent": -25
     },
     "endurance": {
       "stamina_percent": 25,
-      "sprint_percent": -10
+      "sprint_percent": -15
     }
   },
   "super": {
@@ -37,10 +37,11 @@
     "auto_stim": {
       "health_percent": 20,
       "cooldown_seconds": 30,
-      "armor_percent": -10
+      "armor_percent": -20
     },
     "field_medic": {
-      "movement_percent": -10,
+      "heal_per_second": 2.5,
+      "movement_percent": -20,
       "armor_percent": -10
     }
   }

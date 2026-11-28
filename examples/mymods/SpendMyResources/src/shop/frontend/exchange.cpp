@@ -18,8 +18,6 @@ static void ExchangeCurrencyRow(const char* role, const SmrCurrency* currencies,
         constexpr float iconSide = 30.0f;
         const float inset = (kExchangeTileSide - iconSide) / 2;
         DrawCurrencyGraphic(static_cast<size_t>(i), ImVec2(min.x + inset, min.y + inset), iconSide);
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip | ImGuiHoveredFlags_AllowWhenDisabled) || ImGui::IsItemFocused())
-            ImGui::SetTooltip("%s (%u points)", currencies[i].name, currencies[i].points);
     }
 }
 
@@ -58,13 +56,6 @@ void Frame(ImDrawList*, float width, float height, float)
             pending |= currencies[count].pending != 0;
             ++count;
         }
-        ImGui::TextDisabled("Points:");
-        for (int i = 0; i < count; ++i)
-        {
-            ImGui::SameLine();
-            DrawCurrencyIcon(static_cast<size_t>(i), "points per unit");
-            ImGui::TextDisabled("%u", currencies[i].points);
-        }
         ImGui::TextUnformatted("Wallet balances:");
         for (int i = 0; i < count; ++i)
         {
@@ -91,7 +82,7 @@ void Frame(ImDrawList*, float width, float height, float)
         SmrCurrencyItem(to, &target);
         if (SmrExchangeQuote(from, to, 1, &unitDebit, &unitCredit))
         {
-            ImGui::TextUnformatted("One batch:");
+            ImGui::TextUnformatted("Exchange rate (one batch):");
             ImGui::SameLine();
             DrawCurrencyIcon(from, "given per batch");
             ImGui::Text("%u", unitDebit);

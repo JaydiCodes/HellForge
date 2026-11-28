@@ -31,7 +31,8 @@ static void DescribePerk(SmrHelldiverPerk perk, const SmrHelldiverTuning& tuning
     if (perk == SMR_PERK_AUTO_STIM)
         ImGui::BulletText("Auto-heal at %.6g%% health or lower, once every %.6g s.", tuning.health_percent,
             tuning.cooldown_seconds);
-    if (perk == SMR_PERK_FIELD_MEDIC) ImGui::BulletText("Regenerate 1 HP every second.");
+    if (perk == SMR_PERK_FIELD_MEDIC)
+        ImGui::BulletText("Regenerate %.6g HP every second.", tuning.heal_per_second);
     const struct { const char* label; double value; } effects[] = {
         {"Primary magazines", tuning.primary_ammo_percent}, {"Secondary magazines", tuning.secondary_ammo_percent},
         {"Throwables", tuning.throwables_percent},

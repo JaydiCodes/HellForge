@@ -90,7 +90,7 @@ static const SmrHelldiverTuning helldiverTuning[SMR_PERK_COUNT] = {
     {{0, 0, 10}, 0, 0, 0, 0, 10, -25},
     {{0, 0, 10}, 0, 0, 0, 0, -10, 25},
     {{0, 0, 0, 5}, 0, 0, 0, -10, 0, 0, 0, 20, 30},
-    {{0, 0, 0, 5}, 0, 0, 0, -10, 0, 0, -10},
+    {{0, 0, 0, 5}, 0, 0, 0, -10, 0, 0, -10, 0, 0, 2.5},
 };
 static bool helldiverConfigAvailable = true;
 extern "C" SmrHelldiverStatus SmrHelldiver(HfMod*) { return helldiver; }
@@ -726,8 +726,9 @@ static void SaveFrontendScreenshot(const char* path, bool expectGameIcons, bool 
             }
     if (exchange)
     {
+        /* Each currency draws in the wallet row and the give and receive tiles: 3 quads of 6 indices. */
         for (size_t i = 0; i < CURRENCY_COUNT; ++i)
-            if (icons::Find(icons::MOD, editorapp::kCurrencyIcons[i])) CHECK(currencyByType[i] >= 24);
+            if (icons::Find(icons::MOD, editorapp::kCurrencyIcons[i])) CHECK(currencyByType[i] >= 18);
     }
     else
     {
@@ -841,7 +842,7 @@ static void CheckExchangeControls(const char* screenshot)
 {
     ImGuiWindow* window = ImGui::FindWindowByName("Spend My Resources - Currency Exchange");
     CHECK(window);
-    CheckExchangeText("Give: Requisition slips", "Receive: Common samples", "One batch:");
+    CheckExchangeText("Give: Requisition slips", "Receive: Common samples", "Exchange rate (one batch):");
     if (screenshot)
     {
         GImGui->NavId = 0;
@@ -885,7 +886,7 @@ static void CheckExchangeControls(const char* screenshot)
 
     exchangeAmounts[COMMON_SAMPLES] = 100;
     PressExchangeButton("##exchange-give-1");
-    CheckExchangeText("Give: Common samples", "Receive: Forge Credits", "One batch:");
+    CheckExchangeText("Give: Common samples", "Receive: Forge Credits", "Exchange rate (one batch):");
     PressExchangeButton("+", "Batches");
     CheckExchangeText("Give 100 Receive 2");
     PressExchangeButton("Exchange");
@@ -1052,7 +1053,7 @@ static void CheckHelldiverTab(const char* screenshot, bool expectGameIcons)
     ImGuiWindow* description = panel->DC.ChildWindows[0];
     Draw();
     CHECK(description->Pos.y > medic.Max.y && panel->ScrollMax.y == 0);
-    CheckModalText("Super: Field Medic", "Regenerate 1 HP every second.", "Armor rating: -10%");
+    CheckModalText("Super: Field Medic", "Regenerate 2.5 HP every second.", "Armor rating: -10%");
     auto& io = ImGui::GetIO();
     io.AddMousePosEvent(grenade.GetCenter().x, grenade.GetCenter().y);
     CheckModalText("Plus: Grenade Kit", "Throwables: -50%", "Cost:");

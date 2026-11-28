@@ -101,7 +101,7 @@ typedef struct SmrHelldiverTuning {
     unsigned price[CURRENCY_COUNT]; /* The perk's tier price, kCurrencies order. */
     double primary_ammo_percent, secondary_ammo_percent, throwables_percent;
     double armor_percent, sprint_percent, stamina_percent, movement_percent;
-    double health_percent, cooldown_seconds;
+    double health_percent, cooldown_seconds, heal_per_second;
 } SmrHelldiverTuning;
 typedef struct SmrHelldiverStatus {
     unsigned balance[CURRENCY_COUNT];

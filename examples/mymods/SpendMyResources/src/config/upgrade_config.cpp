@@ -173,10 +173,11 @@ static int ReadHelldiverConfig(const std::wstring& path, SmrHelldiverTuning tuni
         {"movement_percent", 1u << SMR_PERK_FIELD_MEDIC, -90, 1000, &SmrHelldiverTuning::movement_percent},
         {"health_percent", 1u << SMR_PERK_AUTO_STIM, 1, 99, &SmrHelldiverTuning::health_percent},
         {"cooldown_seconds", 1u << SMR_PERK_AUTO_STIM, 0, 86400, &SmrHelldiverTuning::cooldown_seconds},
+        {"heal_per_second", 1u << SMR_PERK_FIELD_MEDIC, 0, 1000, &SmrHelldiverTuning::heal_per_second},
     };
     SmrHelldiverTuning loaded[SMR_PERK_COUNT] = {};
     unsigned seenTiers = 0;
-    bool usedDefaultSuperArmor = false;
+    bool usedDefaultSuperArmor = false, usedDefaultHealRate = false;
     for (const auto& section : document.members)
     {
         unsigned tier = 0;
@@ -251,6 +252,13 @@ static int ReadHelldiverConfig(const std::wstring& path, SmrHelldiverTuning tuni
                         usedDefaultSuperArmor = true;
                         continue;
                     }
+                    /* Configs written before heal_per_second existed keep the original 1 HP/s rate. */
+                    if (fields[i].number == &SmrHelldiverTuning::heal_per_second)
+                    {
+                        loaded[perk].heal_per_second = 1;
+                        usedDefaultHealRate = true;
+                        continue;
+                    }
                     snprintf(result, size, "Missing setting: %s.%s.%s.", tiers[tier], perks[perk], fields[i].name);
                     return 0;
                 }
@@ -278,7 +286,10 @@ static int ReadHelldiverConfig(const std::wstring& path, SmrHelldiverTuning tuni
             return 0;
         }
     for (unsigned i = 0; i < SMR_PERK_COUNT; ++i) tuning[i] = loaded[i];
-        if (usedDefaultSuperArmor) snprintf(result, size, "Missing super armor settings use -10%%.");
+        if (usedDefaultSuperArmor || usedDefaultHealRate)
+            snprintf(result, size, "%s%s%s", usedDefaultSuperArmor ? "Missing super armor settings use -10%." : "",
+                usedDefaultSuperArmor && usedDefaultHealRate ? " " : "",
+                usedDefaultHealRate ? "Missing heal_per_second uses 1 HP/s." : "");
         else if (size) result[0] = '\0';
     return 1;
 }

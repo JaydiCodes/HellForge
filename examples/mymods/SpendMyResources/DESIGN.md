@@ -1,7 +1,7 @@
 TODO:
+- Release mod
 - Upgrades: Stratagems
 - Random free loadout button
-- Release mod
 
 - **Spend samples, Req or FC (Forge Credits) to empower weapons / strats for one operation**
 	- Strats
