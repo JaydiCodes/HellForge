@@ -58,6 +58,9 @@ $out=if($SpendMyResources){Join-Path $project 'artifacts/SpendMyResources'}elsei
     Join-Path $project 'artifacts\UnbalancePass'
 }else{Join-Path $project 'artifacts/editor/hellforge-editor'}
 New-Item -ItemType Directory $out -Force|Out-Null
+if($SpendMyResources -and (Test-Path -LiteralPath (Join-Path $out 'modded-content.json'))){
+    throw 'Move the existing modded-content.json out of the output folder before building; it must not be distributed.'
+}
 $sources=@('imgui.cpp','imgui_draw.cpp','imgui_tables.cpp','imgui_widgets.cpp','imgui_demo.cpp','backends/imgui_impl_win32.cpp','backends/imgui_impl_dx11.cpp','backends/imgui_impl_dx12.cpp')|ForEach-Object {Join-Path $imgui $_}
 $common=@('-target','x86_64-windows-gnu','-O2','-std=c++17','-fno-exceptions','-fno-rtti','-I',(Join-Path $project 'native/mod-sdk'),'-I',$imgui,'-I',(Join-Path $imgui 'backends'),'-DIMGUI_DISABLE_OBSOLETE_FUNCTIONS',('-ffile-prefix-map='+$project+'=.')) # source paths in the DLL are relative: it ships
 # Dear ImGui as it is (its own warnings off), then the editor with the warnings every HellForge mod is built with.
@@ -89,13 +92,18 @@ if($UnbalancePass){
     $frontend=Join-Path $mod 'overlay'
     $editor=Join-Path $project 'native\editor'
     $sdk=Join-Path $project 'native\mod-sdk'
+    # The DLL carries the whole balance pass: the F7 menu regenerates hellforge-stats.json from it with sections or
+    # entries switched off.
+    $statsJson=[IO.File]::ReadAllText((Join-Path $mod 'hellforge-stats.json'))
+    if($statsJson.Contains(')HFSTATS(')){throw 'hellforge-stats.json cannot be embedded: it contains the raw string delimiter.'}
+    [IO.File]::WriteAllText((Join-Path $objects 'unbalance_stats.inc'),('static const char kUnbalanceMasterStats[] = R"HFSTATS('+$statsJson+')HFSTATS";'+"`n"))
     $gameplay=Join-Path $objects 'unbalance_pass.o'
     & $zig cc -target x86_64-windows-gnu -O2 -Wall -Werror -Wno-unused-parameter -I $sdk -DUNBALANCE_OVERLAY `
         -c (Join-Path $src 'unbalance_pass.c') -o $gameplay
     if($LASTEXITCODE){throw 'UnBalance Pass gameplay did not compile.'}
     $dll=Join-Path $out 'unbalance_pass.dll'
     $renderer=@('editor.cpp','icons.cpp','canvas.cpp','json.cpp','local_stats.cpp','sounds.cpp','translate.cpp')|ForEach-Object {Join-Path $editor $_}
-    & $zig c++ @common -shared -Wall -Werror -Wno-unused-parameter -s -I $src -I $editor -I $frontend `
+    & $zig c++ @common -shared -Wall -Werror -Wno-unused-parameter -s -I $src -I $editor -I $frontend -I $objects `
         '-DHF_OVERLAY_FRONTEND=\"unbalance_frontend.h\"' `
         @renderer (Join-Path $frontend 'unbalance_frontend.cpp') $gameplay @built `
         -ld3d11 -ld3d12 -ldxgi -ld3dcompiler_47 -ldwmapi -lgdi32 -lole32 -luser32 -o $dll
@@ -114,7 +122,7 @@ if($UnbalancePass){
         if($LASTEXITCODE){throw 'The UnBalance Pass fixture failed.'}
         $settingsTest=Join-Path $testOut 'unbalance_settings_test.exe'
         $imguiCore=@($built|Where-Object {[IO.Path]::GetFileName($_) -notlike 'imgui_impl_*'})
-        & $zig c++ @common -Wall -Werror -I $sdk -I $src -I $editor `
+        & $zig c++ @common -Wall -Werror -I $sdk -I $src -I $editor -I $objects `
             (Join-Path $mod 'tests\settings_test.cpp') (Join-Path $editor 'json.cpp') @imguiCore -o $settingsTest
         if($LASTEXITCODE){throw 'The UnBalance Pass settings fixture did not compile.'}
         $settingsDir=Join-Path $testOut ('unbalance-settings-'+[guid]::NewGuid())
@@ -123,7 +131,8 @@ if($UnbalancePass){
             & $settingsTest $settingsDir
             if($LASTEXITCODE){throw 'The UnBalance Pass settings fixture failed.'}
         } finally {
-            foreach($file in @('hellforge-jedsdeads-unbalance-pass.json','hellforge-jedsdeads-unbalance-pass.json.ingame.tmp')){
+            foreach($file in @('hellforge-jedsdeads-unbalance-pass.json','hellforge-jedsdeads-unbalance-pass.json.ingame.tmp',
+                'hellforge-stats.json','hellforge-stats.json.ingame.tmp')){
                 $path=Join-Path $settingsDir $file
                 if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path}
             }
@@ -188,7 +197,7 @@ if($SpendMyResources){
         'shop\frontend\helldiver_panel.cpp','shop\frontend\equipment_panel.cpp','shop\frontend\exchange.cpp'
     )|ForEach-Object {Join-Path $src $_}
     $storage=@(
-        'config\config_path.cpp','config\prices.cpp','config\upgrade_config.cpp','currency\currency_ledger.cpp'
+        'config\config_path.cpp','config\prices.cpp','config\modded_content.cpp','config\upgrade_config.cpp','currency\currency_ledger.cpp'
     )|ForEach-Object {Join-Path $src $_}
     & $zig c++ @common -shared -Wall -Werror -Wno-unused-parameter -s -I $src -I $editor '-DHF_OVERLAY_FRONTEND=\"shop/shop_frontend.h\"' `
         (Join-Path $editor 'editor.cpp') (Join-Path $editor 'icons.cpp') (Join-Path $editor 'json.cpp') @frontend @storage $gameplay @built `
@@ -223,8 +232,7 @@ if($SpendMyResources){
     }
     Copy-Item -LiteralPath (Join-Path $project 'data\forge-credits\currency-icon.png') -Destination (Join-Path $imageOut 'Forge_Credit.png') -Force
     Get-ChildItem -LiteralPath $out -Filter '*.lib' | Remove-Item
-    Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'README.md'),(Join-Path $mod 'extra-stratagem-slot.md'),(Join-Path $mod 'currency-ledger.md'),(Join-Path $mod 'kill-rewards.md'),(Join-Path $mod 'prices.json'),(Join-Path $mod 'destroyer-upgrades.json'),(Join-Path $mod 'helldiver-upgrades.json'),(Join-Path $mod 'kill-rewards.json'),(Join-Path $project 'LICENSE') -Destination $out
-    Copy-Item -LiteralPath (Join-Path $mod 'equipment-upgrades.json') -Destination $out
+    Copy-Item -LiteralPath (Join-Path $mod 'hellforge-mod.json'),(Join-Path $mod 'README.md'),(Join-Path $mod 'prices.json'),(Join-Path $mod 'destroyer-upgrades.json'),(Join-Path $mod 'helldiver-upgrades.json'),(Join-Path $mod 'kill-rewards.json'),(Join-Path $mod 'equipment-upgrades.json'),(Join-Path $project 'LICENSE') -Destination $out
     Copy-Item -LiteralPath (Join-Path $imgui 'LICENSE.txt') -Destination (Join-Path $out 'imgui-LICENSE.txt')
     Write-Output "Built standalone mod: $dll"
     if($Test){
@@ -247,6 +255,14 @@ if($SpendMyResources){
         if($LASTEXITCODE){throw 'The price list fixture did not compile.'}
         & $pricesTest (Join-Path $out 'prices.json') (Join-Path $out 'destroyer-upgrades.json') (Join-Path $out 'helldiver-upgrades.json') (Join-Path $out 'kill-rewards.json') (Join-Path $out 'equipment-upgrades.json')
         if($LASTEXITCODE){throw 'The price list fixture failed.'}
+        $moddedContentTest=Join-Path $testOut 'modded_content_test.exe'
+        & $zig c++ -target x86_64-windows-gnu -O1 -std=c++17 -Wall -Werror -Wno-unused-parameter `
+            -I (Join-Path $project 'native/mod-sdk') -I $editor -I $src `
+            (Join-Path $mod 'test/modded_content_test.cpp') (Join-Path $src 'config\modded_content.cpp') `
+            (Join-Path $src 'config\config_path.cpp') (Join-Path $editor 'json.cpp') -o $moddedContentTest
+        if($LASTEXITCODE){throw 'The modded content fixture did not compile.'}
+        & $moddedContentTest
+        if($LASTEXITCODE){throw 'The modded content fixture failed.'}
         $checkoutTest=Join-Path $testOut 'checkout_frontend_test.exe'
         & $zig c++ @common -Wall -Werror -Wno-unused-parameter -I $src -I $editor `
             (Join-Path $mod 'test/checkout_frontend_test.cpp') (Join-Path $editor 'icons.cpp') (Join-Path $editor 'json.cpp') @frontend @built `

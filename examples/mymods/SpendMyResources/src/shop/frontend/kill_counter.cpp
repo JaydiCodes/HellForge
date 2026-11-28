@@ -118,7 +118,7 @@ void KillRewardFrame(float width, float height)
     PanelPlace(PositionPanel::KillReward, width, height, &place, &pivot);
     ImGui::SetNextWindowPos(place, ImGuiCond_Always, pivot);
     // A minimum width keeps the centered card from jittering as the digits change.
-    ImGui::SetNextWindowSizeConstraints(ImVec2(220, 0), ImVec2(FLT_MAX, FLT_MAX));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(kKillCardMinWidth, 0), ImVec2(FLT_MAX, FLT_MAX));
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
     const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs |

@@ -14,7 +14,35 @@ typedef struct SmrItem {
     int selected;
 } SmrItem;
 
-enum { SMR_MAX_RESTRICTED_ITEMS = 64 };
+enum {
+    SMR_BUILTIN_PRICE_COUNT = 249,
+    SMR_MAX_RESTRICTED_ITEMS = 1024,
+    SMR_MAX_MODDED_ENEMIES = 1024,
+    SMR_ITEM_SET_WORDS = (SMR_MAX_RESTRICTED_ITEMS + 63) / 64
+};
+typedef enum { PRICE_WEAPON, PRICE_STRATAGEM } PriceKind;
+typedef struct AccessItem {
+    PriceKind kind;
+    uint32_t id;
+    const char* name;
+    unsigned requisition;
+} AccessItem;
+typedef struct SmrItemSet { uint64_t words[SMR_ITEM_SET_WORDS]; } SmrItemSet;
+typedef struct SmrModdedEnemy { uint64_t resource; const char* key; const char* name; unsigned value; } SmrModdedEnemy;
+static inline int SmrItemSetHas(const SmrItemSet* set, size_t item)
+{
+    return (set->words[item / 64] & (UINT64_C(1) << (item % 64))) != 0;
+}
+static inline void SmrItemSetAdd(SmrItemSet* set, size_t item)
+{
+    set->words[item / 64] |= UINT64_C(1) << (item % 64);
+}
+static inline int SmrItemSetEqual(const SmrItemSet* left, const SmrItemSet* right)
+{
+    for (size_t i = 0; i < SMR_ITEM_SET_WORDS; ++i)
+        if (left->words[i] != right->words[i]) return 0;
+    return 1;
+}
 typedef struct SmrQuoteLine {
     const char* name;
     unsigned due;
@@ -147,6 +175,10 @@ int SmrCheckoutComplete(void);
 int SmrTakeCheckoutRequest(void);
 void SmrFinishCheckout(int ready);
 int SmrLoadPrices(const char* const* names, unsigned* prices, size_t count, char* result, size_t size);
+int SmrEnsureModdedContentFile(char* result, size_t size);
+int SmrLoadModdedContent(HfMod* mod, AccessItem* items, const char** item_keys, size_t* item_count,
+    SmrModdedEnemy* enemies, size_t* enemy_count, const char* const* builtin_enemy_names,
+    size_t builtin_enemy_count, char* result, size_t size);
 /* Kill rewards: an enemy missing from kill-rewards.json is worth the default; 0 excludes it. */
 enum {
     SMR_KILL_DEFAULT_VALUE = 1, SMR_KILL_MAX_VALUE = 1000000, SMR_KILL_BONUS_PERCENT = 5,

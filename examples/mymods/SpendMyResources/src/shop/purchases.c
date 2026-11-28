@@ -67,7 +67,8 @@ static SmrCheckoutAction CheckoutAction(unsigned gear_cost, int upgrade, const u
 SmrCheckoutAction SmrCheckout(unsigned* gear_cost, unsigned upgrade_price[CURRENCY_COUNT], int* pending)
 {
     AcquireSRWLockShared(&shop_lock);
-    UnpaidItems(WithExtraAccess(checkout_equipped), gear_cost);
+    SmrItemSet selected = WithExtraAccess(checkout_equipped);
+    UnpaidItems(&selected, gear_cost);
     int upgrade = CheckoutUpgradePrice(upgrade_selected, helldiver_selected, equipment_selected, upgrade_price);
     *pending = CheckoutPending();
     SmrCheckoutAction action = CheckoutAction(*gear_cost, upgrade, upgrade_price, *pending);
@@ -84,8 +85,8 @@ int SmrConfirmCheckout(HfMod* mod, SmrCheckoutAction action)
     }
     AcquireSRWLockExclusive(&shop_lock);
     unsigned gear_cost, upgrade_price[CURRENCY_COUNT];
-    uint64_t selected = WithExtraAccess(checkout_equipped);
-    uint64_t unpaid = UnpaidItems(selected, &gear_cost);
+    SmrItemSet selected = WithExtraAccess(checkout_equipped);
+    SmrItemSet unpaid = UnpaidItems(&selected, &gear_cost);
     int upgrade = CheckoutUpgradePrice(upgrade_selected, helldiver_selected, equipment_selected, upgrade_price);
     if (CheckoutGate() != CHECKOUT_OPEN || action == SMR_CHECKOUT_BLOCKED ||
         action != CheckoutAction(gear_cost, upgrade, upgrade_price, CheckoutPending()))
@@ -134,13 +135,13 @@ static int UpgradeFunded(const HfApi* api, uintptr_t manager, const unsigned pri
 static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, unsigned balance, int state)
 {
     if (state != CHARGE_QUEUED) return;
-    uint64_t equipped = 0;
+    SmrItemSet equipped = {0};
     unsigned gear_cost, upgrade_price[CURRENCY_COUNT], expected[CURRENCY_COUNT];
     uint32_t primary = 0;
     int readable = ReadEquippedItems(mod, &equipped, &primary);
     AcquireSRWLockShared(&shop_lock);
-    uint64_t selected = WithExtraAccess(equipped);
-    uint64_t unpaid = UnpaidItems(selected, &gear_cost), mask = charge.mask;
+    SmrItemSet selected = WithExtraAccess(equipped);
+    SmrItemSet unpaid = UnpaidItems(&selected, &gear_cost), mask = charge.mask;
     int active = CheckoutGate() == CHECKOUT_OPEN;
     unsigned quoted_gear_cost = charge.gear_cost;
     memcpy(upgrade_price, charge.upgrade_price, sizeof upgrade_price);
@@ -163,7 +164,8 @@ static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, un
     const HfApi* api = HF_API(mod);
     uint64_t requisition = SmrRequisitionDue(gear_cost, upgrade_price);
     unsigned before[CURRENCY_COUNT] = {0};
-    if (!active || api->game_state(mod) != HF_STATE_SHIP || !manager || !readable || unpaid != mask ||
+    if (!active || api->game_state(mod) != HF_STATE_SHIP || !manager || !readable ||
+        !SmrItemSetEqual(&unpaid, &mask) ||
         gear_cost != quoted_gear_cost || (requisition && (!balance_ready || balance < requisition)) ||
         (upgrades && (!upgrade_valid || !UpgradeFunded(api, manager, upgrade_price, before) ||
             (upgrade && !CanApplyUpgrade(mod, upgrade, extra)) || !CanApplyHelldiver(mod, helldiver) ||
@@ -191,8 +193,8 @@ static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, un
     {
         AcquireSRWLockExclusive(&shop_lock);
         wallet = currency_amount[REQUISITION_SLIPS] = after;
-        for (size_t i = 0; i < PRICE_COUNT; ++i)
-            if (mask & (UINT64_C(1) << i)) access[i] = 1;
+        for (size_t i = 0; i < loadout_price_count; ++i)
+            if (SmrItemSetHas(&mask, i)) access[i] = 1;
         if (upgrade)
         {
             upgrade_purchased = upgrade;
@@ -218,9 +220,11 @@ static void ProcessPurchase(HfMod* mod, uintptr_t manager, int balance_ready, un
         InterlockedCompareExchange(&checkout_gate, CHECKOUT_CONFIRMED, CHECKOUT_OPEN);
         ReleaseSRWLockExclusive(&shop_lock);
         api->log(mod, "Purchased loadout: %u Req, %u Forge Credits, %u Common, %u Rare and %u Super samples, "
-            "access mask 0x%llX, Destroyer upgrade %d, Helldiver upgrades %d/%d/%d. %s", req_cost,
+            "access masks 0x%llX/0x%llX/0x%llX/0x%llX, Destroyer upgrade %d, Helldiver upgrades %d/%d/%d. %s", req_cost,
             upgrade_price[FORGE_CREDITS], upgrade_price[COMMON_SAMPLES], upgrade_price[RARE_SAMPLES],
-            upgrade_price[SUPER_SAMPLES], (unsigned long long)mask, upgrade, helldiver[SMR_TIER_PLUS],
+            upgrade_price[SUPER_SAMPLES], (unsigned long long)mask.words[0],
+            (unsigned long long)mask.words[1], (unsigned long long)mask.words[2],
+            (unsigned long long)mask.words[3], upgrade, helldiver[SMR_TIER_PLUS],
             helldiver[SMR_TIER_ELITE], helldiver[SMR_TIER_SUPER], detail);
         ShopMessage(mod, "Loadout purchased. Readying automatically.");
         return;

@@ -7,10 +7,12 @@
 #include "../overlay/unbalance_frontend.cpp"
 
 static int requested;
+static int swapsRequested = -1;
 static unsigned logs;
 static uint32_t gameState = HF_STATE_SHIP;
 
 void UnbalanceRequestMitigation(int percent) { requested = percent; }
+void UnbalanceSetProjectileSwaps(int enabled) { swapsRequested = enabled; }
 UnbalanceMitigationState UnbalanceMitigationStatus() { return UNBALANCE_SOLO; }
 static void Log(HfMod*, const char*, ...) { ++logs; }
 static uint32_t State(HfMod*) { return gameState; }
@@ -23,7 +25,7 @@ int main(int argc, char** argv)
     HfApi api{};
     api.log = Log;
     api.game_state = State;
-    const editorapp::Host host{&api, nullptr, {}, {}, nullptr, nullptr, nullptr};
+    const editorapp::Host host{&api, nullptr, argv[1], {}, nullptr, nullptr, nullptr};
 
     assert(CanOpenOverlay(&api, nullptr) && hf_overlay_hotkey == VK_F7);
     gameState = HF_STATE_PREPARE_MISSION;
@@ -59,6 +61,78 @@ int main(int argc, char** argv)
     }
     editorapp::draft = 60;
     editorapp::Save();
+
+    /* The stats switches: hellforge-stats.json is regenerated from the built-in pass, and left alone on defaults. */
+    const std::wstring statsFile = editorapp::statsPath;
+    assert(editorapp::masterParsed && !editorapp::sections.empty());
+    assert(statsFile == directory + L"\\hellforge-stats.json");
+    assert(editorapp::statsEnabled && editorapp::swapsEnabled && swapsRequested == 1);
+    assert(GetFileAttributesW(statsFile.c_str()) == INVALID_FILE_ATTRIBUTES);
+    auto targetNamed = [](const char* section, const char* name) -> editorapp::StatsTarget* {
+        editorapp::StatsSection* s = editorapp::SectionNamed(section);
+        if (s == nullptr) return nullptr;
+        for (editorapp::StatsTarget& t : s->targets)
+            if (t.name == name) return &t;
+        return nullptr;
+    };
+    editorapp::StatsTarget* eagle = targetNamed("enemies", "eagle_bomb");
+    assert(eagle != nullptr && editorapp::SectionNamed("weapons") != nullptr);
+
+    /* One entry off: the file appears without it, everything else kept. */
+    eagle->enabled = false;
+    editorapp::SaveToggles();
+    assert(!editorapp::saveFailed && !editorapp::statsWriteFailed);
+    std::string text, again;
+    hfjson::Value stats;
+    assert(hfjson::ReadFile(statsFile, &text) && hfjson::Parse(text, &stats, nullptr));
+    assert(stats.GetNumber("format", 0) == 1);
+    assert(stats.Find("enemies") != nullptr && stats.Find("enemies")->Find("eagle_bomb") == nullptr);
+    assert(stats.Find("enemies")->Find("Charger") != nullptr && stats.Find("weapons") != nullptr);
+
+    /* The switch comes back after a restart, and the regenerated file is not written again. */
+    editorapp::Init(host);
+    eagle = targetNamed("enemies", "eagle_bomb");
+    assert(eagle != nullptr && !eagle->enabled && editorapp::statsEnabled);
+    assert(hfjson::ReadFile(statsFile, &again) && again == text);
+
+    /* A reinstall ships the full file again: Init filters it back to the saved switches. */
+    assert(hfjson::WriteAtomically(statsFile, kUnbalanceMasterStats));
+    editorapp::Init(host);
+    assert(hfjson::ReadFile(statsFile, &again) && again == text);
+
+    /* A whole section off. */
+    editorapp::SectionNamed("enemies")->enabled = false;
+    editorapp::SaveToggles();
+    assert(hfjson::ReadFile(statsFile, &text) && hfjson::Parse(text, &stats, nullptr));
+    assert(stats.Find("enemies") == nullptr && stats.Find("weapons") != nullptr);
+
+    /* The weapons section and the master switch gate the code's projectile swaps too. */
+    editorapp::SectionNamed("weapons")->enabled = false;
+    editorapp::SaveToggles();
+    assert(swapsRequested == 0);
+    editorapp::SectionNamed("weapons")->enabled = true;
+    editorapp::SaveToggles();
+    assert(swapsRequested == 1);
+    editorapp::swapsEnabled = false;
+    editorapp::SaveToggles();
+    assert(swapsRequested == 0);
+    editorapp::swapsEnabled = true;
+
+    /* Everything off: the stats file goes; back on, the whole pass is written again. */
+    editorapp::statsEnabled = false;
+    editorapp::SaveToggles();
+    assert(swapsRequested == 0 && GetFileAttributesW(statsFile.c_str()) == INVALID_FILE_ATTRIBUTES);
+    editorapp::statsEnabled = true;
+    editorapp::SectionNamed("enemies")->enabled = true;
+    targetNamed("enemies", "eagle_bomb")->enabled = true;
+    editorapp::SaveToggles();
+    assert(swapsRequested == 1 && editorapp::TogglesDefault());
+    assert(hfjson::ReadFile(statsFile, &text) && hfjson::Parse(text, &stats, nullptr));
+    assert(stats.Find("enemies") != nullptr && stats.Find("enemies")->Find("eagle_bomb") != nullptr);
+    editorapp::Init(host);
+    assert(hfjson::ReadFile(statsFile, &again) && again == text); /* defaults: the shipped file is left alone */
+    assert(DeleteFileW(statsFile.c_str()));
+
     ImGui::CreateContext();
     auto& io = ImGui::GetIO();
     io.IniFilename = nullptr;

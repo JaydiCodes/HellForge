@@ -56,7 +56,15 @@ static int EnemyIndex(uint64_t resource)
         if (kEnemies[middle].resource < resource) low = middle + 1;
         else high = middle;
     }
-    return low < ENEMY_COUNT && kEnemies[low].resource == resource ? (int)low : -1;
+    if (low < ENEMY_COUNT && kEnemies[low].resource == resource) return (int)low;
+    for (size_t i = 0; i < modded_enemy_count; ++i)
+        if (modded_enemies[i].resource == resource) return (int)(ENEMY_COUNT + i);
+    return -1;
+}
+
+static unsigned EnemyValue(int index)
+{
+    return index < ENEMY_COUNT ? enemy_value[index] : modded_enemies[index - ENEMY_COUNT].value;
 }
 
 static void ResetKills(void)
@@ -123,7 +131,7 @@ static int InitKillRewards(HfMod* mod)
     if (!hf_has_functions_(mod) || !api->hook_function ||
         hf_hook_SendMissionEndTelemetry(mod, MissionEndTelemetry, &send_mission_end, 0))
         api->log(mod, "SendMissionEndTelemetry hook refused; abandoned missions pay their full kill reward.");
-    api->log(mod, "Loaded kill-rewards.json (%u enemies).", (unsigned)ENEMY_COUNT);
+    api->log(mod, "Loaded kill-rewards.json (%u enemies).", (unsigned)(ENEMY_COUNT + modded_enemy_count));
     return 1;
 }
 
@@ -193,7 +201,7 @@ static void EnemyKilled(HfMod* mod, const HfKillEvent* event, void* user)
 {
     if (!kill_rewards_ready || !event->creditor || HF_API(mod)->game_state(mod) != HF_STATE_MISSION) return;
     int enemy = EnemyIndex(VictimResource(mod, event->victim));
-    if (enemy < 0 || !enemy_value[enemy]) return;
+    if (enemy < 0 || !EnemyValue(enemy)) return;
     size_t slot = (event->victim * 2654435761u) & (KILL_SLOTS - 1);
     while (kill_used[slot])
     {
@@ -208,9 +216,9 @@ static void EnemyKilled(HfMod* mod, const HfKillEvent* event, void* user)
         return;
     }
     kill_used[slot] = 1;
-    kill_records[slot] = (KillRecord){event->victim, enemy_value[enemy], event->creditor};
+    kill_records[slot] = (KillRecord){event->victim, EnemyValue(enemy), event->creditor};
     ++kill_count;
-    PublishKill(mod, event->creditor, enemy_value[enemy]);
+    PublishKill(mod, event->creditor, EnemyValue(enemy));
 }
 
 /* Mission end: the players still in the session split the team's total; the leaving state may have emptied the list. */

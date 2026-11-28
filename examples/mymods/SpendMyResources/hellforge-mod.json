@@ -3,7 +3,7 @@
   "id": "jaydicodes.spend-my-resources",
   "name": "Spend My Resources",
   "version": "0.8.0",
-  "description": "Ready opens mission upgrades, then access checkout for restricted equipment if needed. F2 opens ship-only currency exchange.",
+  "description": "Equipment costs and upgrades, using your currencies. F2 opens currency exchange.",
   "gameplay": true,
   "coop": "shared",
   "code": {

@@ -226,7 +226,8 @@ static void CheckCostPanel(const char* total, bool breakdown, float width = 1280
     ImGuiWindow* panel = ImGui::FindWindowByName("Loadout cost");
     CHECK(panel && (panel->Flags & ImGuiWindowFlags_NoInputs) == ImGuiWindowFlags_NoInputs &&
         ImGui::GetDrawData()->TotalVtxCount > 0);
-    CHECK(std::abs(panel->Pos.x + panel->Size.x / 2 - width / 2) <= 1 && panel->Pos.y == 16);
+    /* The default spot, independent of the display size. */
+    CHECK(panel->Pos.x == 577 && panel->Pos.y == 88);
     CHECK(!modalShown && !transactionPending && !upgrade.selected && !automaticReady);
     ImGui::GetIO().DisplaySize = display;
 }
@@ -274,7 +275,8 @@ static void CheckKillCard()
     CHECK(text.find("Kill reward") != std::string::npos && text.find("0") != std::string::npos &&
         text.find("10000") == std::string::npos && text.find("Req") == std::string::npos);
     ImGuiWindow* card = ImGui::FindWindowByName("Kill reward");
-    CHECK(card && (card->Flags & ImGuiWindowFlags_NoInputs) && card->Pos.x == 180 && card->Pos.y == 90);
+    /* The default spot (1221, 27), moved left so the whole card fits the 1280-wide screen. */
+    CHECK(card && (card->Flags & ImGuiWindowFlags_NoInputs) && card->Pos.x == 1060 && card->Pos.y == 27);
     fixtureNow += 350;
     const double halfway = editorapp::KillCardAmount(fixtureNow);
     CHECK(halfway > 0 && halfway < 300 && editorapp::KillCardAlpha(fixtureNow) == 1);
@@ -480,7 +482,7 @@ static void CheckLayoutScreen()
             !(preview->Flags & (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoMouseInputs)));
     }
     const ImGuiWindow* killPreview = ImGui::FindWindowByName("###layout-kill-reward");
-    CHECK(killPreview->Pos.x == 180 && killPreview->Pos.y == 90); /* follows the loadout cost card */
+    CHECK(killPreview->Pos.x == 1060 && killPreview->Pos.y == 27); /* its default, kept fully on screen */
 
     /* Drag the exchange preview by its body. */
     ImGuiWindow* exchange = ImGui::FindWindowByName("###layout-exchange");
@@ -506,7 +508,7 @@ static void CheckLayoutScreen()
     editorapp::LoadPanelPositions();
     const auto& saved = positions[PositionIndex(PositionPanel::Exchange)];
     CHECK(saved.hasPosition && saved.position.x == from.x - 200 && saved.position.y == from.y + 60);
-    /* Panels left at their default anchor keep following it. */
+    /* Panels left at their default spot keep it. */
     CHECK(!positions[PositionIndex(PositionPanel::Checkout)].hasPosition &&
         !positions[PositionIndex(PositionPanel::KillReward)].hasPosition &&
         positions[PositionIndex(PositionPanel::LoadoutCost)].position.x == 180);

@@ -13,6 +13,7 @@ typedef enum UnbalanceMitigationState {
 int UnbalanceInit(const HfApi* api, HfMod* mod);
 void UnbalanceRequestMitigation(int percent);
 UnbalanceMitigationState UnbalanceMitigationStatus(void);
+void UnbalanceSetProjectileSwaps(int enabled);
 
 #ifdef __cplusplus
 }

@@ -10,15 +10,19 @@
 enum { DELIVERY_EAGLE = 0, DELIVERY_ORBITAL = 1, DELIVERY_MISSION = 4, DELIVERY_BARRAGE = 5, DELIVERY_REARM = 7 };
 enum { HUD_MISSION = 1, HUD_SUPPORT = 2, HUD_DEFENSIVE = 3, HUD_SPECIAL = 4 };
 
-static unsigned char access[PRICE_COUNT];
-static unsigned char deployed_access[PRICE_COUNT];
+static unsigned char access[SMR_MAX_RESTRICTED_ITEMS];
+static unsigned char deployed_access[SMR_MAX_RESTRICTED_ITEMS];
 static unsigned wallet;
 static int inventory_ready;
 static int shop_failed;
+static size_t loadout_price_count = PRICE_COUNT;
+static const char* loadout_price_keys[SMR_MAX_RESTRICTED_ITEMS];
+static SmrModdedEnemy modded_enemies[SMR_MAX_MODDED_ENEMIES];
+static size_t modded_enemy_count;
 static char shop_message[192] = "Waiting for the player's inventory.";
 static SRWLOCK shop_lock = SRWLOCK_INIT;
 static const char* logs_folder;
-static uint64_t checkout_equipped, ready_selection;
+static SmrItemSet checkout_equipped, ready_selection;
 static uint32_t checkout_primary, ready_primary;
 static int checkout_valid;
 enum { CHECKOUT_IDLE, CHECKOUT_REQUESTED, CHECKOUT_OPEN, CHECKOUT_CONFIRMED, CHECKOUT_RESUME };
@@ -39,7 +43,7 @@ static struct {
 enum { CHARGE_IDLE, CHARGE_QUEUED };
 static struct {
     int state;
-    uint64_t mask;
+    SmrItemSet mask;
     unsigned gear_cost, upgrade_price[CURRENCY_COUNT];
     SmrUpgrade upgrade;
     uint32_t extra;

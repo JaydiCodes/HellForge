@@ -30,11 +30,18 @@ static const struct { HfRef entity; uint32_t projectile; } primarySwaps[] = {
 
 static atomic_int requested = UNBALANCE_DEFAULT_MITIGATION;
 static atomic_int mitigationState = UNBALANCE_WAITING;
+static atomic_int swapsRequested = 1;
+static int swapsApplied; /* what UpdateSwaps last wrote; nothing is applied before the first tick */
 static int overrideActive;
 
 void UnbalanceRequestMitigation(int percent)
 {
     atomic_store(&requested, percent < 0 ? 0 : percent > 100 ? 100 : percent);
+}
+
+void UnbalanceSetProjectileSwaps(int enabled)
+{
+    atomic_store(&swapsRequested, enabled != 0);
 }
 
 UnbalanceMitigationState UnbalanceMitigationStatus(void)
@@ -75,6 +82,29 @@ static void UpdateMitigation(HfMod* mod, const HfPassives* passives, int readabl
     atomic_store(&mitigationState, state);
 }
 
+/* Live edits rather than deferred ones: the F7 menu turns the swaps off and on while the game runs, and a NULL value
+ * puts the vanilla projectile back. */
+static void UpdateSwaps(HfMod* mod)
+{
+    int wanted = atomic_load(&swapsRequested);
+    if (wanted == swapsApplied) return;
+    const HfApi* api = HF_API(mod);
+    const HfField projectile = HF_FIELD(ProjectileWeapon, projectile);
+    const HfField rounds = HF_FIELD(WeaponRounds, primary_projectile);
+    const HfValue constitution = HF_U32(305);
+    const size_t primaryCount = sizeof primarySwaps / sizeof primarySwaps[0];
+    size_t refused = 0;
+    for (size_t i = 0; i < primaryCount; i++)
+    {
+        const HfValue value = HF_U32(primarySwaps[i].projectile);
+        if (!api->set_live(mod, primarySwaps[i].entity, &projectile, wanted ? &value : NULL, 0)) refused++;
+    }
+    if (!api->set_live(mod, HF_ENTITY_R2124_CONSTITUTION, &rounds, wanted ? &constitution : NULL, 0)) refused++;
+    swapsApplied = wanted;
+    api->log(mod, "Projectile swaps %s: %zu %s, %zu refused", wanted ? "on" : "off",
+        primaryCount + 1 - refused, wanted ? "applied" : "released", refused);
+}
+
 static void CheckPassives(HfMod* mod, float dt, void* user)
 {
     static float elapsed = 0.25f;
@@ -87,6 +117,7 @@ static void CheckPassives(HfMod* mod, float dt, void* user)
     if (elapsed < 0.25f) return;
     elapsed = 0.0f;
 
+    UpdateSwaps(mod);
     int readable = api->get_passives(mod, &passives);
     UpdateMitigation(mod, &passives, readable);
     if (passives.want_armor != HF_PASSIVE_KIT || passives.want_second != BLUNT_FORCE_MITIGATION)
@@ -102,23 +133,12 @@ static void CheckPassives(HfMod* mod, float dt, void* user)
     }
 }
 
-static void QueueProjectileSwaps(const HfApi* api, HfMod* mod)
-{
-    /* Deferred SDK edits resolve these components after entity readiness, unlike the JSON stats package retry. */
-    const size_t primaryCount = sizeof primarySwaps / sizeof primarySwaps[0];
-    size_t refused = 0;
-    for (size_t i = 0; i < primaryCount; i++)
-        if (hf_set(mod, primarySwaps[i].entity, ProjectileWeapon, projectile, HF_U32(primarySwaps[i].projectile))) refused++;
-    if (hf_set(mod, HF_ENTITY_R2124_CONSTITUTION, WeaponRounds, primary_projectile, HF_U32(305))) refused++;
-    api->log(mod, "Projectile swaps: %zu queued, %zu refused", primaryCount + 1 - refused, refused);
-}
-
 int UnbalanceInit(const HfApi* api, HfMod* mod)
 {
     if (api->version < 6 || api->size < offsetof(HfApi, on_game_thread) + sizeof api->on_game_thread ||
-        !api->set_passives || !api->get_passives || !api->set_live || !api->get_live || !api->on_game_thread || !api->set_field)
+        !api->set_passives || !api->get_passives || !api->set_live || !api->get_live || !api->on_game_thread)
     {
-        api->log(mod, "UnBalance Pass requires the SDK 6 passive, game-thread and deferred field APIs");
+        api->log(mod, "UnBalance Pass requires the SDK 6 passive, game-thread and live edit APIs");
         return 1;
     }
     if (!api->set_passives(mod, HF_PASSIVE_KIT, BLUNT_FORCE_MITIGATION))
@@ -134,7 +154,6 @@ int UnbalanceInit(const HfApi* api, HfMod* mod)
         return 1;
     }
     api->log(mod, "Requested Blunt-Force Mitigation as the second passive; solo only");
-    QueueProjectileSwaps(api, mod);
     return 0;
 }
 

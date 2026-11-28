@@ -3,7 +3,7 @@ static int waiting_for_spawn;
 static unsigned TrackSelectedAccess(HfMod* mod, const uint32_t weapons[3], const uint32_t* stratagems, uint32_t count)
 {
     unsigned total = 0;
-    for (size_t i = 0; i < PRICE_COUNT; ++i)
+    for (size_t i = 0; i < loadout_price_count; ++i)
     {
         int weapon = kLoadoutPrices[i].kind == PRICE_WEAPON;
         const uint32_t* picks = weapon ? weapons : stratagems;
@@ -184,7 +184,7 @@ static void MissionEnd(HfMod* mod, const HfStateEvent* event, void* user)
         extra_pick = 0;
     }
     if (consumed_helldiver) memset(helldiver_purchased, 0, sizeof helldiver_purchased);
-    for (size_t i = 0; i < PRICE_COUNT; ++i)
+    for (size_t i = 0; i < loadout_price_count; ++i)
         if (deployed_access[i])
         {
             access[i] = 0;

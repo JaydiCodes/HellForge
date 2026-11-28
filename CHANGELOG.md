@@ -14,6 +14,8 @@ On `dev`, since 0.5.0-beta.
 
 - The Spend My Resources example charges saved offline-profile requisition instead of a simulated balance, and
   gates Eruptor and Solo Silo selection until the mod grants temporary access.
+- Spend My Resources can price modded weapons and stratagems and reward modded enemies from its content catalog or
+  their author's mod file.
 
 ### Fixed
 

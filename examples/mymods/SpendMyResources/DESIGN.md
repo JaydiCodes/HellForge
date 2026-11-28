@@ -1,8 +1,6 @@
 TODO:
 - Upgrades: Stratagems
-- Support modded content
-- Allow adding items outside of mod?
-- Update readme (remove random bullshit)
+- Random free loadout button
 - Release mod
 
 - **Spend samples, Req or FC (Forge Credits) to empower weapons / strats for one operation**

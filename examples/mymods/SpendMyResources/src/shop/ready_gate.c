@@ -9,9 +9,9 @@ enum {
 static HfMod* ready_mod;
 static int (*ready_input_original)(uintptr_t button, uintptr_t input);
 
-static int ReadReadyLoadout(HfMod* mod, uintptr_t card, uint64_t* selected)
+static int ReadReadyLoadout(HfMod* mod, uintptr_t card, SmrItemSet* selected)
 {
-    uint64_t equipped = 0;
+    SmrItemSet equipped = {0};
     uint32_t primary = 0;
     int valid = ReadRestrictedItems(HF_API(mod), ReadCardLoadout(mod, card), &equipped, &primary);
     AcquireSRWLockExclusive(&shop_lock);
@@ -32,11 +32,13 @@ static void RequestCheckout(HfMod* mod, uintptr_t card)
 
 static int ResumeReady(HfMod* mod, uintptr_t card)
 {
-    uint64_t selected;
+    SmrItemSet selected;
     if (!ReadReadyLoadout(mod, card, &selected)) return 0;
     AcquireSRWLockShared(&shop_lock);
     unsigned total;
-    int ready = selected == ready_selection && checkout_primary == ready_primary && !UnpaidItems(selected, &total) && !upgrade_selected &&
+    SmrItemSet unpaid = UnpaidItems(&selected, &total);
+    int ready = SmrItemSetEqual(&selected, &ready_selection) && checkout_primary == ready_primary &&
+        SmrItemSetEqual(&unpaid, &(SmrItemSet){0}) && !upgrade_selected &&
         !helldiver_selected[SMR_TIER_PLUS] && !helldiver_selected[SMR_TIER_ELITE] && !helldiver_selected[SMR_TIER_SUPER];
     ReleaseSRWLockShared(&shop_lock);
     if (!ready) ShopMessage(mod, "Automatic Ready cancelled: review the current loadout costs.");

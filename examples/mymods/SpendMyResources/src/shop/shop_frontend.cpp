@@ -115,9 +115,6 @@ void Overlay(ImDrawList*, float width, float height)
     SmrLoadoutQuote quote;
     bool valid = SmrQuoteLoadout(mod, &quote) != 0;
     PreparePanel(PositionPanel::LoadoutCost, width, height);
-    // The live quote can resize the card, so its default anchor follows the center.
-    if (!panelPositions[PositionIndex(PositionPanel::LoadoutCost)].hasPosition)
-        ImGui::SetNextWindowPos(ImVec2(width / 2, 16), ImGuiCond_Always, ImVec2(0.5f, 0));
     const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs;
     if (ImGui::Begin("Loadout cost", nullptr, flags))

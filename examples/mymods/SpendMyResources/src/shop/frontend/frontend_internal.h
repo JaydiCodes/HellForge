@@ -51,6 +51,8 @@ constexpr ImU32 kSurface = IM_COL32(32, 38, 46, 255);
 constexpr ImU32 kSelectedSurface = IM_COL32(63, 57, 34, 255);
 constexpr ImU32 kBorder = IM_COL32(82, 93, 104, 255);
 constexpr float kCurrencyIconSize = 16.0f;
+// The kill reward card's minimum width; it keeps the centered card from jittering as the digits change.
+constexpr float kKillCardMinWidth = 220.0f;
 inline constexpr size_t kUpgradeCurrencies[] = {
     REQUISITION_SLIPS, FORGE_CREDITS, COMMON_SAMPLES, RARE_SAMPLES, SUPER_SAMPLES
 };

@@ -36,9 +36,10 @@ void SmrMessage(char* out, size_t size)
 
 int SmrShopItem(size_t i, SmrItem* out)
 {
-    if (i >= PRICE_COUNT) return 0;
+    if (i >= loadout_price_count) return 0;
     AcquireSRWLockShared(&shop_lock);
-    int selected = (WithExtraAccess(checkout_equipped) & (UINT64_C(1) << i)) != 0;
+    SmrItemSet selected_set = WithExtraAccess(checkout_equipped);
+    int selected = SmrItemSetHas(&selected_set, i);
     *out = (SmrItem){kLoadoutPrices[i].name, kLoadoutPrices[i].requisition, access[i] != 0,
         charge.state != CHARGE_IDLE, selected};
     ReleaseSRWLockShared(&shop_lock);
@@ -53,23 +54,22 @@ int SmrQuoteLoadout(HfMod* mod, SmrLoadoutQuote* out)
     AcquireSRWLockShared(&shop_lock);
     uintptr_t game = shop_failed ? 0 : game_base;
     ReleaseSRWLockShared(&shop_lock);
-    uint64_t equipped;
+    SmrItemSet equipped;
     if (!game || !ReadRestrictedItems(HF_API(mod), ReadPickerLoadout(mod, game), &equipped, NULL))
         return 0;
     AcquireSRWLockShared(&shop_lock);
     int valid = !shop_failed;
     if (valid)
     {
-        uint64_t selected = WithExtraAccess(equipped);
-        uint64_t unpaid = UnpaidItems(selected, &out->total);
+        SmrItemSet selected = WithExtraAccess(equipped);
+        SmrItemSet unpaid = UnpaidItems(&selected, &out->total);
         out->balance_ready = inventory_ready;
         out->balance = wallet;
-        for (size_t i = 0; i < PRICE_COUNT; ++i)
+        for (size_t i = 0; i < loadout_price_count; ++i)
         {
-            uint64_t bit = UINT64_C(1) << i;
-            if (selected & bit)
+            if (SmrItemSetHas(&selected, i))
                 out->items[out->count++] = (SmrQuoteLine){kLoadoutPrices[i].name,
-                    unpaid & bit ? kLoadoutPrices[i].requisition : 0};
+                    SmrItemSetHas(&unpaid, i) ? kLoadoutPrices[i].requisition : 0};
         }
     }
     ReleaseSRWLockShared(&shop_lock);
@@ -115,7 +115,7 @@ static void ShopTick(HfMod* mod, float dt, void* user)
     if (shop_failed) return;
     ProcessKillReward(mod, manager);
     if (shop_failed) return;
-    uint64_t equipped = 0;
+    SmrItemSet equipped = {0};
     uint32_t primary = 0;
     int selection_read = ReadEquippedItems(mod, &equipped, &primary);
     unsigned balance = 0;

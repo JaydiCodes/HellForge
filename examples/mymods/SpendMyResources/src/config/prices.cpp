@@ -5,6 +5,11 @@
 #include <cstdlib>
 #include <limits>
 
+static int QualifiedModContent(const std::string& name)
+{
+    return name.find(':') != std::string::npos || name.find('/') != std::string::npos;
+}
+
 static int ReadPrices(const std::wstring& path, const char* const* names, unsigned* prices,
     size_t count, char* result, size_t size)
 {
@@ -28,6 +33,7 @@ static int ReadPrices(const std::wstring& path, const char* const* names, unsign
         while (index < count && member.first != names[index]) ++index;
         if (index == count)
         {
+            if (QualifiedModContent(member.first)) continue;
             snprintf(result, size, "Unknown item: %s.", member.first.c_str());
             return 0;
         }
@@ -40,10 +46,9 @@ static int ReadPrices(const std::wstring& path, const char* const* names, unsign
         const unsigned maximum = static_cast<unsigned>(std::numeric_limits<unsigned>::max() / count);
         if (value.kind != Value::Number || value.text.empty() || value.text.size() > 10 ||
             value.text.find_first_not_of("0123456789") != std::string::npos ||
-            strtoull(value.text.c_str(), nullptr, 10) == 0 ||
             strtoull(value.text.c_str(), nullptr, 10) > maximum)
         {
-            snprintf(result, size, "Invalid price for %s: use a whole number from 1 to %u.", names[index], maximum);
+            snprintf(result, size, "Invalid price for %s: use a whole number from 0 to %u.", names[index], maximum);
             return 0;
         }
         loaded[index] = static_cast<unsigned>(strtoull(value.text.c_str(), nullptr, 10));
@@ -89,6 +94,7 @@ static int ReadKillRewards(const std::wstring& path, const char* const* names, u
         while (index < count && member.first != names[index]) ++index;
         if (index == count)
         {
+            if (QualifiedModContent(member.first)) continue;
             snprintf(result, size, "Unknown enemy: %s.", member.first.c_str());
             return 0;
         }

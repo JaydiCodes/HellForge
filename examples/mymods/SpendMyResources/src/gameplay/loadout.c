@@ -16,7 +16,7 @@ enum {
     READY_SELECTION = 0x1EDF0,
     READY_PEER = 0x1EE00
 };
-_Static_assert(PRICE_COUNT <= SMR_MAX_RESTRICTED_ITEMS, "Restricted items must fit the quote and checkout mask.");
+_Static_assert(PRICE_COUNT <= SMR_MAX_RESTRICTED_ITEMS, "Built-in restricted items must fit the item table.");
 
 static uintptr_t LocalLoadout(const HfApi* api, uintptr_t game, uint64_t peer)
 {
@@ -100,31 +100,31 @@ static int ContainsPick(const uint32_t* picks, uint32_t count, uint32_t type)
     return 0;
 }
 
-static int ReadRestrictedItems(const HfApi* api, uintptr_t loadout, uint64_t* selected, uint32_t* primary)
+static int ReadRestrictedItems(const HfApi* api, uintptr_t loadout, SmrItemSet* selected, uint32_t* primary)
 {
     uint32_t count = 0, weapons[3], stratagems[MAX_STRATAGEMS];
     if (!ReadStratagems(api, loadout, stratagems, &count)) return 0;
     for (size_t i = 0; i < 3; ++i)
         if (api->read(loadout + i * WEAPON_STRIDE, &weapons[i], sizeof weapons[i])) return 0;
-    *selected = 0;
+    memset(selected, 0, sizeof *selected);
     if (primary) *primary = weapons[0];
-    for (size_t i = 0; i < PRICE_COUNT; ++i)
+    for (size_t i = 0; i < loadout_price_count; ++i)
     {
         int weapon = kLoadoutPrices[i].kind == PRICE_WEAPON;
         uint32_t type = kLoadoutPrices[i].id;
         if (weapon ? ContainsPick(weapons, 3, type) : ContainsPick(stratagems, count, type))
-            *selected |= UINT64_C(1) << i;
+            SmrItemSetAdd(selected, i);
     }
     return 1;
 }
 
-static int ReadEquippedItems(HfMod* mod, uint64_t* selected, uint32_t* primary)
+static int ReadEquippedItems(HfMod* mod, SmrItemSet* selected, uint32_t* primary)
 {
     return ReadRestrictedItems(HF_API(mod), ReadPickerLoadout(mod, game_base), selected, primary);
 }
 
 /* Called under shop_lock: a checkout pick belongs to the item it was made for, not its slot. */
-static void UpdateCheckoutLoadout(uint64_t equipped, uint32_t primary, int valid)
+static void UpdateCheckoutLoadout(SmrItemSet equipped, uint32_t primary, int valid)
 {
     checkout_equipped = equipped;
     checkout_valid = valid;
@@ -133,24 +133,27 @@ static void UpdateCheckoutLoadout(uint64_t equipped, uint32_t primary, int valid
 }
 
 /* Merge the extra under shop_lock so a new or removed upgrade changes the quote immediately. */
-static uint64_t WithExtraAccess(uint64_t equipped)
+static SmrItemSet WithExtraAccess(SmrItemSet equipped)
 {
     if (extra_pick &&
         (upgrade_selected == SMR_UPGRADE_EXTRA_SLOT || upgrade_purchased == SMR_UPGRADE_EXTRA_SLOT))
-        for (size_t i = 0; i < PRICE_COUNT; ++i)
+        for (size_t i = 0; i < loadout_price_count; ++i)
             if (kLoadoutPrices[i].kind == PRICE_STRATAGEM && kLoadoutPrices[i].id == extra_pick)
-                return equipped | (UINT64_C(1) << i);
+            {
+                SmrItemSetAdd(&equipped, i);
+                return equipped;
+            }
     return equipped;
 }
 
-static uint64_t UnpaidItems(uint64_t selected, unsigned* total)
+static SmrItemSet UnpaidItems(const SmrItemSet* selected, unsigned* total)
 {
-    uint64_t unpaid = 0;
+    SmrItemSet unpaid = {0};
     *total = 0;
-    for (size_t i = 0; i < PRICE_COUNT; ++i)
-        if ((selected & (UINT64_C(1) << i)) && !access[i])
+    for (size_t i = 0; i < loadout_price_count; ++i)
+        if (SmrItemSetHas(selected, i) && !access[i])
         {
-            unpaid |= UINT64_C(1) << i;
+            SmrItemSetAdd(&unpaid, i);
             *total += kLoadoutPrices[i].requisition;
         }
     return unpaid;

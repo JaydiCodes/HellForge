@@ -21,7 +21,8 @@ static int wallet_exists, wallet_refused, wallet_writes;
 static SmrWallet stored_wallet;
 #define saved_currency (stored_wallet.amount)
 #define saved_wallet (saved_currency[0])
-static int prices_refused, subscription_calls;
+static int prices_refused, subscription_calls, modded_file_checks;
+static HfEventCallback entities_ready_callback;
 static int input_result = 1, hook_refused;
 static uintptr_t last_button, last_input, unreadable_at;
 static int add_failed, add_calls;
@@ -203,6 +204,11 @@ static uintptr_t Global(HfMod* unused, const char* name)
     return local_ready ? (uintptr_t)&local_pointer : 0;
 }
 static int Subscribe(HfMod* unused, uint32_t kind, HfListener listener, void* data, int32_t priority) { subscription_calls++; return 1; }
+static int OnEvent(HfMod* unused, HfEvent event, HfEventCallback callback, void* data)
+{
+    if (event == HF_EVENT_ENTITIES_READY) entities_ready_callback = callback;
+    return 0;
+}
 static int OnTick(HfMod* unused, HfTickCallback callback, void* data) { return 1; }
 static int OriginalInput(uintptr_t button, uintptr_t input)
 {
@@ -376,10 +382,18 @@ int SmrLoadPrices(const char* const* names, unsigned* prices, size_t count, char
         CHECK(!strcmp(names[i], kLoadoutPrices[i].name));
         /* Use the fixture's prices, independently of the shipped prices.json. */
         prices[i] = i == PriceIndex("R-36 Eruptor") ? 750 :
-            i == PriceIndex("MS-11 Solo Silo") ? 2000 : 500;
+            i == PriceIndex("MS-11 Solo Silo") ? 2000 : i < 62 ? 500 : 0;
     }
     return 1;
 }
+int SmrEnsureModdedContentFile(char* result, size_t size) { ++modded_file_checks; return 1; }
+int SmrLoadModdedContent(HfMod* mod, AccessItem* items, const char** item_keys, size_t* item_count,
+    SmrModdedEnemy* enemies, size_t* enemy_count, const char* const* builtin_enemy_names,
+    size_t builtin_enemy_count, char* result, size_t size)
+{
+    return 1;
+}
+
 static size_t EnemyNamed(const char* name)
 {
     for (size_t i = 0; i < ENEMY_COUNT; ++i)
@@ -456,7 +470,7 @@ static int BuyItem(size_t i)
         OpenCheckout();
         Pick(i == 0 ? HF_ITEM_R36_ERUPTOR : HF_ITEM_AR23_LIBERATOR,
             i == PriceIndex("MS-11 Solo Silo") ? HF_STRATAGEM_MS11_SOLO_SILO : 0);
-        checkout_equipped = 0;
+        memset(&checkout_equipped, 0, sizeof checkout_equipped);
         checkout_valid = ReadEquippedItems(&mod, &checkout_equipped, &checkout_primary);
     }
     return BuyCheckout();
@@ -1631,7 +1645,7 @@ static void TestExpandedCatalog(void)
         {HF_STRATAGEM_40K_MELTAGUN, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "40-K Meltagun"},
         {HF_STRATAGEM_GL21_GRENADE_LAUNCHER, PRICE_STRATAGEM, STRATAGEM_SLOTS, 500, "GL-21 Grenade Launcher"}
     };
-    CHECK(PRICE_COUNT == 2 + sizeof expected / sizeof expected[0]);
+    CHECK(PRICE_COUNT >= 62);
     for (size_t i = 0; i < sizeof expected / sizeof expected[0]; ++i)
     {
         size_t index = i + 2;
@@ -1644,10 +1658,11 @@ static void TestExpandedCatalog(void)
         if (expected[i].slot == STRATAGEM_SLOTS) Put32(history + LOADOUT + STRATAGEM_COUNT, 1);
         Tick();
         wallet_writes = 0;
-        uint64_t selected;
+        SmrItemSet selected = {0}, expected_selection = {0};
+        SmrItemSetAdd(&expected_selection, index);
         unsigned total;
         int pending;
-        CHECK(ReadEquippedItems(&mod, &selected, NULL) && selected == (UINT64_C(1) << index));
+        CHECK(ReadEquippedItems(&mod, &selected, NULL) && SmrItemSetEqual(&selected, &expected_selection));
         RequestCheckout(&mod, (uintptr_t)PickerCard());
         CHECK(SmrTakeCheckoutRequest());
         CHECK(GearCheckout(&total, &pending) && total == expected[i].price && !pending);
@@ -1707,6 +1722,44 @@ static void TestExpandedCatalog(void)
     wallet_writes = 0;
     printf("PASS expanded catalogue: all %u restrictions gate Ready, deduct once, grant access and expire; seven-item checkout costs 3500\n",
         (unsigned)PRICE_COUNT);
+}
+
+static void TestModdedLoadoutItem(void)
+{
+    const size_t index = 64;
+    const uint32_t weapon = UINT32_C(0xF0000001);
+    CHECK(index < SMR_MAX_RESTRICTED_ITEMS);
+    kLoadoutPrices[index] = (AccessItem){PRICE_WEAPON, weapon, "Rail Rifle", 750};
+    loadout_price_keys[index] = "author.arsenal:rail_rifle";
+    loadout_price_count = index + 1;
+    SetAmount(REQUISITION, 5000);
+    Pick(weapon, 0);
+    Tick();
+
+    SmrItemSet selected = {0}, expected = {0};
+    SmrItemSetAdd(&expected, index);
+    CHECK(ReadEquippedItems(&mod, &selected, NULL) && SmrItemSetEqual(&selected, &expected));
+    SmrLoadoutQuote quote;
+    CHECK(SmrQuoteLoadout(&mod, &quote) && quote.total == 750 && quote.count == 1 &&
+        !strcmp(quote.items[0].name, "Rail Rifle") && quote.items[0].due == 750);
+    RequestCheckout(&mod, (uintptr_t)PickerCard());
+    CHECK(SmrTakeCheckoutRequest() && BuyCheckout());
+    Tick();
+    CHECK(access[index] && saved_wallet == 4250 && Amount(REQUISITION) == 4250);
+
+    MissionStart(&mod, NULL, NULL);
+    CHECK(deployed_access[index]);
+    MissionEnd(&mod, NULL, NULL);
+    CHECK(!access[index] && !deployed_access[index]);
+    loadout_price_count = PRICE_COUNT;
+    memset(&checkout_equipped, 0, sizeof checkout_equipped);
+    memset(&ready_selection, 0, sizeof ready_selection);
+    memset(&kLoadoutPrices[index], 0, sizeof kLoadoutPrices[index]);
+    loadout_price_keys[index] = NULL;
+    Pick(HF_ITEM_AR23_LIBERATOR, 0);
+    SetAmount(REQUISITION, 5000);
+    Tick();
+    puts("PASS modded loadout: item at index 64 quotes, charges, grants access and expires.");
 }
 
 static void TestWalletPersistence(void)
@@ -1897,7 +1950,7 @@ int main(void)
         Put32(manager + INVENTORY_RECORDS + i * INVENTORY_STRIDE + 4, kCurrencies[i].id);
     api.version = 16; api.size = sizeof api; api.log = Log; api.read = Read;
     api.module_base = Base; api.build_id = Build; api.game_state = State; api.code_matches = Matches;
-    api.global = Global; api.subscribe = Subscribe; api.on_game_thread = OnTick;
+    api.global = Global; api.subscribe = Subscribe; api.on = OnEvent; api.on_game_thread = OnTick;
     api.hook = Hook;
     api.hook_function = HookFunction;
     api.logs_folder = Logs;
@@ -1905,9 +1958,11 @@ int main(void)
     api.get_stat = GetStat; api.set_stat = SetStat;
     api.heal = Heal;
     prices_refused = 1;
-    CHECK(SmrInit(&api, &mod) != 0 && !subscription_calls);
+    CHECK(SmrInit(&api, &mod) != 0 && !subscription_calls && modded_file_checks == 1);
     prices_refused = 0;
-    CHECK(SmrInit(&api, &mod) == 0);
+    CHECK(SmrInit(&api, &mod) == 0 && modded_file_checks == 2);
+    CHECK(entities_ready_callback);
+    entities_ready_callback(&mod, HF_EVENT_ENTITIES_READY, NULL);
     pins_match = 0;
     Tick();
     CHECK(!game_base && !inventory_ready);
@@ -1940,6 +1995,7 @@ int main(void)
     CHECK(!BuyItem(PRICE_COUNT));
     TestReadyGate();
     TestExpandedCatalog();
+    TestModdedLoadoutItem();
     TestDestroyer();
     TestUpgradeEffects();
     TestHelldiver();

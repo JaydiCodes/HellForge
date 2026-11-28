@@ -345,8 +345,13 @@ int main(int argc, char** argv)
     CHECK(WriteAtomically(path, Write(valid)));
     CHECK(ReadPrices(path, names, prices, PRICE_COUNT, result, sizeof result));
     for (size_t i = 0; i < PRICE_COUNT; ++i) CHECK(prices[i] == 1375 + i);
+    valid.At(names[0]) = Value::MakeNumber(0, true);
+    CHECK(WriteAtomically(path, Write(valid)));
+    CHECK(ReadPrices(path, names, prices, PRICE_COUNT, result, sizeof result));
+    CHECK(prices[0] == 0);
+    valid.At(names[0]) = Value::MakeNumber(1375, true);
     const unsigned maximum = std::numeric_limits<unsigned>::max() / PRICE_COUNT;
-    for (const char* invalid : {"0", "-1", "1.5", "1e3", "\"500\"", "true", "null", "4294967296",
+    for (const char* invalid : {"-1", "1.5", "1e3", "\"500\"", "true", "null", "4294967296",
             "999999999999999999999999999999"})
     {
         Value document = valid, value;

@@ -127,26 +127,37 @@ void SavePanelPositions()
         api->log(mod, "Cannot save Spend My Resources UI positions.");
 }
 
+static ImVec2 OnScreen(ImVec2 position, float width, float height)
+{
+    return ImVec2(std::clamp(position.x, 0.0f, std::max(0.0f, width - 80.0f)),
+        std::clamp(position.y, 0.0f, std::max(0.0f, height - 40.0f)));
+}
+
 static bool SavedPosition(PositionPanel panel, float width, float height, ImVec2* out)
 {
     const PanelPosition& state = panelPositions[PositionIndex(panel)];
     if (!state.hasPosition) return false;
-    *out = ImVec2(std::clamp(state.position.x, 0.0f, std::max(0.0f, width - 80.0f)),
-        std::clamp(state.position.y, 0.0f, std::max(0.0f, height - 40.0f)));
+    *out = OnScreen(state.position, width, height);
     return true;
 }
 
-// The kill reward card sits where the loadout cost card does until it is given a place of its own.
+// Checkout, exchange, loadout cost and kill reward spots chosen for a 1080p screen, kept on screen elsewhere.
+static constexpr ImVec2 kDefaultPositions[kPanelCount] = {{479, 189}, {693, 245}, {577, 88}, {1221, 27}};
+
 void PanelPlace(PositionPanel panel, float width, float height, ImVec2* position, ImVec2* pivot)
 {
     LoadPanelPositions();
     *pivot = ImVec2(0, 0);
-    if (SavedPosition(panel, width, height, position) ||
-        (panel == PositionPanel::KillReward && SavedPosition(PositionPanel::LoadoutCost, width, height, position)))
-        return;
-    const bool card = panel == PositionPanel::LoadoutCost || panel == PositionPanel::KillReward;
-    *position = card ? ImVec2(width / 2, 16) : ImVec2(width / 2, height / 2);
-    *pivot = card ? ImVec2(0.5f, 0) : ImVec2(0.5f, 0.5f);
+    if (SavedPosition(panel, width, height, position)) return;
+    *position = OnScreen(kDefaultPositions[PositionIndex(panel)], width, height);
+    // Two panels have a known size, so their defaults keep the whole panel on a small screen.
+    if (panel == PositionPanel::Checkout || panel == PositionPanel::KillReward)
+    {
+        const ImVec2 size =
+            panel == PositionPanel::Checkout ? CheckoutSize(width, height) : ImVec2(kKillCardMinWidth, 40);
+        position->x = std::min(position->x, std::max(0.0f, width - size.x));
+        position->y = std::min(position->y, std::max(0.0f, height - size.y));
+    }
 }
 
 void PreparePanel(PositionPanel panel, float width, float height)
@@ -175,7 +186,7 @@ void OpenLayout()
     SetScreens(shopOpen, true);
 }
 
-// A panel that was not dragged keeps what it had: its saved position, or its default anchor.
+// A panel that was not dragged keeps what it had: its saved position, or its default spot.
 void CloseLayout()
 {
     SetScreens(shopOpen, false);
@@ -210,7 +221,7 @@ static void LayoutPanel(PositionPanel panel, float width, float height)
     static_assert(static_cast<size_t>(IM_ARRAYSIZE(kPreviews)) == kPanelCount, "Each panel needs a layout preview.");
     const size_t i = PositionIndex(panel);
     LayoutPreview& preview = layoutPreviews[i];
-    // Until dragged, the preview stays on the panel's anchor while its auto-fitted size settles. The drag is seen
+    // Until dragged, the preview stays on the panel's spot while its auto-fitted size settles. The drag is seen
     // before Begin, so the move ImGui made this frame is not placed back.
     if (preview.grabbed && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) preview.moved = true;
     if (!preview.moved)
@@ -226,7 +237,7 @@ static void LayoutPanel(PositionPanel panel, float width, float height)
     {
         // The preview is as large as the panel was when last shown, so it is placed by its real outline.
         const ImVec2 seen = panelPositions[i].size;
-        ImGui::SetNextWindowSizeConstraints(ImVec2(std::max(seen.x, 220.0f), seen.y), ImVec2(FLT_MAX, FLT_MAX));
+        ImGui::SetNextWindowSizeConstraints(ImVec2(std::max(seen.x, kKillCardMinWidth), seen.y), ImVec2(FLT_MAX, FLT_MAX));
     }
     const ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoNav |

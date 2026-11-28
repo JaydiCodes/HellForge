@@ -1,130 +1,145 @@
 # Spend My Resources
 
-Spend requisition from your offline profile to equip the restricted items below for one mission.
-Items must already be unlocked in the game. The mod checks equipped loadout entries rather than querying each item's
-inventory record; normal game loadout rules still apply.
+Spend My Resources (SMR) adds paid access to restricted equipment, one-mission upgrades, mission kill rewards, and
+currency exchange to HellForge. It keeps a separate wallet for each offline profile.
 
-## Custom prices
+Items must already be unlocked. Normal game visibility and loadout rules still apply. Paid access lasts for the
+mission; purchased upgrades apply to one mission.
 
-Edit [`prices.json`](prices.json) beside the installed mod DLL, then restart the game. No rebuild is needed.
-Change the numbers only; keep every item name exactly as supplied. Prices must be positive whole numbers
-(1 to 89,478,485 Req per item). The table above shows the shipped defaults.
+[SMR has modded content support](#modded-content)
 
-The file is loaded once at startup. Missing files, missing or duplicate items, unknown names, and invalid prices
-stop the mod from loading and report the reason in the mod log; compiled prices are not silently substituted.
-The supported item roster is fixed. Everyone in co-op should use the same price list.
-Back up custom prices before replacing the mod with an update.
+## Requirements
+
+- HellForge mod SDK 16 and game build `25480438`.
+- In co-op, every player should use the same mod version and configuration.
+- Orbital Laser cannot currently be granted through Extra Stratagem Slot. Use a native stratagem slot for it.
 
 ## Installation
 
-With the game closed, copy the packaged `SpendMyResources` folder into HellForge's `mods` folder, replacing the
-previous copy if installed. Enable **Spend My Resources** on the Mods page. Requires HellForge SDK 16 and game
-build `25480438`. Everyone in co-op needs the same version of the mod.
+1. Close the game.
+2. Copy the packaged `SpendMyResources` folder into HellForge's `mods` folder.
+3. Enable **Spend My Resources** on HellForge's Mods page.
 
-## Using the shop
+## Using the mod
 
-1. Equip your loadout. A read-only panel shows your total requisition cost, the price of each equipped restricted
-   item, any access you've already paid for, and your available balance. It updates as you change gear.
-   Items retain their normal visibility and unlock requirements.
-2. Press **Ready** to open **Destroyer Upgrades**. Choose **Select upgrade** or **Skip upgrade** to continue.
-   Selecting an upgrade does not charge you. Checkout opens if you selected an upgrade or an equipped item needs
-   access. Otherwise, the game continues readying up normally.
-3. Review the individual charges and totals in Requisition and Forge Credits. Existing access is not charged again.
-4. Select **Purchase** to pay for the selected upgrade, restricted gear access, or both. After success, checkout closes and readies you
-   automatically. The game's normal loadout checks still apply (including required stratagem slots).
+1. Equip your loadout. The cost panel updates with restricted equipment charges.
+2. Press **Ready** to review upgrades. Selecting an upgrade previews it but does not charge you.
+3. If an upgrade or restricted equipment needs payment, checkout opens. Review charges and select **Purchase**.
+4. Press **Escape** or **X** to close checkout without paying.
+5. On the ship, press **F2** to exchange currencies.
+6. Press **F3** to arrange UI panels. Drag panels, then press **F3** or **Escape** to save.
 
-Close checkout with **Escape** or its X to change your loadout without purchasing. This clears the unpaid upgrade
-selection. F1 does not open the mod.
-The upgrade and checkout windows block new mouse presses from reaching the game but let left-button releases through,
-so the click that opens the window cannot leave the game holding the button down.
+Your wallet persists per offline profile. Unused access and upgrade selections are lost when the game closes.
+The native four-slot loadout remains unchanged.
 
-Access is used only when you take the item on a mission and lasts through that mission, including reinforcements.
-Access is session-only and resets when the game closes; the mod does not save access to a file.
-Access for items taken on a mission is consumed when the mission-end event fires, not at deployment.
-Purchases are not refunded, including unused access when the game closes.
+## Configuration
 
-Purchases deduct from the running game's inventory first, then subtract the same amount from the active offline
-profile JSON in one write, even when two currencies are used. Access and the selected upgrade are granted only after
-both steps are verified. A partial failure stops further purchases and
-is reported in the shop. This does not refresh the backend's in-memory profile; later backend saves may overwrite
-the file edit.
+Edit these files beside the installed mod DLL, then restart the game. Back up edits before updating SMR. Invalid
+configuration disables the affected feature and is reported in `mod-jaydicodes.spend-my-resources.log`.
 
-## Destroyer upgrades
-
-Select a square icon above the description to preview an upgrade. Orbital, Eagle, Defensive, Support, and
-[Extra Stratagem Slot](./extra-stratagem-slot.md) are available in solo and co-op play. The extra stratagem is granted
-after deployment, without adding a fifth slot to the main loadout.
-
-**Known issue: Orbital Laser in the Extra Stratagem Slot.** HellForge's asset catalogue is missing the Orbital Laser
-package, so checkout is cancelled without deducting any resources. Until HellForge fixes this, equip Orbital Laser in
-one of the four normal stratagem slots in your main loadout instead.
-
-The picker uses the local HellForge Editor icon cache (`mods\hellforge-editor\game-icons.bin`) when available:
-Orbital Precision Strike, Eagle Airstrike, Gatling Sentry, and Supply Pack. If a sprite is missing, the picker uses
-a drawn fallback. Extra Stratagem Slot always uses a plus icon. No game art is shipped with the mod.
-
-| Upgrade | Default benefit | Default trade-off |
-|---|---|---|
-| Orbital | Equipped orbital strikes and barrages have 66% shorter cooldowns. | Other equipped cooldowns and Eagle rearm are 50% longer. |
-| Eagle | Eagles rearm in 30 seconds. | Equipped Eagles take 2 seconds longer to call in and have a 20-second cooldown between uses. Other equipped cooldowns are 50% longer. |
-| Defensive | Equipped defensive stratagems have 66% shorter cooldowns and unlimited uses. | Other equipped cooldowns and Eagle rearm are doubled. |
-| Support | Equipped support stratagems have 66% shorter cooldowns and unlimited uses. | Other equipped cooldowns and Eagle rearm are doubled. |
-
-Resupply and objective-granted stratagems such as the objective Hellbomb are unchanged. Nothing on the destroyer
-itself changes. In co-op, each player chooses and pays for upgrades in their own game. The mod does not synchronize
-upgrade choices between players, and replication of the extra stratagem has not been verified.
-
-Each upgrade costs **50 Forge Credits by default**, deducted at checkout, not on the upgrade screen. The effects last one mission.
-You can buy the upgrade only once before a mission. If you change your loadout before deployment, it applies to the
-stratagems you actually take. A paid upgrade stays available in the current game session until it applies to a mission;
-it is not saved or refunded when you quit. Escape or X closes the upgrade screen without continuing to Ready.
-
-### Configuring upgrade effects and prices
-
-Edit [`destroyer-upgrades.json`](destroyer-upgrades.json) beside the installed mod DLL and restart the game.
-No rebuild is needed. The picker and checkout use the same settings as the mission effects. Back up your edited
-file before redeploying the mod, since deployment copies the shipped config over the installed one.
-
-| Setting | Meaning |
+| File | Controls |
 |---|---|
-| `forge_credits` | Cost for that upgrade (a positive whole number). |
-| `cooldown_percent` | Orbital, Defensive, and Support: percentage change to each matching equipped stratagem's cooldown. `-66` leaves 34% of its cooldown. |
-| `other_cooldown_percent` | Percentage change to other equipped cooldowns. `50` makes them 50% longer; `0` leaves them unchanged. Also affects Eagle rearm on non-Eagle upgrades. |
-| `cooldown_seconds` | Eagle only: fixed cooldown between uses for equipped Eagles. `0` removes it. |
-| `call_in_extra_seconds`, `rearm_seconds` | Eagle only: seconds added to call-in time and the fixed Eagle rearm time, respectively. |
+| `prices.json` | Restricted equipment prices. |
+| `destroyer-upgrades.json` | Upgrade prices and effects. |
+| `helldiver-upgrades.json` | Helldiver upgrade prices and effects. |
+| `equipment-upgrades.json` | Equipment upgrade prices and weapon effects. |
+| `kill-rewards.json` | Requisition rewards for enemies. |
+| `modded-content.json` | Local support for equipment and enemies from other mods. |
 
-If you reuse an older config, replace `cooldown_seconds` with `cooldown_percent` (for example, `-66`) in
-`defensive` and `support`, and remove any remaining `uses` entries. Keep `cooldown_seconds` in `eagle`.
+Keep supplied names and JSON keys unchanged. Restart the game session after editing.
 
-Keep the four required sections and their settings. Percentages accept `-100` to `10000`; times accept `0` to `86400`
-seconds. If the file is missing or invalid, the mod logs the error and disables upgrade selection; gear checkout
-and currency exchange still work. The optional `extra_slot` section is described in the
-[Extra Stratagem Slot guide](./extra-stratagem-slot.md).
+## Currency wallet
 
-## Currency exchange (F2)
+SMR maintains balances for Requisition, Forge Credits, Common samples, Rare samples, and Super samples. The first
+session seeds the wallet from HellForge's inventory. Later sessions restore the saved wallet for that profile.
 
-On the ship, press **F2** to open the separate currency exchange menu. Choose the currency to give, the currency to
-receive, and the number of batches, then select **Exchange**. The menu shows all five balances, the exact cost and
-return, and the running game's destination cap. Close with F2, Escape or X.
+**Exchange** 
 
-| Currency | Points per unit |
-|---|---:|
-| Requisition slips | 1 |
-| Common sample | 50 |
-| Rare sample | 100 |
-| Super sample | 200 |
-| Forge Credit | 750 |
+The F2 exchange chooses a currency to give and a currency to receive. Select a whole-unit batch count, then choose
 
-All pairs work in both directions. Exchanges use exact whole-unit batches: for example, 50 Req = 1 Common,
-2 Common = 1 Rare, and 15 Super = 4 Forge Credits. Any unused source currency stays in your balance; there are no
-fees or rounding losses. Exchanges that exceed your balance or the destination cap are rejected, not clipped.
-Forge Credits use HellForge's existing wallet, not a new currency.
+Exchanges need enough balance and room under the destination cap.
 
-Exchanges run only on the ship, one transaction at a time (shared with access and upgrade purchases). The mod removes the source
-and adds the destination with native inventory functions, verifies both changes, then updates both amounts in the
-active offline profile JSON in one verified write. A missing destination profile entry is created. A partial failure
-disables both exchanges and access purchases and reports the error; the mod never automatically retries.
-The same backend in-memory profile limitation described above applies. No backend changes are required.
+SMR saves actual wallet changes in the loaded game inventory, including mission payouts and Forge Credit pickups.
+It does not add backend rewards again. Game caps limit holdings but not lifetime earnings or spending.
 
-F2 does not open upgrades or access checkout, or trigger Ready. The Ready screens take priority over the exchange
-menu. Leaving the ship closes the exchange menu and cancels queued exchanges.
+The mod wallet works only while SMR is enabled. The backend `profile.json` is untouched. Normal game shops continue
+to use the backend balance. Changes made with SMR disabled or account resyncs do not reset the saved wallet.
+
+Wallet files are separate `wallet-*.json` files in:
+
+```text
+<HellForge installation>\userdata\environment\Local\SpendMyResources
+```
+
+The `profile` field identifies the offline profile. To reseed a wallet, end the HellForge session, move the
+corresponding wallet file out of the folder, and relaunch. If saving or restoring fails, SMR reports the error and
+disables its shop for that session instead of replacing the saved wallet.
+
+## Kill rewards
+
+Kills by Helldivers add Requisition Slips on mission end and save the result to the SMR wallet.
+
+1. Each counted kill uses its value in `kill-rewards.json`.
+2. The team total is split equally between session players and rounded up.
+3. With two or more players, each player gets a bonus based on the percentage of kills they contributed towards.
+4. Abandoned missions pay 20% of that reward, rounded down.
+
+For base-game enemies, `kill-rewards.json` maps names from `mappings\entities.json` to whole numbers from 0 to
+1,000,000. A base-game enemy not listed is worth 1. Set a listed enemy to `0` to exclude it. Misspellings, duplicate
+entries, or invalid values disable kill rewards for the session and are logged.
+
+## Modded content
+
+Mod authors can ship support with a `spend-my-resources.json` besides their `hellforge-mod.json`:
+
+```json
+{
+  "enemies": { "brute": 25 },
+  "weapons": { "rail_rifle": 750 },
+  "stratagems": { "pelican_gunship": 1500 }
+}
+```
+
+Use registered names, not display labels or numeric IDs. Include only categories you need. SMR reads the file when
+both mods load; no SMR dependency or code change is needed.
+
+The example rewards 25 Requisition for each Brute kill, charges 750 Requisition for the Rail Rifle, and charges
+1,500 Requisition for the Pelican Gunship. It does not create equipment upgrade paths.
+
+To add support locally for a mod that lacks the file:
+
+1. Enable SMR and the content mod.
+2. Open SMR's log in the launcher Console.
+3. Find `Uncatalogued mod content:` and copy registered weapon, stratagem, or enemy names.
+4. Open `modded-content.json` beside `spend_my_resources.dll`.
+5. Add a group under the content mod's manifest `id`, preserving existing entries.
+6. Save and restart the game with both mods enabled.
+
+Example local catalog:
+
+```json
+{
+  "author.arsenal": {
+    "enemies": { "author.arsenal:brute": 25 },
+    "weapons": { "author.arsenal:rail_rifle": 750 },
+    "stratagems": { "author.arsenal:pelican_gunship": 1500 }
+  }
+}
+```
+
+Names containing `/` or `:` are used as written. Otherwise, a short name belongs to the owning mod. Enemy rewards range
+from 0 to 1,000,000. Weapon and stratagem prices range from 1 to 4,194,303 Requisition.
+
+SMR uses a fixed table for 1,024 restricted items, of which 249 are built-in entries, plus a separate table for up to 1,024
+modded enemies. It logs and skips entries it cannot resolve or fit.
+
+Overrides use this priority:
+
+1. Author `spend-my-resources.json`
+2. SMR `modded-content.json`
+3. Player `prices.json` or `kill-rewards.json`
+
+The author file overrides SMR's catalog. Player price and reward files override both and can change values, but they
+cannot register missing content.
+
+An `entity (possible enemy)` entry is only a candidate. Confirm it is an enemy before assigning a reward.
